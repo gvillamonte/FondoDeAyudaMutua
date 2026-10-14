@@ -1,0 +1,90 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --color-primary: #3258CA;
+  --color-primary-dark: #2848A8;
+  --color-primary-light: #4A6DD4;
+  --color-white: #FFFFFF;
+  --color-bg: #F8FAFC;
+  --color-text: #1E293B;
+  --color-text-sec: #64748B;
+  --color-border: #E2E8F0;
+  --color-error: #DC2626;
+  --color-success: #16A34A;
+  --color-warning: #D97706;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-primary text-white px-4 py-2 rounded-lg font-medium
+           hover:bg-primary-dark transition-colors duration-200
+           focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2;
+  }
+
+  .btn-secondary {
+    @apply bg-white text-text-main border border-border-main px-4 py-2 rounded-lg font-medium
+           hover:bg-bg-layout transition-colors duration-200
+           focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2;
+  }
+
+  .btn-danger {
+    @apply bg-error text-white px-4 py-2 rounded-lg font-medium
+           hover:bg-red-700 transition-colors duration-200
+           focus:outline-none focus:ring-2 focus:ring-error focus:ring-offset-2;
+  }
+
+  .btn-success {
+    @apply bg-success text-white px-4 py-2 rounded-lg font-medium
+           hover:bg-green-700 transition-colors duration-200
+           focus:outline-none focus:ring-2 focus:ring-success focus:ring-offset-2;
+  }
+
+  .card {
+    @apply bg-white rounded-lg border border-border-main p-6;
+  }
+
+  .input-field {
+    @apply w-full px-3 py-2 border border-border-main rounded-lg
+           text-text-main placeholder:text-text-sec
+           focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent
+           transition-colors duration-200;
+  }
+
+  .label-field {
+    @apply block text-sm font-medium text-text-main mb-1;
+  }
+
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .badge-pending {
+    @apply badge bg-yellow-100 text-yellow-800;
+  }
+
+  .badge-approved {
+    @apply badge bg-green-100 text-green-800;
+  }
+
+  .badge-rejected {
+    @apply badge bg-red-100 text-red-800;
+  }
+
+  .badge-paid {
+    @apply badge bg-blue-100 text-blue-800;
+  }
+
+  .table-header {
+    @apply bg-bg-layout text-text-sec text-sm font-medium uppercase tracking-wider;
+  }
+}

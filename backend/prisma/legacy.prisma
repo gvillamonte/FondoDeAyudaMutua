@@ -1,0 +1,46 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/legacy-client"
+}
+
+datasource db {
+  provider = "sqlserver"
+  url      = env("LEGACY_DB_URL")
+}
+
+model Colegiado {
+  id                String   @id @map("COLEGIADO_ID") @db.NVarChar(36)
+  numeroColegiatura String   @unique @map("NUM_COLEGIATURA") @db.VarChar(20)
+  dni               String   @map("DNI") @db.VarChar(8)
+  nombres           String   @map("NOMBRES") @db.VarChar(100)
+  apellidoPaterno   String   @map("APELLIDO_PATERNO") @db.VarChar(100)
+  apellidoMaterno   String?  @map("APELLIDO_MATERNO") @db.VarChar(100)
+  fechaNacimiento   DateTime? @map("FECHA_NACIMIENTO") @db.Date
+  sexo              String?  @map("SEXO") @db.VarChar(1)
+  estadoColegiatura String   @map("ESTADO_COLEGIATURA") @db.VarChar(30)
+  fechaIngreso      DateTime? @map("FECHA_INGRESO") @db.Date
+  fechaVencimiento  DateTime? @map("FECHA_VENCIMIENTO") @db.Date
+  especialidad      String?  @map("ESPECIALIDAD") @db.VarChar(200)
+  telefono          String?  @map("TELEFONO") @db.VarChar(20)
+  email             String?  @map("EMAIL") @db.VarChar(255)
+  direccion         String?  @map("DIRECCION") @db.VarChar(500)
+  distrito          String?  @map("DISTRITO") @db.VarChar(100)
+  provincia         String?  @map("PROVINCIA") @db.VarChar(100)
+  departamento      String?  @map("DEPARTAMENTO") @db.VarChar(100)
+
+  @@map("COLEGIADOS")
+}
+
+model CuotaColegiatura {
+  id               String   @id @map("CUOTA_ID") @db.NVarChar(36)
+  colegiadoId      String   @map("COLEGIADO_ID") @db.NVarChar(36)
+  anio             Int      @map("ANIO")
+  mes              Int      @map("MES")
+  monto            Decimal  @map("MONTO") @db.Decimal(12, 2)
+  estadoPago       String   @map("ESTADO_PAGO") @db.VarChar(20)
+  fechaVencimiento DateTime @map("FECHA_VENCIMIENTO") @db.Date
+  fechaPago        DateTime? @map("FECHA_PAGO")
+
+  @@index([colegiadoId])
+  @@map("CUOTAS_COLEGIATURA")
+}

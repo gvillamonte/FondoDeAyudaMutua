@@ -1,0 +1,50 @@
+# Dependencias
+node_modules/
+**/node_modules/
+
+# Compilaciones (Builds)
+dist/
+.next/
+out/
+build/
+
+# Variables de entorno (¡CRÍTICO!)
+.env
+**/.env
+.env.local
+**/.env.local
+.env.*.local
+**/.env.*.local
+
+# Archivos de registro (Logs)
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Caché de TypeScript y pruebas
+*.tsbuildinfo
+tsc_output.txt
+coverage/
+test-prismajs/
+
+# Respaldos de base de datos y pruebas temporales
+_backup_pre_fam_registro_*
+*.sqlite
+*.db
+
+# Scripts locales de Windows
+iniciar.bat
+iniciar.ps1
+reiniciar-sqlserver.bat
+*.bat
+*.ps1
+
+# Archivos de sistema operativo
+.DS_Store
+Thumbs.db
+
+# Configuración de IDE
+.vscode/
+.idea/
+*.swp

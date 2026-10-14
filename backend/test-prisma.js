@@ -1,0 +1,1 @@
+﻿const { PrismaClient } = require('@prisma/client'); const p = new PrismaClient(); p.famConfiguracion.findMany({ take: 2 }).then(r => { console.log('OK:', JSON.stringify(r.map(x => x.clave))); process.exit(0); }).catch(e => { console.error('ERROR:', e.message.substring(0, 300)); process.exit(1); });

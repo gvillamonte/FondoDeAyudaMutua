@@ -1,0 +1,508 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlserver"
+  url      = env("APP_DB_URL")
+}
+
+model Usuario {
+  id              String    @id @default(uuid()) @db.NVarChar(36)
+  username        String    @unique @db.VarChar(50)
+  email           String    @unique @db.VarChar(255)
+  passwordHash    String    @map("password_hash") @db.VarChar(255)
+  nombreCompleto  String    @map("nombre_completo") @db.VarChar(200)
+  rol             String    @db.VarChar(30)
+  activo          Boolean   @default(true) @db.Bit
+  ultimoAcceso    DateTime? @map("ultimo_acceso")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  refreshTokens            RefreshToken[]
+  beneficiosCreados        Beneficio[]             @relation("BeneficioCreatedBy")
+  solicitudesResueltas     SolicitudBeneficio[]    @relation("SolicitudResueltoPor")
+  pagosRegistrados         Pago[]                  @relation("PagoRegistradoPor")
+
+  @@map("usuarios")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid()) @db.NVarChar(36)
+  userId    String   @map("user_id") @db.NVarChar(36)
+  tokenHash String   @map("token_hash") @db.VarChar(255)
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  revoked   Boolean  @default(false) @db.Bit
+
+  usuario Usuario @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@map("refresh_tokens")
+}
+
+model Beneficio {
+  id            String    @id @default(uuid()) @db.NVarChar(36)
+  nombre        String    @db.VarChar(200)
+  descripcion   String?   @db.NVarChar(1000)
+  tipo          String    @db.VarChar(50)
+  montoBase     Decimal   @default(0) @map("monto_base") @db.Decimal(12, 2)
+  moneda        String    @default("PEN") @db.VarChar(3)
+  activo        Boolean   @default(true) @db.Bit
+  requiereJunta Boolean   @default(false) @map("requiere_junta") @db.Bit
+  createdBy     String?   @map("created_by") @db.NVarChar(36)
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  solicitudes SolicitudBeneficio[]
+  usuario     Usuario?             @relation("BeneficioCreatedBy", fields: [createdBy], references: [id])
+
+  @@index([tipo])
+  @@index([activo])
+  @@map("beneficios")
+}
+
+model SolicitudBeneficio {
+  id              String    @id @default(uuid()) @db.NVarChar(36)
+  colegiadoId     String    @map("colegiado_id") @db.VarChar(50)
+  beneficioId     String    @map("beneficio_id") @db.NVarChar(36)
+  montoSolicitado Decimal   @map("monto_solicitado") @db.Decimal(12, 2)
+  motivo          String    @db.NVarChar(1000)
+  estado          String    @default("PENDIENTE") @db.VarChar(30)
+  fechaSolicitud  DateTime  @default(now()) @map("fecha_solicitud")
+  fechaResolucion DateTime? @map("fecha_resolucion")
+  resueltoPor     String?   @map("resuelto_por") @db.NVarChar(36)
+  observaciones   String?   @db.NVarChar(1000)
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  beneficio  Beneficio          @relation(fields: [beneficioId], references: [id])
+  resolvente Usuario?           @relation("SolicitudResueltoPor", fields: [resueltoPor], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  pagos      Pago[]
+
+  @@index([colegiadoId])
+  @@index([estado])
+  @@index([fechaSolicitud])
+  @@map("solicitudes_beneficio")
+}
+
+model Pago {
+  id             String    @id @default(uuid()) @db.NVarChar(36)
+  solicitudId    String    @map("solicitud_id") @db.NVarChar(36)
+  colegiadoId    String    @map("colegiado_id") @db.VarChar(50)
+  montoPagado    Decimal   @map("monto_pagado") @db.Decimal(12, 2)
+  moneda         String    @default("PEN") @db.VarChar(3)
+  medioPago      String    @map("medio_pago") @db.VarChar(30)
+  referenciaPago String?   @map("referencia_pago") @db.VarChar(100)
+  fechaPago      DateTime  @default(now()) @map("fecha_pago")
+  estado         String    @default("COMPLETADO") @db.VarChar(30)
+  registradoPor  String    @map("registrado_por") @db.NVarChar(36)
+  comprobanteUrl String?   @map("comprobante_url") @db.VarChar(500)
+  notas          String?   @db.NVarChar(1000)
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  solicitud SolicitudBeneficio @relation(fields: [solicitudId], references: [id])
+  usuario   Usuario            @relation("PagoRegistradoPor", fields: [registradoPor], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  metodoPago MetodoPago?        @relation(fields: [metodoPagoId], references: [id])
+  metodoPagoId Int?             @map("metodo_pago_id")
+
+  @@index([solicitudId])
+  @@index([colegiadoId])
+  @@index([fechaPago])
+  @@index([estado])
+  @@map("pagos")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid()) @db.NVarChar(36)
+  userId      String   @map("user_id") @db.NVarChar(36)
+  action      String   @db.VarChar(20)
+  entity      String   @db.VarChar(50)
+  entityId    String   @map("entity_id") @db.VarChar(100)
+  changesJson String?  @map("changes_json") @db.NVarChar(4000)
+  ipAddress   String?  @map("ip_address") @db.VarChar(45)
+  userAgent   String?  @map("user_agent") @db.NVarChar(1000)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([entity])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model TipoBeneficio {
+  id          String   @id @default(uuid()) @db.NVarChar(36)
+  codigo      String   @db.VarChar(30)
+  nombre      String   @db.VarChar(100)
+  descripcion String?  @db.NVarChar(500)
+  programa    String   @db.VarChar(20)  // FAM, ISS
+  activo      Boolean  @default(true) @db.Bit
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  datosBeneficios DatosBeneficio[]
+  solicitudesFam  FamSolicitudBeneficio[]
+  duplicados      FamDuplicado[]
+
+  @@unique([codigo, programa])
+  @@index([programa])
+  @@index([activo])
+  @@map("tipos_beneficio")
+}
+
+model DatosBeneficio {
+  id              String    @id @default(uuid()) @db.NVarChar(36)
+  colegiadoId     String    @map("colegiado_id") @db.VarChar(50)
+  programa        String    @db.VarChar(20)  // FAM, ISS
+  tipoBeneficioId String    @map("tipo_beneficio_id") @db.NVarChar(36)
+  monto           Decimal   @default(0) @db.Decimal(12, 2)
+  moneda          String    @default("PEN") @db.VarChar(3)
+  estado          String    @default("PENDIENTE") @db.VarChar(30)
+  fechaSolicitud  DateTime  @default(now()) @map("fecha_solicitud")
+  fechaResolucion DateTime? @map("fecha_resolucion")
+  fechaPago       DateTime? @map("fecha_pago")
+  observaciones   String?   @db.NVarChar(1000)
+  registradoPor   String?   @map("registrado_por") @db.NVarChar(36)
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  tipoBeneficio TipoBeneficio @relation(fields: [tipoBeneficioId], references: [id])
+
+  @@index([colegiadoId])
+  @@index([programa])
+  @@index([estado])
+  @@index([tipoBeneficioId])
+  @@index([fechaSolicitud])
+  @@map("datos_beneficios")
+}
+
+model FamBeneficiario {
+  id             String    @id @default(uuid()) @db.NVarChar(36)
+  colegiadoId    String    @map("colegiado_id") @db.VarChar(50)
+  nombre         String    @db.VarChar(200)
+  dni            String?   @db.VarChar(20)
+  parentesco     String    @db.VarChar(30)
+  porcentaje     Decimal   @default(0) @db.Decimal(5, 2)
+  activo         Boolean   @default(true) @db.Bit
+  observaciones  String?   @db.NVarChar(500)
+  registradoPor  String?   @map("registrado_por") @db.NVarChar(36)
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  imagenes       FamImagenBeneficiario?
+  vinculos       FamSolicitudBeneficiario[]
+  vinculosCovid  FamCovidAsignacionBeneficiario[]
+
+  @@index([colegiadoId])
+  @@index([activo])
+  @@map("fam_beneficiarios")
+}
+
+model FamImagenBeneficiario {
+  id                 String   @id @default(uuid()) @db.NVarChar(36)
+  beneficiarioId     String   @map("beneficiario_id") @db.NVarChar(36)
+  dniCara            String?  @map("dni_cara") @db.NVarChar(MAX)
+  dniReverso         String?  @map("dni_reverso") @db.NVarChar(MAX)
+  cartaDeclaratoria  String?  @map("carta_declaratoria") @db.NVarChar(MAX)
+  sucesionIntestada  String?  @map("sucesion_intestada") @db.NVarChar(MAX)
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  beneficiario FamBeneficiario @relation(fields: [beneficiarioId], references: [id], onDelete: Cascade)
+
+  @@unique([beneficiarioId])
+  @@map("fam_imagenes_beneficiario")
+}
+
+model FamSolicitudBeneficio {
+  id                  String    @id @default(uuid()) @db.NVarChar(36)
+  colegiadoId         String    @map("colegiado_id") @db.VarChar(50)
+  tipoBeneficioId     String    @map("tipo_beneficio_id") @db.NVarChar(36)
+  monto               Decimal   @db.Decimal(12, 2)
+  moneda              String    @default("PEN") @db.VarChar(3)
+  estado              String    @default("PENDIENTE") @db.VarChar(30)
+  fechaSolicitud      DateTime  @default(now()) @map("fecha_solicitud")
+  fechaResolucion     DateTime? @map("fecha_resolucion")
+  fechaPago           DateTime? @map("fecha_pago")
+  documentacionCompleta Boolean @default(true) @map("documentacion_completa") @db.Bit
+  documentacionObservacion String? @map("documentacion_observacion") @db.NVarChar(1000)
+  solicitanteBeneficiarioId String? @map("solicitante_beneficiario_id") @db.NVarChar(36)
+  solicitanteNombre   String?   @map("solicitante_nombre") @db.NVarChar(200)
+  solicitanteDni      String?   @map("solicitante_dni") @db.VarChar(20)
+  sucesionIntestada   String?   @map("sucesion_intestada") @db.NVarChar(MAX)
+  observaciones       String?   @db.NVarChar(1000)
+  registradoPor       String?   @map("registrado_por") @db.NVarChar(36)
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  fichaAdmisibilidad       String?  @map("ficha_admisibilidad") @db.NVarChar(MAX)
+  solicitudAsignacion      String?  @map("solicitud_asignacion") @db.NVarChar(MAX)
+  cartaRemision            String?  @map("carta_remision") @db.NVarChar(MAX)
+  cartaNumero              String?  @map("carta_numero") @db.VarChar(50)
+  expedienteNumero         String?  @map("expediente_numero") @db.VarChar(50)
+  cartaFecha               DateTime? @map("carta_fecha")
+  memorando                String?  @map("memorando") @db.NVarChar(MAX)
+  memorandoNumero          String?  @map("memorando_numero") @db.VarChar(50)
+  memorandoFecha           DateTime? @map("memorando_fecha")
+  ordenPago                String?  @map("orden_pago") @db.NVarChar(MAX)
+  formaPago                String?  @map("forma_pago") @db.VarChar(30)
+  banco                    String?  @db.VarChar(100)
+  ordenPagoFecha           DateTime? @map("orden_pago_fecha")
+  modalidadBeneficio       String?  @map("modalidad_beneficio") @db.VarChar(30)
+  covidAsignacionId        String?  @map("covid_asignacion_id") @db.NVarChar(36)
+  descuentoCovid           Decimal  @default(0) @map("descuento_covid") @db.Decimal(12, 2)
+  montoFinal               Decimal? @map("monto_final") @db.Decimal(12, 2)
+
+  tipoBeneficio TipoBeneficio @relation(fields: [tipoBeneficioId], references: [id])
+  vinculos      FamSolicitudBeneficiario[]
+
+  @@index([colegiadoId])
+  @@index([tipoBeneficioId])
+  @@index([estado])
+  @@index([fechaSolicitud])
+  @@map("fam_solicitud_beneficio")
+}
+
+model FamSolicitudBeneficiario {
+  id                 Int     @id @default(autoincrement())
+  solicitudId        String  @map("solicitud_id") @db.NVarChar(36)
+  beneficiarioId     String  @map("beneficiario_id") @db.NVarChar(36)
+  porcentajeAsignado Decimal @default(0) @map("porcentaje_asignado") @db.Decimal(5, 2)
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  solicitud    FamSolicitudBeneficio @relation(fields: [solicitudId], references: [id], onDelete: Cascade)
+  beneficiario FamBeneficiario       @relation(fields: [beneficiarioId], references: [id])
+
+  @@unique([solicitudId, beneficiarioId])
+  @@index([solicitudId])
+  @@map("fam_solicitud_beneficiarios")
+}
+
+model FamConfiguracion {
+  id          String   @id @default(uuid()) @db.NVarChar(36)
+  clave       String   @unique @db.VarChar(100)
+  valor       String   @db.NVarChar(MAX)
+  grupo       String   @default("GENERAL") @db.VarChar(30)
+  descripcion String?  @db.NVarChar(500)
+  activo      Boolean  @default(true) @db.Bit
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([grupo])
+  @@map("fam_configuracion")
+}
+
+model MetodoPago {
+  id                 Int      @id @default(autoincrement())
+  nombre             String   @unique @db.NVarChar(100)
+  descripcion        String?  @db.NVarChar(300)
+  requiereReferencia Boolean  @default(false) @map("requiere_referencia") @db.Bit
+  activo             Boolean  @default(true) @db.Bit
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  pagos Pago[]
+
+  @@map("metodos_pago")
+}
+
+model MontoFam {
+  id          Int     @id @default(autoincrement())
+  nombre      String  @db.NVarChar(100)
+  aplicaA     String? @map("aplica_a") @db.VarChar(50)
+  monto       Decimal @default(0) @db.Decimal(12, 2)
+  descripcion String? @db.NVarChar(300)
+  activo      Boolean @default(true) @db.Bit
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("montos_fam")
+}
+
+model EstadoSolicitud {
+  id          Int     @id @default(autoincrement())
+  nombre      String  @unique @db.NVarChar(60)
+  descripcion String? @db.NVarChar(300)
+  orden       Int     @default(0)
+  activo      Boolean @default(true) @db.Bit
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("estados_solicitud")
+}
+
+model Moneda {
+  id          Int     @id @default(autoincrement())
+  nombre      String  @unique @db.NVarChar(60)
+  simbolo     String  @db.VarChar(10)
+  descripcion String? @db.NVarChar(300)
+  activo      Boolean @default(true) @db.Bit
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("monedas")
+}
+
+model TipoBeneficioConfig {
+  id          Int     @id @default(autoincrement())
+  nombre      String  @unique @db.NVarChar(100)
+  descripcion String? @db.NVarChar(300)
+  activo      Boolean @default(true) @db.Bit
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("tipos_beneficio_config")
+}
+
+// ============= CATÁLOGOS: MEMORÁNDUMS Y CARTAS =============
+
+model Memorando {
+  id          String    @id @default(uuid()) @db.NVarChar(36)
+  numero      String    @db.VarChar(50)
+  fecha       DateTime? @db.DateTime2()
+  asunto      String?   @db.NVarChar(255)
+  activo      Boolean   @default(true) @db.Bit
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  asignacionesCovid FamCovidAsignacion[]
+
+  @@unique([numero])
+  @@index([activo])
+  @@map("memorandos")
+}
+
+model Carta {
+  id          String    @id @default(uuid()) @db.NVarChar(36)
+  numero      String    @db.VarChar(50)
+  fecha       DateTime? @db.DateTime2()
+  referencia  String?   @db.NVarChar(255)
+  activo      Boolean   @default(true) @db.Bit
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  asignacionesCovid FamCovidAsignacion[]
+
+  @@unique([numero])
+  @@index([activo])
+  @@map("cartas")
+}
+
+// ============= AYUDA COVID =============
+
+model FamCovidAsignacion {
+  id                       String    @id @default(uuid()) @db.NVarChar(36)
+  colegiadoId              String    @map("colegiado_id") @db.VarChar(50)
+  cip                      String?   @db.VarChar(20)
+  dni                      String?   @db.VarChar(20)
+  nombreColegiado          String?   @map("nombre_colegiado") @db.NVarChar(200)
+  modalidadBeneficio       String    @default("monto_unico") @map("modalidad_beneficio") @db.VarChar(30)
+  monto                    Decimal   @default(200) @db.Decimal(12, 2)
+  fechaPago                DateTime? @map("fecha_pago") @db.DateTime2()
+  fechaRegistro            DateTime  @default(now()) @map("fecha_registro")
+  solicitanteBeneficiarioId String? @map("solicitante_beneficiario_id") @db.NVarChar(36)
+  solicitanteNombre        String?   @map("solicitante_nombre") @db.NVarChar(200)
+  solicitanteDni           String?   @map("solicitante_dni") @db.VarChar(20)
+  memorandoId              String?   @map("memorando_id") @db.NVarChar(36)
+  cartaId                  String?   @map("carta_id") @db.NVarChar(36)
+  observaciones            String?   @db.NVarChar(MAX)
+  activo                   Boolean   @default(true) @db.Bit
+  registradoPor            String?   @map("registrado_por") @db.NVarChar(100)
+  createdAt                DateTime  @default(now()) @map("created_at")
+  updatedAt                DateTime  @updatedAt @map("updated_at")
+
+  memorando       Memorando?               @relation(fields: [memorandoId], references: [id])
+  carta           Carta?                   @relation(fields: [cartaId], references: [id])
+  vinculos        FamCovidAsignacionBeneficiario[]
+  comprobantes    FamReembolsoComprobante[]
+
+  @@index([colegiadoId])
+  @@index([activo])
+  @@map("fam_covid_asignaciones")
+}
+
+model FamCovidAsignacionBeneficiario {
+  id                  String   @id @default(uuid()) @db.NVarChar(36)
+  covidAsignacionId   String   @map("covid_asignacion_id") @db.NVarChar(36)
+  beneficiarioId      String   @map("beneficiario_id") @db.NVarChar(36)
+  porcentajeAsignado  Decimal  @default(0) @map("porcentaje_asignado") @db.Decimal(5, 2)
+  orden               Int?     @db.Int()
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  asignacion FamCovidAsignacion   @relation(fields: [covidAsignacionId], references: [id], onDelete: Cascade)
+  beneficiario FamBeneficiario    @relation(fields: [beneficiarioId], references: [id])
+
+  @@unique([covidAsignacionId, beneficiarioId])
+  @@index([covidAsignacionId])
+  @@map("fam_covid_asignacion_beneficiarios")
+}
+
+model FamReembolsoComprobante {
+  id                  String   @id @default(uuid()) @db.NVarChar(36)
+  covidAsignacionId   String   @map("covid_asignacion_id") @db.NVarChar(36)
+  tipoComprobante     String   @map("tipo_comprobante") @db.VarChar(30)
+  serie               String?  @db.VarChar(10)
+  numero              String?  @db.VarChar(20)
+  concepto            String?  @db.NVarChar(255)
+  importeTotal        Decimal  @map("importe_total") @db.Decimal(12, 2)
+  pdfBase64           String?  @map("pdf_base64") @db.NVarChar(MAX)
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  asignacion FamCovidAsignacion @relation(fields: [covidAsignacionId], references: [id], onDelete: Cascade)
+
+  @@index([covidAsignacionId])
+  @@map("fam_reembolso_comprobantes")
+}
+
+model ExpedienteSlaConfig {
+  id              Int      @id @default(autoincrement())
+  estado          String   @unique @db.VarChar(30)
+  nombreVisible   String   @map("nombre_visible") @db.NVarChar(100)
+  horasLimite     Int      @default(72) @map("horas_limite")
+  colorBadge      String   @default("gray") @map("color_badge") @db.VarChar(20)
+  ordenFlujo      Int      @default(0) @map("orden_flujo")
+  activo          Boolean  @default(true) @db.Bit
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("expediente_sla_config")
+}
+
+// ============= BENEFICIOS DUPLICADOS =============
+
+model FamDuplicado {
+  id              String   @id @default(uuid()) @db.NVarChar(36)
+  colegiadoId     String   @map("colegiado_id") @db.VarChar(50)
+  tipoBeneficioId String   @map("tipo_beneficio_id") @db.NVarChar(36)
+  estado          String   @default("DETECTADO") @db.VarChar(20) // DETECTADO | CONFIRMADO | DESCARTADO
+  motivo          String?  @db.NVarChar(500)
+  observaciones   String?  @db.NVarChar(1000)
+  expedienteIds   String?  @map("expediente_ids") @db.NVarChar(MAX) // JSON array de UUIDs
+  registradoPor   String?  @map("registrado_por") @db.NVarChar(36)
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  tipoBeneficio TipoBeneficio            @relation(fields: [tipoBeneficioId], references: [id])
+  documentos    FamDuplicadoDocumento[]
+
+  @@index([colegiadoId])
+  @@index([tipoBeneficioId])
+  @@index([estado])
+  @@map("fam_duplicados")
+}
+
+model FamDuplicadoDocumento {
+  id            String   @id @default(uuid()) @db.NVarChar(36)
+  duplicadoId   String   @map("duplicado_id") @db.NVarChar(36)
+  etiqueta      String   @db.NVarChar(100)
+  pdfBase64     String   @map("pdf_base64") @db.NVarChar(MAX)
+  registradoPor String?  @map("registrado_por") @db.NVarChar(36)
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  duplicado FamDuplicado @relation(fields: [duplicadoId], references: [id], onDelete: Cascade)
+
+  @@index([duplicadoId])
+  @@map("fam_duplicado_documentos")
+}

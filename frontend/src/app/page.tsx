@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { parseJsonSafe } from '@/lib/safe-json';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -22,14 +23,18 @@ export default function LoginPage() {
         body: JSON.stringify({ username, password }),
       });
 
-      const data = await response.json();
+      const data = await parseJsonSafe<{ error?: string; accessToken?: string; refreshToken?: string; usuario?: unknown }>(response);
 
       if (!response.ok) {
         throw new Error(data.error || 'Credenciales inválidas');
       }
 
+      if (!data.accessToken) {
+        throw new Error('Respuesta invalida del servidor. Verifique que el backend este activo.');
+      }
+
       localStorage.setItem('accessToken', data.accessToken);
-      localStorage.setItem('refreshToken', data.refreshToken);
+      localStorage.setItem('refreshToken', data.refreshToken || '');
       localStorage.setItem('user', JSON.stringify(data.usuario));
       router.push('/dashboard');
     } catch (err: any) {

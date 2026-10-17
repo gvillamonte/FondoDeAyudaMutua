@@ -32,7 +32,6 @@
     "cookie-parser": "^1.4.6",
     "exceljs": "^4.4.0",
     "jszip": "^3.10.2",
-    "msnodesqlv8": "^5.2.3",
     "mssql": "^12.7.0",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
@@ -62,5 +61,8 @@
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.3.3"
+  },
+  "optionalDependencies": {
+    "msnodesqlv8": "^5.2.3"
   }
 }

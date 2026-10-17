@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { parseJsonSafe } from '@/lib/safe-json';
 
 interface Colegiado {
   COLEGIADO_ID: string;
@@ -43,8 +44,8 @@ export default function ColegiadoSearch({ onSelect, selectedColegiado }: Colegia
         headers: { Authorization: `Bearer ${token}` },
       });
       if (response.ok) {
-        const data = await response.json();
-        setResults(data.data || data);
+        const data = await parseJsonSafe<{ data?: Colegiado[] }>(response);
+        setResults(data.data || []);
         setIsOpen(true);
       }
     } catch {

@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import * as sql from 'mssql/msnodesqlv8';
+import * as sql from 'mssql';
 import * as ExcelJS from 'exceljs';
 import * as JSZip from 'jszip';
 import { randomUUID } from 'crypto';

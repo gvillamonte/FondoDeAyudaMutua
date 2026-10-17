@@ -7,7 +7,8 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import * as sql from 'mssql/msnodesqlv8';
+import * as sql from 'mssql';
+import { createLegacyPool } from './legacy-sql.helper';
 
 @Injectable()
 export class LegacyService implements OnModuleInit, OnModuleDestroy {
@@ -27,36 +28,15 @@ export class LegacyService implements OnModuleInit, OnModuleDestroy {
 
   async connect() {
     try {
-      const server = this.configService.get<string>('LEGACY_DB_SERVER', '.\\SQLEXPRESS');
-      const database = this.configService.get<string>('LEGACY_DB_NAME', 'DBCIPCusco');
-      const envUrl = this.configService.get<string>('LEGACY_DB_URL');
-
-      // Detect connection configuration with Windows Authentication
-      const connectionString =
-        envUrl && envUrl.includes('Trusted_Connection')
-          ? envUrl
-          : `Driver={ODBC Driver 18 for SQL Server};Server=${server};Database=${database};Trusted_Connection=Yes;TrustServerCertificate=Yes;`;
-
-      const config: any = {
-        connectionString,
-        options: {
-          trustedConnection: true,
-          enableArithAbort: true,
-        },
-        pool: {
-          min: 2,
-          max: 10,
-          idleTimeoutMillis: 30000,
-        },
-        requestTimeout: 90000,
-        connectionTimeout: 30000,
-      };
-
-      this.pool = new sql.ConnectionPool(config);
+      const { pool, mode } = await createLegacyPool(this.configService);
+      this.pool = pool;
 
       await this.pool.connect();
       this.isConnected = true;
-      this.logger.log(`Conectado exitosamente a SQL Server (${database} en ${server}) con Autenticacion de Windows`);
+      const server = this.configService.get<string>('LEGACY_DB_SERVER', 'localhost');
+      const database = this.configService.get<string>('LEGACY_DB_NAME', 'DBCIPCusco');
+      const authLabel = mode === 'sql' ? 'Autenticacion SQL' : 'Autenticacion de Windows';
+      this.logger.log(`Conectado exitosamente a SQL Server (${database} en ${server}) con ${authLabel}`);
     } catch (error: any) {
       this.logger.error(`Error conectando a SQL Server legacy (${error.message})`, error.stack);
       this.isConnected = false;

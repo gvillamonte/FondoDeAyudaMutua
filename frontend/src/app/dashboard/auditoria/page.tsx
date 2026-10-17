@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { parseJsonSafe } from '@/lib/safe-json';
 
 interface AuditLog {
   id: string;
@@ -54,9 +55,9 @@ export default function AuditoriaPage() {
       });
 
       if (response.ok) {
-        const result = await response.json();
-        setLogs(result.data || []);
-        setMeta(result.meta || { total: 0, page: 1, limit: 25, totalPages: 1 });
+        const result = await parseJsonSafe<{ data?: unknown[]; meta?: unknown }>(response);
+        setLogs((result.data as any[]) || []);
+        setMeta((result.meta as any) || { total: 0, page: 1, limit: 25, totalPages: 1 });
       }
     } catch {
       setLogs([]);

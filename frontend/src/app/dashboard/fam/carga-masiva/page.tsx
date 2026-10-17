@@ -115,9 +115,15 @@ export default function CargaMasivaPage() {
         if (res.ok) {
           ok++;
         } else {
-          const err = await res.json();
+          let errMsg = 'Error';
+          try {
+            const err = await res.json();
+            errMsg = err.message || err.error || 'Error';
+          } catch {
+            errMsg = 'Backend no disponible';
+          }
           error++;
-          errors.push(`Fila ${fila._fila}: ${err.message || 'Error'}`);
+          errors.push(`Fila ${fila._fila}: ${errMsg}`);
         }
       } catch {
         error++;

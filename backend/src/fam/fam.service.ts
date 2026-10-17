@@ -1,7 +1,8 @@
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import * as sql from 'mssql/msnodesqlv8';
+import * as sql from 'mssql';
 import { PrismaClient } from '@prisma/client';
+import { createLegacyPool } from '../legacy/legacy-sql.helper';
 
 @Injectable()
 export class FamService implements OnModuleInit, OnModuleDestroy {
@@ -31,27 +32,12 @@ export class FamService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleInit() {
     try {
-      const envUrl = this.configService.get<string>('LEGACY_DB_URL');
-      const server = this.configService.get<string>('LEGACY_DB_SERVER', '.\\SQLEXPRESS');
-      const database = this.configService.get<string>('LEGACY_DB_NAME', 'DBCIPCusco');
-
-      const connectionString =
-        envUrl && envUrl.includes('Trusted_Connection')
-          ? envUrl
-          : `Driver={ODBC Driver 18 for SQL Server};Server=${server};Database=${database};Trusted_Connection=Yes;TrustServerCertificate=Yes;`;
-
-      const config: any = {
-        connectionString,
-        options: { trustedConnection: true, enableArithAbort: true },
-        pool: { min: 2, max: 10, idleTimeoutMillis: 30000 },
-        requestTimeout: 90000,
-        connectionTimeout: 30000,
-      };
-
-      this.pool = new sql.ConnectionPool(config);
+      const { pool, mode } = await createLegacyPool(this.configService);
+      this.pool = pool;
       await this.pool.connect();
       this.isConnected = true;
-      this.logger.log('FAM conectado a DBCIPCusco');
+      const authLabel = mode === 'sql' ? 'SQL' : 'Windows';
+      this.logger.log(`FAM conectado a DBCIPCusco (auth: ${authLabel})`);
       await this.cargarParentescos();
     } catch (error: any) {
       this.logger.error(`FAM error conexion: ${error.message}`);

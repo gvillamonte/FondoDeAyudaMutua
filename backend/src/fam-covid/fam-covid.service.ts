@@ -111,19 +111,11 @@ export class FamCovidService {
       let dni: string | null = null;
       let nombre: string | null = null;
       try {
-        const sql = await import('mssql/msnodesqlv8');
+        const sql = await import('mssql');
+        const { createLegacyPool } = await import('../legacy/legacy-sql.helper');
         const { ConfigService } = await import('@nestjs/config');
         const config = new ConfigService();
-        const envUrl = config.get<string>('LEGACY_DB_URL');
-        const server = config.get<string>('LEGACY_DB_SERVER', '.\\SQLEXPRESS');
-        const database = config.get<string>('LEGACY_DB_NAME', 'DBCIPCusco');
-        const connStr = envUrl && envUrl.includes('Trusted_Connection')
-          ? envUrl
-          : `Driver={ODBC Driver 18 for SQL Server};Server=${server};Database=${database};Trusted_Connection=Yes;TrustServerCertificate=Yes;`;
-        const pool = new sql.ConnectionPool({
-          connectionString: connStr,
-          options: { trustedConnection: true, enableArithAbort: true },
-        } as any);
+        const { pool } = await createLegacyPool(config);
         await pool.connect();
         const req = pool.request();
         req.input('id', sql.VarChar, dto.colegiadoId.trim());

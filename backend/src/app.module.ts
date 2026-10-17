@@ -18,6 +18,7 @@ import { FamDuplicadosModule } from './fam-duplicados/fam-duplicados.module';
 import { ExpedienteSlaModule } from './expediente-sla/expediente-sla.module';
 import { TesoreriaModule } from './tesoreria/tesoreria.module';
 import { ReportesModule } from './reportes/reportes.module';
+import { HealthModule } from './health/health.module';
 import { AuditInterceptor } from './audit/audit.interceptor';
 
 @Module({
@@ -43,6 +44,7 @@ import { AuditInterceptor } from './audit/audit.interceptor';
     ExpedienteSlaModule,
     TesoreriaModule,
     ReportesModule,
+    HealthModule,
   ],
   providers: [
     { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },

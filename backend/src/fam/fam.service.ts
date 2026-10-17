@@ -31,6 +31,12 @@ export class FamService implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleInit() {
+    // No bloquear el arranque del servidor: la conexion legacy se intenta
+    // en segundo plano para que app.listen() no dependa de LEGACY_DB.
+    void this.initLegacyPool();
+  }
+
+  private async initLegacyPool() {
     try {
       const { pool, mode } = await createLegacyPool(this.configService);
       this.pool = pool;

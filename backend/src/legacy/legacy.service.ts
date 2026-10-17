@@ -19,7 +19,10 @@ export class LegacyService implements OnModuleInit, OnModuleDestroy {
   constructor(private configService: ConfigService) {}
 
   async onModuleInit() {
-    await this.connect();
+    // No bloquear el arranque del servidor: si LEGACY_DB esta caido o mal
+    // configurado, app.listen() no se ejecutaria y el puerto 3001 nunca
+    // estaria disponible. La conexion se intenta en segundo plano.
+    void this.connect();
   }
 
   async onModuleDestroy() {

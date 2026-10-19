@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Sistema de Beneficios Colegiales',
+  title: 'Sistema de Fondo de Ayuda Mutua',
   description: 'Sistema de gestión de beneficios y pagos a colegiados',
 };
 

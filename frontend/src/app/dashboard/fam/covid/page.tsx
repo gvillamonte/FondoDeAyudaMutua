@@ -271,7 +271,7 @@ export default function AyudaCovidPage() {
       <ConfirmCenterMessage />
 
       <div>
-        <h2 className="text-2xl font-semibold text-text-main">Ayuda COVID</h2>
+        <h2 className="text-xl sm:text-2xl font-semibold text-text-main">Ayuda COVID</h2>
         <p className="text-text-sec text-sm mt-1">Gestión de asignaciones económicas por COVID-19 y documentación contable para reembolso.</p>
       </div>
 
@@ -425,19 +425,19 @@ export default function AyudaCovidPage() {
                     return (
                       <div key={f.key}
                         className={`grid grid-cols-12 gap-2 items-center border rounded-lg p-3 transition-colors ${esSolicitante ? 'border-primary bg-blue-50/60' : 'border-border bg-white'}`}>
-                        <label className="col-span-4 flex items-center gap-2.5 cursor-pointer" title="Marcar como solicitante">
+                        <label className="col-span-12 sm:col-span-4 flex items-center gap-2.5 cursor-pointer min-w-0" title="Marcar como solicitante">
                           <input type="radio" name="solicitante-covid" checked={esSolicitante}
                             onChange={() => setSolicitanteKey(f.key)}
                             className="w-4 h-4 accent-[#3258CA]" />
                           <span className="text-sm font-medium text-text-main truncate">{f.nombre}</span>
                         </label>
                         <span className="col-span-2 text-xs text-text-sec">{f.dni || '—'}</span>
-                        <span className="col-span-1 text-xs text-text-sec">{f.parentesco}</span>
-                        <span className="col-span-1 text-xs text-text-sec font-semibold text-right">{porcentaje}%</span>
+                        <span className="col-span-3 sm:col-span-1 text-xs text-text-sec">{f.parentesco}</span>
+                        <span className="col-span-2 sm:col-span-1 text-xs text-text-sec font-semibold text-right">{porcentaje}%</span>
                         {modalidad === 'opcion_sucesiva' && (
                           <span className="col-span-1 text-xs text-primary font-semibold text-center">#{idx + 1}</span>
                         )}
-                        <div className="col-span-3 text-right">
+                        <div className="col-span-3 sm:col-span-3 text-right">
                           <span className="text-sm font-semibold text-text-main">→ S/ {corresponde.toFixed(2)}</span>
                         </div>
                       </div>
@@ -461,7 +461,7 @@ export default function AyudaCovidPage() {
           {colegiado && (
             <div className="bg-white border border-border rounded-lg p-5">
               <h3 className="text-sm font-semibold text-text-main mb-3">3. Datos de la Asignación y Documentación</h3>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-text-sec uppercase mb-1">Monto entregado (S/)*</label>
                   <input type="number" step="0.01" min="0" value={monto}
@@ -494,7 +494,7 @@ export default function AyudaCovidPage() {
                     ))}
                   </select>
                 </div>
-                <div className="col-span-2">
+                <div className="col-span-6 sm:col-span-2">
                   <label className="block text-xs font-medium text-text-sec uppercase mb-1">Observaciones</label>
                   <textarea value={observaciones} onChange={(e) => setObservaciones(e.target.value)}
                     rows={2} className="w-full px-3 py-2 border border-border rounded-lg text-sm resize-none" />
@@ -523,35 +523,35 @@ export default function AyudaCovidPage() {
                 <div className="space-y-3">
                   {comprobantes.map((comp, idx) => (
                     <div key={idx} className="grid grid-cols-12 gap-2 items-end border border-border rounded-lg p-3 bg-gray-50/50">
-                      <div className="col-span-2">
+                      <div className="col-span-6 sm:col-span-2">
                         <label className="block text-xs text-text-sec mb-1">Tipo*</label>
                         <select value={comp.tipoComprobante} onChange={(e) => updateComprobante(idx, 'tipoComprobante', e.target.value)}
                           className="w-full px-2 py-1.5 border border-border rounded text-sm">
                           {TIPOS_COMPROBANTE.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                         </select>
                       </div>
-                      <div className="col-span-1">
+                      <div className="col-span-6 sm:col-span-1">
                         <label className="block text-xs text-text-sec mb-1">Serie</label>
                         <input type="text" value={comp.serie} onChange={(e) => updateComprobante(idx, 'serie', e.target.value)}
                           className="w-full px-2 py-1.5 border border-border rounded text-sm" placeholder="B001" />
                       </div>
-                      <div className="col-span-2">
+                      <div className="col-span-6 sm:col-span-2">
                         <label className="block text-xs text-text-sec mb-1">N.°</label>
                         <input type="text" value={comp.numero} onChange={(e) => updateComprobante(idx, 'numero', e.target.value)}
                           className="w-full px-2 py-1.5 border border-border rounded text-sm" placeholder="000123" />
                       </div>
-                      <div className="col-span-3">
+                      <div className="col-span-12 sm:col-span-3">
                         <label className="block text-xs text-text-sec mb-1">Concepto</label>
                         <input type="text" value={comp.concepto} onChange={(e) => updateComprobante(idx, 'concepto', e.target.value)}
                           className="w-full px-2 py-1.5 border border-border rounded text-sm" placeholder="Gastos de sepelio" />
                       </div>
-                      <div className="col-span-2">
+                      <div className="col-span-6 sm:col-span-2">
                         <label className="block text-xs text-text-sec mb-1">Importe total*</label>
                         <input type="number" step="0.01" min="0" value={comp.importeTotal}
                           onChange={(e) => updateComprobante(idx, 'importeTotal', e.target.value)}
                           className="w-full px-2 py-1.5 border border-border rounded text-sm" />
                       </div>
-                      <div className="col-span-1 flex flex-col items-center gap-1">
+                      <div className="col-span-3 sm:col-span-1 flex flex-col items-center gap-1">
                         <label className="block text-xs text-text-sec mb-1">PDF</label>
                         <label className="cursor-pointer">
                           <input type="file" accept=".pdf" className="hidden"
@@ -561,7 +561,7 @@ export default function AyudaCovidPage() {
                           </span>
                         </label>
                       </div>
-                      <div className="col-span-1 flex items-end">
+                      <div className="col-span-3 sm:col-span-1 flex items-end justify-end">
                         <button onClick={() => removeComprobante(idx)} className="p-1.5 rounded hover:bg-red-50 text-red-500" title="Quitar">
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                         </button>

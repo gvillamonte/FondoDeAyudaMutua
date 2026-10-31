@@ -19,6 +19,7 @@ import { ExpedienteSlaModule } from './expediente-sla/expediente-sla.module';
 import { TesoreriaModule } from './tesoreria/tesoreria.module';
 import { ReportesModule } from './reportes/reportes.module';
 import { HealthModule } from './health/health.module';
+import { ActualizacionDatosModule } from './actualizacion-datos/actualizacion-datos.module';
 import { AuditInterceptor } from './audit/audit.interceptor';
 
 @Module({
@@ -45,6 +46,7 @@ import { AuditInterceptor } from './audit/audit.interceptor';
     TesoreriaModule,
     ReportesModule,
     HealthModule,
+    ActualizacionDatosModule,
   ],
   providers: [
     { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },

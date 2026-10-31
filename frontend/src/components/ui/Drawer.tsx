@@ -31,7 +31,7 @@ export default function Drawer({ isOpen, onClose, title, children, width = 'w-96
         onClick={onClose}
       />
       <div
-        className={`fixed right-0 top-0 h-full ${width} bg-white shadow-xl z-50 transform transition-transform duration-300 ${
+        className={`fixed right-0 top-0 h-full w-full ${width} max-w-full bg-white shadow-xl z-50 transform transition-transform duration-300 ${
           isOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
       >

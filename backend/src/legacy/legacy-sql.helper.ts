@@ -2,8 +2,8 @@ import { ConfigService } from '@nestjs/config';
 import * as sql from 'mssql';
 
 const POOL = { min: 2, max: 10, idleTimeoutMillis: 30000 };
-const REQUEST_TIMEOUT = 90000;
-const CONNECTION_TIMEOUT = 30000;
+const REQUEST_TIMEOUT = 20000;
+const CONNECTION_TIMEOUT = 10000;
 
 export type LegacyAuthMode = 'sql' | 'windows';
 
@@ -90,4 +90,113 @@ export async function createLegacyPool(config: ConfigService): Promise<{
   } as any);
 
   return { pool, mode: 'windows' };
+}
+
+/**
+ * Clasifica errores de LEGACY_DB. LEGACY_DB es SOLO LECTURA (SELECT), por lo
+ * que reconectar el pool y reintentar la consulta es siempre seguro.
+ *
+ * Se reintenta:
+ * - fallos de conexion/pool (ENOTOPEN, ESOCKET, etc.)
+ * - timeout de consulta (`Query timeout expired` / ETIMEOUT): el sintoma
+ *   tipico de una conexion colgada en el pool (driver ODBC + autenticacion de
+ *   Windows). Sin reintento el cliente espera 20s y recibe un HTTP 500.
+ *
+ * NO se reintenta: errores de SQL (EREQUEST) ni de parametros (EINPUT).
+ */
+export function isLegacyRetryableError(error: any): boolean {
+  const code = String(error?.code || '');
+  const msg = String(error?.message || '').toLowerCase();
+
+  // msnodesqlv8 marca TODO error de sentencia como EREQUEST, incluido el
+  // timeout de consulta: por eso el mensaje se evalua antes que el codigo.
+  const esTimeout =
+    code === 'ETIMEOUT' ||
+    msg.includes('timeout expired') ||
+    msg.includes('timeout') // query_timeout / login timeout del driver ODBC
+  if (esTimeout) return true;
+
+  if (code === 'EREQUEST' || code === 'EINPUT') return false;
+  if (['ENOTOPEN', 'ESOCKET', 'ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT'].includes(code)) return true;
+
+  return (
+    msg.includes('connection is closed') ||
+    msg.includes('connection was closed') ||
+    msg.includes('connection pool') ||
+    msg.includes('unable to connect') ||
+    msg.includes('socket hang up') ||
+    msg.includes('econnreset') ||
+    msg.includes('connection terminated')
+  );
+}
+
+/**
+ * Cierra el pool legacy sin bloquear la peticion del usuario: si alguna
+ * conexion quedo colgada, pool.close() puede no resolver nunca.
+ */
+export async function closePoolSafely(
+  pool: { close: () => Promise<void> } | null,
+  timeoutMs = 5000,
+): Promise<void> {
+  if (!pool) return;
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    await Promise.race([
+      Promise.resolve().then(() => pool.close()).catch(() => undefined),
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, timeoutMs);
+        if (typeof timer.unref === 'function') timer.unref();
+      }),
+    ]);
+  } catch {
+    // Ignorar errores al cerrar el pool caido
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+/** Peso del ping de keepalive: por debajo de idleTimeoutMillis (30s). */
+export const LEGACY_KEEPALIVE_MS = 25000;
+
+/**
+ * Mantiene vivas las conexiones ociosas del pool legacy.
+ *
+ * El driver ODBC (msnodesqlv8) con autenticacion de Windows puede dejar
+ * conexiones "colgadas" tras un periodo de inactividad: la primera consulta
+ * posterior agota los 20s de requestTimeout en lugar de detectar la conexion
+ * muerta y responde con `Query timeout expired`. Con un ping periodico las
+ * conexiones nunca quedan ociosas y los buscadores responden en milisegundos.
+ */
+export function startLegacyKeepalive(
+  ping: () => Promise<void>,
+  onError: (error: any) => void,
+  intervalMs: number = LEGACY_KEEPALIVE_MS,
+): NodeJS.Timeout {
+  const timer = setInterval(() => {
+    void Promise.resolve()
+      .then(() => ping())
+      .catch((error) => onError(error));
+  }, intervalMs);
+  if (typeof timer.unref === 'function') timer.unref();
+  return timer;
+}
+
+/**
+ * Ejecuta una consulta sobre LEGACY_DB y, si el fallo es reintentable
+ * (conexion o timeout de consulta), reconecta el pool una vez y reintenta.
+ * Un Request por ejecucion.
+ */
+export async function queryWithLegacyRetry<T>(
+  execute: () => Promise<T>,
+  reconnect: () => Promise<void>,
+  onRetry: (error: any) => void,
+): Promise<T> {
+  try {
+    return await execute();
+  } catch (error: any) {
+    if (!isLegacyRetryableError(error)) throw error;
+    onRetry(error);
+    await reconnect();
+    return await execute();
+  }
 }

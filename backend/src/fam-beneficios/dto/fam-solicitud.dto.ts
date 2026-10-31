@@ -6,6 +6,7 @@ import {
   IsInt,
   IsBoolean,
   IsIn,
+  IsArray,
   ValidateNested,
   ArrayMaxSize,
   Min,
@@ -14,6 +15,7 @@ import {
   ValidatorConstraintInterface,
   ValidationArguments,
   Validate,
+  Matches,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -63,6 +65,16 @@ export class DocumentoExpedienteDto {
   @IsOptional()
   @IsString()
   sucesionIntestada?: string;
+
+  @Validate(EsPdfBase64)
+  @IsOptional()
+  @IsString()
+  actaDefuncion?: string;
+
+  @Validate(EsPdfBase64)
+  @IsOptional()
+  @IsString()
+  otrosDocumentos?: string;
 }
 
 export class BeneficiarioRegistroDto {
@@ -96,6 +108,99 @@ export class BeneficiarioRegistroDto {
   @IsOptional()
   @IsInt()
   orden?: number;
+
+  @Validate(EsPdfBase64)
+  @IsOptional()
+  @IsString()
+  declaracionJurada?: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d{8}$/, { message: 'declaracionJuradaDni debe tener exactamente 8 digitos' })
+  declaracionJuradaDni?: string;
+
+  @Validate(EsPdfBase64)
+  @IsOptional()
+  @IsString()
+  ordenPago?: string;
+}
+
+export class SubirDocumentoDto {
+  @Validate(EsPdfBase64)
+  @IsString()
+  contenido: string;
+}
+
+export class SubirDeclaracionJuradaDto extends SubirDocumentoDto {
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d{8}$/, { message: 'declaracionJuradaDni debe tener exactamente 8 digitos' })
+  declaracionJuradaDni?: string;
+}
+
+export class ActualizarBeneficiariosDto {
+  @ValidateNested({ each: true })
+  @Type(() => BeneficiarioRegistroDto)
+  @ArrayMaxSize(20)
+  beneficiarios: BeneficiarioRegistroDto[];
+}
+
+export class DepositoPagoDto {
+  @IsOptional()
+  @IsString()
+  beneficiarioId?: string;
+
+  @IsOptional()
+  @IsString()
+  banco?: string;
+
+  @IsOptional()
+  @IsString()
+  numeroCuenta?: string;
+
+  @IsOptional()
+  @IsString()
+  cci?: string;
+
+  @Validate(EsPdfBase64)
+  @IsOptional()
+  @IsString()
+  comprobantePdf?: string;
+}
+
+export class PagarExpedienteDto {
+  @IsOptional()
+  @IsDateString()
+  fechaPago?: string;
+
+  @IsOptional()
+  @ValidateNested({ each: true })
+  @Type(() => DepositoPagoDto)
+  @ArrayMaxSize(20)
+  depositos?: DepositoPagoDto[];
+}
+
+export class ActualizarDepositoDto {
+  @IsOptional()
+  @IsString()
+  banco?: string;
+
+  @IsOptional()
+  @IsString()
+  numeroCuenta?: string;
+
+  @IsOptional()
+  @IsString()
+  cci?: string;
+
+  @Validate(EsPdfBase64)
+  @IsOptional()
+  @IsString()
+  comprobantePdf?: string;
+
+  @IsOptional()
+  @IsDateString()
+  fechaPago?: string;
 }
 
 export class CrearRegistroFamDto {
@@ -168,6 +273,26 @@ export class CrearRegistroFamDto {
   @IsString()
   ordenPago?: string;
 
+  @Validate(EsPdfBase64)
+  @IsOptional()
+  @IsString()
+  declaracionJurada?: string;
+
+  @Validate(EsPdfBase64)
+  @IsOptional()
+  @IsString()
+  actaDefuncion?: string;
+
+  @Validate(EsPdfBase64)
+  @IsOptional()
+  @IsString()
+  otrosDocumentos?: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d{8}$/, { message: 'declaracionJuradaDni debe tener exactamente 8 digitos' })
+  declaracionJuradaDni?: string;
+
   @IsOptional()
   @IsString()
   observaciones?: string;
@@ -184,7 +309,7 @@ export class CrearRegistroFamDto {
   @IsString()
   modalidadBeneficio?: string; // 'monto_unico' | 'monto_compartido' | 'opcion_sucesiva'
 
-  // Solicitante: beneficiario registrado (radio) o manual (caso sucesion intestada)
+  // Solicitante: beneficiario registrado (radio/checkbox) o manual (caso sucesion intestada)
   @IsOptional()
   @IsString()
   solicitanteBeneficiarioId?: string;
@@ -194,6 +319,16 @@ export class CrearRegistroFamDto {
   @IsInt()
   @Min(0)
   solicitanteIndice?: number;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  solicitanteBeneficiarioIds?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsInt({ each: true })
+  solicitanteIndices?: number[];
 
   @IsOptional()
   @IsString()
@@ -231,6 +366,31 @@ export class CrearRegistroFamDto {
   @IsOptional()
   @IsDateString()
   ordenPagoFecha?: string;
+
+  // Datos especificos segun tipo de beneficio
+  @IsOptional()
+  @IsDateString()
+  fechaDefuncion?: string;
+
+  @IsOptional()
+  @IsString()
+  causaFallecimiento?: string;
+
+  @IsOptional()
+  @IsDateString()
+  fechaDiagnostico?: string;
+
+  @IsOptional()
+  @IsString()
+  diagnosticoMedico?: string;
+
+  @IsOptional()
+  @IsDateString()
+  fechaAccidente?: string;
+
+  @IsOptional()
+  @IsString()
+  descripcionAccidente?: string;
 }
 
 export class CrearFamSolicitudDto {
@@ -294,6 +454,15 @@ export class CrearFamSolicitudDto {
 
   @IsOptional()
   @IsString()
+  actaDefuncion?: string;
+
+  @Validate(EsPdfBase64)
+  @IsOptional()
+  @IsString()
+  otrosDocumentos?: string;
+
+  @IsOptional()
+  @IsString()
   formaPago?: string;
 
   @IsOptional()
@@ -306,6 +475,31 @@ export class CrearFamSolicitudDto {
 }
 
 export class ActualizarFamSolicitudDto {
+  // Datos especificos segun tipo de beneficio
+  @IsOptional()
+  @IsDateString()
+  fechaDefuncion?: string;
+
+  @IsOptional()
+  @IsString()
+  causaFallecimiento?: string;
+
+  @IsOptional()
+  @IsDateString()
+  fechaDiagnostico?: string;
+
+  @IsOptional()
+  @IsString()
+  diagnosticoMedico?: string;
+
+  @IsOptional()
+  @IsDateString()
+  fechaAccidente?: string;
+
+  @IsOptional()
+  @IsString()
+  descripcionAccidente?: string;
+
   @IsOptional()
   @IsNumber()
   @Min(0)
@@ -386,6 +580,26 @@ export class ActualizarFamSolicitudDto {
   @IsOptional()
   @IsString()
   ordenPago?: string;
+
+  @Validate(EsPdfBase64)
+  @IsOptional()
+  @IsString()
+  declaracionJurada?: string;
+
+  @Validate(EsPdfBase64)
+  @IsOptional()
+  @IsString()
+  actaDefuncion?: string;
+
+  @Validate(EsPdfBase64)
+  @IsOptional()
+  @IsString()
+  otrosDocumentos?: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d{8}$/, { message: 'declaracionJuradaDni debe tener exactamente 8 digitos' })
+  declaracionJuradaDni?: string;
 
   @IsOptional()
   @IsString()

@@ -11,6 +11,8 @@ interface BeneficiarioVinculado {
   dni: string | null;
   parentesco: string;
   porcentajeAsignado: number;
+  tieneDeclaracionJurada?: boolean;
+  tieneOrdenPago?: boolean;
 }
 
 interface HistorialBeneficio {
@@ -60,6 +62,13 @@ export interface DetalleExpediente {
   montoFinal: number | null;
   modalidadBeneficio: string | null;
   documentosDisponibles: Record<string, boolean>;
+  declaracionJuradaDni: string | null;
+  fechaDefuncion?: string | null;
+  causaFallecimiento?: string | null;
+  fechaDiagnostico?: string | null;
+  diagnosticoMedico?: string | null;
+  fechaAccidente?: string | null;
+  descripcionAccidente?: string | null;
   beneficiariosVinculados: BeneficiarioVinculado[];
   covidMontoTotal: number;
   historialBeneficios: HistorialBeneficio[];
@@ -84,6 +93,8 @@ const DOCS_LABELS: Record<string, string> = {
   memorando: 'Memorándum',
   ordenPago: 'Orden de Pago',
   sucesionIntestada: 'Sucesión Intestada',
+  declaracionJurada: 'Declaración Jurada',
+  otrosDocumentos: 'Otros / Documentación Completa',
 };
 
 const ESTADO_COLORS: Record<string, string> = {
@@ -175,6 +186,19 @@ export default function DetalleExpedienteModal({ id, onClose, onDelete }: { id: 
       alert('No se pudo abrir el documento.');
     } finally {
       setPdfLoadingKey(null);
+    }
+  };
+
+  const abrirOrdenPagoBeneficiario = async (beneficiarioId: string) => {
+    try {
+      const { data } = await api.get(`/fam-beneficios/${id}/beneficiario/${beneficiarioId}/orden-pago`);
+      const bytes = Uint8Array.from(atob(data.contenido), (c) => c.charCodeAt(0));
+      const blob = new Blob([bytes], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 30000);
+    } catch {
+      alert('No se pudo abrir la orden de pago.');
     }
   };
 
@@ -293,10 +317,10 @@ export default function DetalleExpedienteModal({ id, onClose, onDelete }: { id: 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative bg-white rounded-xl shadow-2xl w-[1100px] max-w-[95vw] max-h-[92vh] flex flex-col">
+      <div className="relative bg-white rounded-xl shadow-2xl w-[1100px] max-w-[96vw] max-h-[95vh] sm:max-h-[92vh] flex flex-col">
 
         {/* HEADER */}
-        <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 border-b border-border bg-white rounded-t-xl">
+        <div className="flex-shrink-0 flex items-center justify-between gap-3 px-4 sm:px-6 py-3 sm:py-4 border-b border-border bg-white rounded-t-xl">
           <div>
             <h3 className="text-lg font-bold text-text-main">
               Expediente {detalle?.expedienteNumero || ''}
@@ -326,7 +350,7 @@ export default function DetalleExpedienteModal({ id, onClose, onDelete }: { id: 
             {/* COLEGIADO + EXPEDIENTE — 2 columnas */}
             <div className="flex-shrink-0 grid grid-cols-1 lg:grid-cols-2 gap-0 border-b border-border">
               {/* Colegiado */}
-              <div className="px-6 py-4 border-r border-border">
+              <div className="px-4 sm:px-6 py-4 lg:border-r border-border">
                 <h4 className="text-[10px] font-semibold text-text-sec uppercase tracking-widest mb-2">Colegiado</h4>
                 <p className="text-base font-bold text-text-main leading-snug">{detalle.NOMBRE_COLEGIADO || '-'}</p>
                 <div className="flex items-center gap-4 mt-1.5 text-xs text-text-sec">
@@ -339,9 +363,9 @@ export default function DetalleExpedienteModal({ id, onClose, onDelete }: { id: 
                 </div>
               </div>
               {/* Expediente */}
-              <div className="px-6 py-4">
+              <div className="px-4 sm:px-6 py-4">
                 <h4 className="text-[10px] font-semibold text-text-sec uppercase tracking-widest mb-2">Expediente</h4>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs">
                   <div className="flex justify-between"><span className="text-text-sec">Tipo</span><span className="font-medium text-text-main">{detalle.tipoBeneficio?.nombre || '-'}</span></div>
                   <div className="flex justify-between"><span className="text-text-sec">Modalidad</span><span className="font-medium text-text-main">{MODALIDAD_LABELS[detalle.modalidadBeneficio || ''] || detalle.modalidadBeneficio || '-'}</span></div>
                   <div className="flex justify-between"><span className="text-text-sec">F. Recepción</span><span className="text-text-main">{fmt(detalle.fechaSolicitud)}</span></div>
@@ -353,7 +377,7 @@ export default function DetalleExpedienteModal({ id, onClose, onDelete }: { id: 
             </div>
 
             {/* TABS */}
-            <div className="flex-shrink-0 flex border-b border-border bg-gray-50">
+            <div className="flex-shrink-0 flex border-b border-border bg-gray-50 overflow-x-auto">
               {[
                 { key: 'montos', label: 'Desglose de Montos' },
                 { key: 'docs', label: 'Documentos' },
@@ -363,7 +387,7 @@ export default function DetalleExpedienteModal({ id, onClose, onDelete }: { id: 
                 <button
                   key={t.key}
                   onClick={() => setActiveTab(t.key as any)}
-                  className={`px-5 py-2.5 text-xs font-semibold border-b-2 transition-colors ${activeTab === t.key ? 'border-primary text-primary bg-white' : 'border-transparent text-text-sec hover:text-text-main hover:bg-gray-100'}`}
+                  className={`px-4 sm:px-5 py-2.5 text-xs font-semibold border-b-2 transition-colors whitespace-nowrap flex-shrink-0 ${activeTab === t.key ? 'border-primary text-primary bg-white' : 'border-transparent text-text-sec hover:text-text-main hover:bg-gray-100'}`}
                 >
                   {t.label}
                 </button>
@@ -371,7 +395,7 @@ export default function DetalleExpedienteModal({ id, onClose, onDelete }: { id: 
             </div>
 
             {/* BODY */}
-            <div className="flex-1 overflow-auto px-6 py-5">
+            <div className="flex-1 overflow-auto px-4 sm:px-6 py-4 sm:py-5">
 
               {/* TAB: MONTOS */}
               {activeTab === 'montos' && (
@@ -467,7 +491,7 @@ export default function DetalleExpedienteModal({ id, onClose, onDelete }: { id: 
                   )}
 
                   {/* Resumen */}
-                  <div className="grid grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                     <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-center">
                       <p className="text-[10px] font-semibold text-green-700 uppercase">Monto Base Total</p>
                       <p className="text-lg font-bold text-green-800 mt-1">{fmtMonto(7000)}</p>
@@ -520,10 +544,15 @@ export default function DetalleExpedienteModal({ id, onClose, onDelete }: { id: 
                         <strong>Justificación:</strong> {detalle.documentacionObservacion || '-'}
                       </p>
                     )}
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {Object.entries(DOCS_LABELS).map(([campo, label]) => (
                         <div key={campo} className="flex items-center justify-between text-sm px-3 py-2 bg-white border border-border rounded-lg">
-                          <span className="text-text-sec">{label}</span>
+                          <span className="text-text-sec inline-flex items-center gap-2">
+                            {label}
+                            {campo === 'declaracionJurada' && detalle.declaracionJuradaDni && (
+                              <span className="text-[10px] font-medium bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">DNI {detalle.declaracionJuradaDni}</span>
+                            )}
+                          </span>
                           {detalle.documentosDisponibles?.[campo] ? (
                             <button onClick={() => abrirPdf(campo)} disabled={pdfLoadingKey === campo}
                               className="text-xs font-medium text-primary hover:text-primary-dark inline-flex items-center gap-1 disabled:opacity-50">
@@ -539,7 +568,7 @@ export default function DetalleExpedienteModal({ id, onClose, onDelete }: { id: 
 
                   <div className="bg-gray-50 rounded-lg p-4">
                     <h4 className="text-xs font-semibold text-text-sec uppercase tracking-wider mb-2">Administrativo</h4>
-                    <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-sm">
                       <span className="text-text-sec">Carta N°:</span><span className="text-text-main">{detalle.cartaNumero || '-'} / {fmt(detalle.cartaFecha)}</span>
                       <span className="text-text-sec">Memorándum N°:</span><span className="text-text-main">{detalle.memorandoNumero || '-'} / {fmt(detalle.memorandoFecha)}</span>
                       <span className="text-text-sec">Forma de Pago:</span><span className="text-text-main">{detalle.formaPago || '-'}</span>
@@ -547,6 +576,20 @@ export default function DetalleExpedienteModal({ id, onClose, onDelete }: { id: 
                       <span className="text-text-sec">F. Orden de Pago:</span><span className="text-text-main">{fmt(detalle.ordenPagoFecha)}</span>
                     </div>
                   </div>
+
+                  {(detalle.fechaDefuncion || detalle.causaFallecimiento || detalle.fechaDiagnostico || detalle.diagnosticoMedico || detalle.fechaAccidente || detalle.descripcionAccidente) && (
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <h4 className="text-xs font-semibold text-text-sec uppercase tracking-wider mb-2">Datos del Beneficio</h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-sm">
+                        {detalle.fechaDefuncion && (<><span className="text-text-sec">Fecha de Fallecimiento:</span><span className="text-text-main">{fmt(detalle.fechaDefuncion)}</span></>)}
+                        {detalle.causaFallecimiento && (<><span className="text-text-sec">Causa de Fallecimiento:</span><span className="text-text-main">{detalle.causaFallecimiento}</span></>)}
+                        {detalle.fechaDiagnostico && (<><span className="text-text-sec">Fecha de Diagnóstico:</span><span className="text-text-main">{fmt(detalle.fechaDiagnostico)}</span></>)}
+                        {detalle.diagnosticoMedico && (<><span className="text-text-sec">Diagnóstico Médico:</span><span className="text-text-main">{detalle.diagnosticoMedico}</span></>)}
+                        {detalle.fechaAccidente && (<><span className="text-text-sec">Fecha de Accidente:</span><span className="text-text-main">{fmt(detalle.fechaAccidente)}</span></>)}
+                        {detalle.descripcionAccidente && (<><span className="text-text-sec">Descripción del Accidente:</span><span className="text-text-main">{detalle.descripcionAccidente}</span></>)}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -565,6 +608,7 @@ export default function DetalleExpedienteModal({ id, onClose, onDelete }: { id: 
                             <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-text-sec uppercase">Parentesco</th>
                             <th className="px-4 py-2.5 text-right text-[10px] font-semibold text-text-sec uppercase">% Asignado</th>
                             <th className="px-4 py-2.5 text-right text-[10px] font-semibold text-text-sec uppercase">Monto</th>
+                            <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-text-sec uppercase">Orden de pago</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-border">
@@ -580,6 +624,15 @@ export default function DetalleExpedienteModal({ id, onClose, onDelete }: { id: 
                                 <td className="px-4 py-3 text-sm text-text-sec">{b.parentesco}</td>
                                 <td className="px-4 py-3 text-sm text-right font-semibold text-primary">{b.porcentajeAsignado}%</td>
                                 <td className="px-4 py-3 text-sm text-right font-semibold text-green-700">{fmtMonto(corresponde)}</td>
+                                <td className="px-4 py-3 text-sm">
+                                  {b.tieneOrdenPago ? (
+                                    <button type="button" onClick={() => abrirOrdenPagoBeneficiario(b.id)} className="text-xs font-medium text-primary hover:underline">
+                                      Ver PDF
+                                    </button>
+                                  ) : (
+                                    <span className="text-xs font-semibold text-amber-600">Pendiente</span>
+                                  )}
+                                </td>
                               </tr>
                             );
                           })}
@@ -608,7 +661,7 @@ export default function DetalleExpedienteModal({ id, onClose, onDelete }: { id: 
                   {/* Estado y Monto */}
                   <div className="bg-gray-50 rounded-lg p-4">
                     <h5 className="text-xs font-semibold text-text-sec uppercase tracking-wider mb-3">Estado y Monto</h5>
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div>
                         <label className="block text-xs font-medium text-text-sec uppercase mb-1">Estado</label>
                         <select value={formAdmin.estado} onChange={(e) => setFormAdmin({ ...formAdmin, estado: e.target.value })}
@@ -638,7 +691,7 @@ export default function DetalleExpedienteModal({ id, onClose, onDelete }: { id: 
                   {/* Fechas */}
                   <div className="bg-gray-50 rounded-lg p-4">
                     <h5 className="text-xs font-semibold text-text-sec uppercase tracking-wider mb-3">Fechas</h5>
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div>
                         <label className="block text-xs font-medium text-text-sec uppercase mb-1">F. Recepción</label>
                         <input type="date" value={formAdmin.fechaSolicitud}
@@ -658,7 +711,7 @@ export default function DetalleExpedienteModal({ id, onClose, onDelete }: { id: 
                   {/* Documentación */}
                   <div className="bg-gray-50 rounded-lg p-4">
                     <h5 className="text-xs font-semibold text-text-sec uppercase tracking-wider mb-3">Documentación</h5>
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div>
                         <label className="block text-xs font-medium text-text-sec uppercase mb-1">Carta N°</label>
                         <input value={formAdmin.cartaNumero}
@@ -807,7 +860,7 @@ export default function DetalleExpedienteModal({ id, onClose, onDelete }: { id: 
         )}
 
         {/* FOOTER */}
-        <div className="flex-shrink-0 px-6 py-3 border-t border-border flex justify-end">
+        <div className="flex-shrink-0 px-4 sm:px-6 py-3 border-t border-border flex justify-end">
           <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-text-sec bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">Cerrar</button>
         </div>
       </div>

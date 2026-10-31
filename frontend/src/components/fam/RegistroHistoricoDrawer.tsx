@@ -35,6 +35,8 @@ const DOCS_PDF = [
   { key: 'cartaRemision', label: 'Carta de Remisión' },
   { key: 'memorando', label: 'Memorándum' },
   { key: 'ordenPago', label: 'Orden de Pago' },
+  { key: 'actaDefuncion', label: 'Acta de Defunción' },
+  { key: 'otrosDocumentos', label: 'Otros / Documentación Completa' },
 ] as const;
 
 type DocKey = (typeof DOCS_PDF)[number]['key'];
@@ -90,8 +92,10 @@ export default function RegistroHistoricoDrawer({
     api.get('/memorandos').then(({ data }) => setCatalogoMemorandos(Array.isArray(data) ? data : [])).catch(() => {});
   }, []);
 
-  const docsPresentadosCount = Object.values(docsPresentados).filter(Boolean).length;
-  const todosPresentados = docsPresentadosCount === DOCS_PDF.length;
+  const tipoActual = tipos.find((t) => String(t.id) === String(tipoSeleccionado));
+  const esFallecimiento = String(tipoActual?.nombre || '').toUpperCase().includes('FALLECIMIENTO');
+  const docsRequeridos = DOCS_PDF.filter(({ key }) => key !== 'actaDefuncion' || esFallecimiento);
+  const todosPresentados = docsRequeridos.every(({ key }) => docsPresentados[key] === true);
 
   const calcularDescuento = () => {
     const tipo = tipos.find((t) => String(t.id) === String(tipoSeleccionado));
@@ -187,9 +191,9 @@ export default function RegistroHistoricoDrawer({
   return (
     <div className="fixed inset-0 z-[60] flex justify-end">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative bg-white w-[560px] max-h-[95vh] flex flex-col shadow-2xl overflow-hidden">
+      <div className="relative bg-white w-full sm:w-[560px] sm:max-w-[96vw] max-h-[95vh] flex flex-col shadow-2xl overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-gray-50">
+        <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-3 sm:py-4 border-b border-border bg-gray-50">
           <div>
             <h3 className="text-lg font-semibold text-text-main">Registrar Beneficio Histórico</h3>
             <p className="text-sm text-text-sec">{colegiadoNombre} — Se guardará como PAGADA</p>
@@ -200,7 +204,7 @@ export default function RegistroHistoricoDrawer({
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-auto px-6 py-5 space-y-5">
+        <div className="flex-1 overflow-auto px-4 sm:px-6 py-4 sm:py-5 space-y-5">
           {error && (
             <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{error}</div>
           )}
@@ -211,7 +215,7 @@ export default function RegistroHistoricoDrawer({
               <svg className="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
               Solicitud de Beneficio — Disponibles
             </h4>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {(['Fallecimiento', 'Accidente Grave', 'Enfermedad Terminal'] as const).map((nombre) => {
                 const configs: Record<string, { base: number; key: string }> = {
                   'Fallecimiento': { base: 3000, key: 'FALLECIMIENTO' },
@@ -251,7 +255,7 @@ export default function RegistroHistoricoDrawer({
           {/* 2. Tipo de beneficio a registrar */}
           <section>
             <label className="block text-xs font-semibold text-text-sec uppercase tracking-wider mb-2">Tipo de Beneficio a Registrar *</label>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {tipos.map((t) => {
                 const seleccionado = String(tipoSeleccionado) === String(t.id);
                 const nombreUpper = (t.nombre || '').toUpperCase().trim();
@@ -289,7 +293,7 @@ export default function RegistroHistoricoDrawer({
           {tipoSeleccionado && (
           <>
           {/* Monto y Solicitante */}
-          <section className="grid grid-cols-2 gap-4">
+          <section className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-text-sec uppercase tracking-wider mb-2">Monto (S/) *</label>
               <input type="number" min={0} step="0.01" value={monto} onChange={(e) => setMonto(e.target.value)}
@@ -321,7 +325,7 @@ export default function RegistroHistoricoDrawer({
           </section>
 
           {/* Fechas */}
-          <section className="grid grid-cols-2 gap-4">
+          <section className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-text-sec uppercase tracking-wider mb-2">F. Recepción *</label>
               <input type="date" value={fechaSolicitud} onChange={(e) => setFechaSolicitud(e.target.value)}
@@ -343,7 +347,7 @@ export default function RegistroHistoricoDrawer({
           <section>
             <h4 className="text-xs font-semibold text-text-sec uppercase tracking-wider mb-3">Documentos PDF</h4>
             <div className="space-y-2">
-              {DOCS_PDF.map(({ key, label }) => (
+              {docsRequeridos.map(({ key, label }) => (
                 <div key={key} className="flex items-center justify-between py-1.5">
                   <span className="text-sm text-text-main">{label}</span>
                   <div className="flex items-center gap-3">
@@ -369,7 +373,7 @@ export default function RegistroHistoricoDrawer({
           {/* Datos administrativos */}
           <section>
             <h4 className="text-xs font-semibold text-text-sec uppercase tracking-wider mb-3">Datos Administrativos</h4>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-medium text-text-sec uppercase mb-1">N.° Carta</label>
                 <select value={cartaNumero} onChange={(e) => {
@@ -435,7 +439,7 @@ export default function RegistroHistoricoDrawer({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-3 border-t border-border flex justify-end gap-3">
+        <div className="px-4 sm:px-6 py-3 border-t border-border flex justify-end gap-3">
           <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-text-sec bg-gray-100 rounded-lg hover:bg-gray-200">Cancelar</button>
           <button onClick={guardar} disabled={guardando}
             className="px-5 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary/90 disabled:opacity-50 inline-flex items-center gap-2">

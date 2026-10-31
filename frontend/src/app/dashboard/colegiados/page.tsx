@@ -66,7 +66,7 @@ export default function ColegiadosPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-semibold text-text-main">Colegiados</h2>
+        <h2 className="text-xl sm:text-2xl font-semibold text-text-main">Colegiados</h2>
         <p className="text-text-sec mt-1">Consulta del padron maestro de colegiados</p>
       </div>
 
@@ -82,7 +82,7 @@ export default function ColegiadosPage() {
         pageSize={limit}
         onPageChange={setPage}
         onPageSizeChange={setLimit}
-        onSearch={setSearch}
+        onSearch={(term) => { setSearch(term); setPage(1); }}
         loading={loading}
         emptyMessage="No se encontraron colegiados"
       />

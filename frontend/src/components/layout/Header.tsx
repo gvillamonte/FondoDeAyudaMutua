@@ -9,7 +9,7 @@ interface UserData {
   email: string;
 }
 
-export default function Header() {
+export default function Header({ onMenuClick }: { onMenuClick?: () => void }) {
   const router = useRouter();
   const [user, setUser] = useState<UserData | null>(null);
 
@@ -48,19 +48,28 @@ export default function Header() {
   };
 
   return (
-    <header className="bg-primary text-white px-6 py-3 flex items-center justify-between shadow-md">
-      <div>
-        <h1 className="text-lg font-semibold">Sistema de Beneficios Colegiales</h1>
+    <header className="bg-primary text-white px-3 sm:px-6 py-3 flex items-center justify-between gap-3 shadow-md">
+      <div className="flex items-center gap-2 min-w-0">
+        <button
+          onClick={onMenuClick}
+          className="lg:hidden p-1.5 -ml-1 rounded hover:bg-primary-dark transition-colors flex-shrink-0"
+          aria-label="Abrir menú"
+        >
+          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+        <h1 className="text-sm sm:text-lg font-semibold truncate">Sistema de Beneficios Colegiales</h1>
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
         {user && (
           <>
-            <div className="text-right">
-              <p className="text-sm font-medium">{user.nombreCompleto}</p>
+            <div className="text-right hidden sm:block">
+              <p className="text-sm font-medium truncate max-w-[180px]">{user.nombreCompleto}</p>
               <p className="text-xs text-blue-200">{getRolLabel(user.rol)}</p>
             </div>
-            <div className="w-8 h-8 bg-primary-dark rounded-full flex items-center justify-center">
+            <div className="w-8 h-8 bg-primary-dark rounded-full flex items-center justify-center flex-shrink-0">
               <span className="text-sm font-medium">
                 {user.nombreCompleto
                   .split(' ')
@@ -74,6 +83,7 @@ export default function Header() {
               onClick={handleLogout}
               className="text-sm text-blue-200 hover:text-white transition-colors"
               title="Cerrar sesión"
+              aria-label="Cerrar sesión"
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />

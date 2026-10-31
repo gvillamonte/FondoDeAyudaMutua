@@ -79,7 +79,7 @@ export default function PagosPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-semibold text-text-main">Pagos y Solicitudes</h2>
+        <h2 className="text-xl sm:text-2xl font-semibold text-text-main">Pagos y Solicitudes</h2>
         <p className="text-text-sec mt-1">Gestion de solicitudes y pagos de beneficios</p>
       </div>
 

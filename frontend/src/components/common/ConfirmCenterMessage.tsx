@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 type MessageType = 'success' | 'error' | 'warning' | 'info';
 
@@ -58,17 +58,14 @@ const TYPE_CONFIG: Record<MessageType, { bg: string; border: string; icon: React
 
 export default function ConfirmCenterMessage() {
   const [messages, setMessages] = useState<ConfirmMessage[]>([]);
-  const [counter, setCounter] = useState(0);
+  const counterRef = useRef(0);
 
   const addMessage = useCallback((type: MessageType, text: string, subtext?: string) => {
-    setCounter((prev) => {
-      const id = prev + 1;
-      setMessages((msgs) => [...msgs, { id, type, text, subtext }]);
-      setTimeout(() => {
-        setMessages((msgs) => msgs.filter((m) => m.id !== id));
-      }, 3500);
-      return id;
-    });
+    const id = ++counterRef.current;
+    setMessages((msgs) => [...msgs, { id, type, text, subtext }]);
+    setTimeout(() => {
+      setMessages((msgs) => msgs.filter((m) => m.id !== id));
+    }, 3500);
   }, []);
 
   useEffect(() => {

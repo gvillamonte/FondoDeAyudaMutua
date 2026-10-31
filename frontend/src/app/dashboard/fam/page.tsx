@@ -396,12 +396,12 @@ export default function FamPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-semibold text-text-main">Fondo de Ayuda Mutua (FAM)</h2>
+          <h2 className="text-xl sm:text-2xl font-semibold text-text-main">Fondo de Ayuda Mutua (FAM)</h2>
           <p className="text-text-sec text-sm mt-1">Beneficiarios registrados y porcentajes asignados</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
           <button onClick={() => router.push('/dashboard/fam/registro')}
             className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary/90 transition-colors">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
@@ -420,9 +420,9 @@ export default function FamPage() {
       </div>
 
       <div className="bg-white border border-border rounded-lg overflow-hidden">
-        <div className="p-4 border-b border-border space-y-3">
-          <div className="flex items-center gap-3">
-            <div className="flex-1 max-w-md relative" ref={suggestionsRef}>
+        <div className="p-3 sm:p-4 border-b border-border space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 sm:gap-3">
+            <div className="flex-1 w-full sm:max-w-md relative" ref={suggestionsRef}>
               <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-sec" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
@@ -565,7 +565,7 @@ export default function FamPage() {
       </div>
 
       <Drawer isOpen={drawerOpen} onClose={() => { setDrawerOpen(false); setBeneficiarios([]); setSelectedColegiado(null); setMontosFam([]); setCovidInfo(null); }}
-        title={`Beneficiarios - ${selectedColegiado?.NUM_COLEGIATURA || ''}`} width="w-[520px]">
+        title={`Beneficiarios - ${selectedColegiado?.NUM_COLEGIATURA || ''}`} width="w-full sm:w-[520px]">
         {selectedColegiado && (
           <div className="space-y-5">
             <div className="bg-gray-50 rounded-lg p-4 space-y-2">
@@ -650,12 +650,12 @@ export default function FamPage() {
       {formOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={() => setFormOpen(false)} />
-          <div className="relative bg-white rounded-xl shadow-2xl w-[700px] max-h-[90vh] flex flex-col">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+          <div className="relative bg-white rounded-xl shadow-2xl w-full sm:w-[700px] sm:max-w-[96vw] max-h-[95vh] sm:max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-3 sm:py-4 border-b border-border">
               <div><h3 className="text-lg font-semibold text-text-main">Agregar Beneficiario</h3><p className="text-sm text-text-sec">{selectedColegiado?.NUM_COLEGIATURA} - {selectedColegiado?.NOMBRE_COLEGIADO}</p></div>
               <button onClick={() => setFormOpen(false)} className="p-1.5 rounded-lg hover:bg-gray-100"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
             </div>
-            <div className="flex-1 overflow-auto px-6 py-5 space-y-5">
+            <div className="flex-1 overflow-auto px-4 sm:px-6 py-4 sm:py-5 space-y-5">
               {formError && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">{formError}</div>}
               <div className="space-y-4">
                 <div className="relative" ref={personaSearchRef}>
@@ -693,7 +693,7 @@ export default function FamPage() {
                     </div>
                   )}
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div><label className="block text-xs font-medium text-text-sec uppercase mb-1">Nombre completo *</label><input type="text" value={form.nombre} onChange={(e) => { setForm({ ...form, nombre: e.target.value }); setPersonaSearchInput(e.target.value); }} className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" placeholder="Nombres y apellidos" /></div>
                   <div><label className="block text-xs font-medium text-text-sec uppercase mb-1">DNI</label><input type="text" value={form.dni} onChange={(e) => setForm({ ...form, dni: e.target.value })} className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" placeholder="8 digitos" maxLength={8} /></div>
                   <div><label className="block text-xs font-medium text-text-sec uppercase mb-1">Parentesco *</label><select value={form.parentesco} onChange={(e) => setForm({ ...form, parentesco: e.target.value })} className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">{PARENTESCO_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}</select></div>
@@ -703,7 +703,7 @@ export default function FamPage() {
               <div><label className="block text-xs font-medium text-text-sec uppercase mb-1">Observaciones</label><textarea value={form.observaciones} onChange={(e) => setForm({ ...form, observaciones: e.target.value })} className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" rows={2} placeholder="Notas..." /></div>
               <div>
                 <h4 className="text-xs font-semibold text-text-sec uppercase tracking-wider mb-3">Documentos (imagenes)</h4>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {IMG_TABS.map((tab) => {
                     const key = tab.key as keyof FormImagenes;
                     const hasImg = !!formImgs[key];
@@ -729,7 +729,7 @@ export default function FamPage() {
                 </div>
               </div>
             </div>
-            <div className="px-6 py-3 border-t border-border flex items-center justify-end gap-3">
+            <div className="px-4 sm:px-6 py-3 border-t border-border flex items-center justify-end gap-3">
               <button onClick={() => setFormOpen(false)} className="px-4 py-2 text-sm font-medium text-text-sec bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">Cancelar</button>
               <button onClick={handleCreateBeneficiario} disabled={formSaving}
                 className="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 inline-flex items-center gap-2">
@@ -744,13 +744,13 @@ export default function FamPage() {
       {detailOpen && detailBeneficiario && detailColegiado && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={() => setDetailOpen(false)} />
-          <div className="relative bg-white rounded-xl shadow-2xl w-[800px] max-h-[90vh] flex flex-col">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+          <div className="relative bg-white rounded-xl shadow-2xl w-full sm:w-[800px] sm:max-w-[96vw] max-h-[95vh] sm:max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-3 sm:py-4 border-b border-border">
               <div><h3 className="text-lg font-semibold text-text-main">Detalle del Beneficiario</h3><p className="text-sm text-text-sec">{detailBeneficiario.NOMBRE_BENEFICIARIO}</p></div>
               <button onClick={() => setDetailOpen(false)} className="p-1.5 rounded-lg hover:bg-gray-100"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
             </div>
-            <div className="flex-1 overflow-auto px-6 py-5">
-              <div className="grid grid-cols-2 gap-6">
+            <div className="flex-1 overflow-auto px-4 sm:px-6 py-4 sm:py-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                 <div className="space-y-4">
                   <div className="bg-gray-50 rounded-lg p-4">
                     <h4 className="text-xs font-semibold text-text-sec uppercase tracking-wider mb-3">Datos del Colegiado</h4>
@@ -821,7 +821,7 @@ export default function FamPage() {
                 </div>
               </div>
             </div>
-            <div className="px-6 py-3 border-t border-border flex justify-end"><button onClick={() => setDetailOpen(false)} className="px-4 py-2 text-sm font-medium text-text-sec bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">Cerrar</button></div>
+            <div className="px-4 sm:px-6 py-3 border-t border-border flex justify-end"><button onClick={() => setDetailOpen(false)} className="px-4 py-2 text-sm font-medium text-text-sec bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">Cerrar</button></div>
           </div>
         </div>
       )}

@@ -7,6 +7,11 @@ import { getCurrentUser } from '@/lib/auth';
 import PdfViewerModal from '@/components/common/PdfViewerModal';
 import ConfirmCenterMessage, { showConfirmMessage } from '@/components/common/ConfirmCenterMessage';
 import EditarExpedienteModal from '@/components/fam/EditarExpedienteModal';
+import CompletarBeneficiariosModal from '@/components/fam/CompletarBeneficiariosModal';
+import PagoExpedienteModal from '@/components/fam/PagoExpedienteModal';
+import EditarDepositoModal from '@/components/fam/EditarDepositoModal';
+import HistorialExpediente from '@/components/fam/HistorialExpediente';
+import EliminarExpedienteModal from '@/components/fam/EliminarExpedienteModal';
 
 interface BeneficiarioVinculado {
   id: string;
@@ -14,6 +19,34 @@ interface BeneficiarioVinculado {
   dni: string | null;
   parentesco: string;
   porcentajeAsignado: number;
+  tieneDeclaracionJurada?: boolean;
+  declaracionJuradaDni?: string | null;
+  tieneOrdenPago?: boolean;
+}
+
+interface DepositoBeneficiario {
+  id: string;
+  beneficiarioId: string | null;
+  nombreBeneficiario: string | null;
+  dniBeneficiario: string | null;
+  porcentaje: number;
+  monto: number;
+  banco: string | null;
+  numeroCuenta: string | null;
+  cci: string | null;
+  fechaPago: string | null;
+  estado: string;
+  tieneComprobante: boolean;
+}
+
+interface EstadoReparto {
+  porcentajeAsignado: number;
+  completo: boolean;
+  declaracionesCompletas: boolean;
+  beneficiariosFaltantes: string[];
+  depositosRegistrados: number;
+  listoParaPago: boolean;
+  pagada: boolean;
 }
 
 interface HistorialBeneficio {
@@ -63,9 +96,19 @@ interface DetalleExpediente {
   montoFinal: number | null;
   modalidadBeneficio: string | null;
   documentosDisponibles: Record<string, boolean>;
+  declaracionJuradaDni: string | null;
+  fechaDefuncion?: string | null;
+  causaFallecimiento?: string | null;
+  fechaDiagnostico?: string | null;
+  diagnosticoMedico?: string | null;
+  fechaAccidente?: string | null;
+  descripcionAccidente?: string | null;
   beneficiariosVinculados: BeneficiarioVinculado[];
   covidMontoTotal: number;
   tieneFallecimiento?: boolean;
+  estadoReparto?: EstadoReparto | null;
+  montoBase?: number | null;
+  depositos?: DepositoBeneficiario[];
   historialBeneficios: HistorialBeneficio[];
 }
 
@@ -88,6 +131,9 @@ const DOCS_LABELS: Record<string, string> = {
   memorando: 'Memorándum',
   ordenPago: 'Orden de Pago',
   sucesionIntestada: 'Sucesión Intestada',
+  declaracionJurada: 'Declaración Jurada',
+  actaDefuncion: 'Acta de Defunción',
+  otrosDocumentos: 'Otros / Documentación Completa',
 };
 
 const ESTADO_COLORS: Record<string, string> = {
@@ -116,8 +162,8 @@ export default function DetalleExpedientePage() {
   const [loading, setLoading] = useState(true);
   const [pdfLoadingKey, setPdfLoadingKey] = useState<string | null>(null);
   const [pdfViewer, setPdfViewer] = useState<{ base64: string; nombre: string } | null>(null);
-  const [activeTab, setActiveTab] = useState<'montos' | 'docs' | 'benef' | 'admin' | 'trazabilidad'>('montos');
-  const [docsOtros, setDocsOtros] = useState<Record<string, { docs: Record<string, boolean>; expediente: string }>>({});
+  const [activeTab, setActiveTab] = useState<'montos' | 'docs' | 'benef' | 'admin' | 'historial'>('montos');
+  const [docsOtros, setDocsOtros] = useState<Record<string, { docs: Record<string, boolean>; expediente: string; dniDJ: string; benefCount: number }>>({});
   const [docsCargados, setDocsCargados] = useState(false);
   const [docsGrupoSel, setDocsGrupoSel] = useState<string | null>(null);
   const docInputRef = useRef<HTMLInputElement>(null);
@@ -125,11 +171,13 @@ export default function DetalleExpedientePage() {
   const [subiendoDoc, setSubiendoDoc] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [guardandoAdmin, setGuardandoAdmin] = useState(false);
-  const [eliminando, setEliminando] = useState(false);
+  const [eliminarAbierto, setEliminarAbierto] = useState(false);
   const [userRole, setUserRole] = useState('');
   const [editHistorialId, setEditHistorialId] = useState<string | null>(null);
   const [slaConfig, setSlaConfig] = useState<any[]>([]);
-  const [trazabilidad, setTrazabilidad] = useState<any[]>([]);
+  const [completarOpen, setCompletarOpen] = useState(false);
+  const [pagoOpen, setPagoOpen] = useState(false);
+  const [depositoEdit, setDepositoEdit] = useState<DepositoBeneficiario | null>(null);
   const [formAdmin, setFormAdmin] = useState({
     estado: '', monto: '', fechaSolicitud: '', fechaPago: '',
     observaciones: '', formaPago: '', banco: '',
@@ -170,14 +218,12 @@ export default function DetalleExpedientePage() {
       })
       .catch(() => { if (activo) setDetalle(null); })
       .finally(() => { if (activo) setLoading(false); });
-    Promise.all([
-      api.get('/expediente-sla/config', { params: { activos: 'true' } }).catch(() => ({ data: [] })),
-      api.get(`/expediente-sla/trazabilidad/${id}`).catch(() => ({ data: [] })),
-    ]).then(([slaRes, trazRes]) => {
-      if (!activo) return;
-      setSlaConfig(Array.isArray(slaRes.data) ? slaRes.data : []);
-      setTrazabilidad(Array.isArray(trazRes.data) ? trazRes.data : []);
-    }).catch(() => {});
+    api.get('/expediente-sla/config', { params: { activos: 'true' } })
+      .then((slaRes) => {
+        if (!activo) return;
+        setSlaConfig(Array.isArray(slaRes.data) ? slaRes.data : []);
+      })
+      .catch(() => {});
     return () => { activo = false; };
   }, [id]);
 
@@ -195,11 +241,11 @@ export default function DetalleExpedientePage() {
     setDocsCargados(false);
     Promise.all(otros.map((hid) =>
       api.get(`/fam-beneficios/${hid}`)
-        .then(({ data }) => ({ hid, info: { docs: (data.documentosDisponibles || {}) as Record<string, boolean>, expediente: (data.expedienteNumero || '') as string } }))
+        .then(({ data }) => ({ hid, info: { docs: (data.documentosDisponibles || {}) as Record<string, boolean>, expediente: (data.expedienteNumero || '') as string, dniDJ: (data.declaracionJuradaDni || '') as string, benefCount: (data.beneficiariosVinculados || []).length } }))
         .catch(() => null)
     )).then((res) => {
       if (!activo) return;
-      const mapa: Record<string, { docs: Record<string, boolean>; expediente: string }> = {};
+      const mapa: Record<string, { docs: Record<string, boolean>; expediente: string; dniDJ: string; benefCount: number }> = {};
       res.forEach((r) => { if (r) mapa[r.hid] = r.info; });
       setDocsOtros(mapa);
       setDocsCargados(true);
@@ -238,7 +284,7 @@ export default function DetalleExpedientePage() {
     if (expedienteId === id) { recargar(); return; }
     try {
       const { data } = await api.get(`/fam-beneficios/${expedienteId}`);
-      setDocsOtros((prev) => ({ ...prev, [expedienteId]: { docs: data.documentosDisponibles || {}, expediente: data.expedienteNumero || '' } }));
+      setDocsOtros((prev) => ({ ...prev, [expedienteId]: { docs: data.documentosDisponibles || {}, expediente: data.expedienteNumero || '', dniDJ: data.declaracionJuradaDni || '', benefCount: (data.beneficiariosVinculados || []).length } }));
     } catch { /* sin actualización de caché */ }
   };
 
@@ -256,6 +302,16 @@ export default function DetalleExpedientePage() {
     if (file.type !== 'application/pdf') { showConfirmMessage('error', `${label}: formato inválido`, 'Solo se permiten archivos PDF'); return; }
     if (file.size > 10 * 1024 * 1024) { showConfirmMessage('error', `${label}: excede 10MB`, `Archivo: ${(file.size / 1024 / 1024).toFixed(2)}MB`); return; }
 
+    let declaracionJuradaDni: string | undefined;
+    if (campo === 'declaracionJurada') {
+      const previo = expedienteId === id ? (detalle?.declaracionJuradaDni || '') : (docsOtros[expedienteId]?.dniDJ || '');
+      const respuesta = window.prompt('DNI del declarante (8 dígitos)', previo || '');
+      if (respuesta === null) return;
+      const dni = respuesta.trim();
+      if (!/^\d{8}$/.test(dni)) { showConfirmMessage('error', 'DNI inválido', 'Debe tener exactamente 8 dígitos'); return; }
+      declaracionJuradaDni = dni;
+    }
+
     const base64 = await new Promise<string>((resolve) => {
       const reader = new FileReader();
       reader.onload = (e) => resolve(((e.target?.result as string) || '').split(',')[1] || '');
@@ -267,8 +323,9 @@ export default function DetalleExpedientePage() {
     try {
       const previos = expedienteId === id ? (detalle?.documentosDisponibles || {}) : (docsOtros[expedienteId]?.docs || {});
       const nucleo = ['fichaAdmisibilidad', 'solicitudAsignacion', 'cartaRemision', 'memorando', 'ordenPago'];
-      const completa = nucleo.every((c) => c === campo || Boolean(previos[c]));
-      await api.put(`/fam-beneficios/${expedienteId}`, { [campo]: base64, ...(completa ? { documentacionCompleta: true } : {}) });
+      const tieneTodo = campo === 'otrosDocumentos' || Boolean(previos.otrosDocumentos);
+      const completa = tieneTodo || nucleo.every((c) => c === campo || Boolean(previos[c]));
+      await api.put(`/fam-beneficios/${expedienteId}`, { [campo]: base64, ...(declaracionJuradaDni && { declaracionJuradaDni }), ...(completa ? { documentacionCompleta: true } : {}) });
       showConfirmMessage('success', `${label} subido correctamente`, expedienteId === id ? detalle?.expedienteNumero || '' : docsOtros[expedienteId]?.expediente || '');
       await refrescarDocs(expedienteId);
     } catch (err: any) {
@@ -305,20 +362,9 @@ export default function DetalleExpedientePage() {
     }
   };
 
-  const eliminarExpediente = async () => {
+  const eliminarExpediente = () => {
     if (!detalle) return;
-    const expedienteNro = detalle.expedienteNumero || 'este expediente';
-    if (!window.confirm(`¿Eliminar ${expedienteNro}?\n\nEsta acción no se puede deshacer.`)) return;
-    setEliminando(true);
-    try {
-      await api.delete(`/fam-beneficios/${id}`);
-      alert('Expediente eliminado correctamente');
-      router.push('/dashboard/fam/expedientes');
-    } catch (e: any) {
-      alert('Error al eliminar: ' + (e.response?.data?.message || 'Error desconocido'));
-    } finally {
-      setEliminando(false);
-    }
+    setEliminarAbierto(true);
   };
 
   const calcFilasMontos = () => {
@@ -430,11 +476,38 @@ export default function DetalleExpedientePage() {
   const tiposFaltantes = ['Fallecimiento', 'Accidente Grave', 'Enfermedad Terminal'].filter((nombre) => {
     const configs: Record<string, string> = { 'Fallecimiento': 'FALLECIMIENTO', 'Accidente Grave': 'ACC_GRAVE', 'Enfermedad Terminal': 'ENF_TERMINAL' };
     const key = configs[nombre];
-    return !detalle.historialBeneficios.some((h) => h.tipo === key && (h.estado === 'PAGADA' || h.estado === 'APROBADA'));
+    return !detalle.historialBeneficios.some((h) => h.tipo === key && h.estado !== 'RECHAZADA');
   });
 
   const tieneFallecimiento = Boolean(detalle.tieneFallecimiento) ||
     (detalle.historialBeneficios || []).some((h) => h.tipo === 'FALLECIMIENTO' && h.estado !== 'RECHAZADA');
+
+  const reparto = detalle.estadoReparto || null;
+  const esTipoBolsa = Boolean(reparto);
+  const depositos = detalle.depositos || [];
+  const puedeOperar = isAdmin || userRole === 'OPERADOR_PAGOS';
+
+  const verComprobanteDeposito = async (depositoId: string, nombre: string) => {
+    try {
+      const { data } = await api.get(`/fam-beneficios/${id}/deposito/${depositoId}/comprobante`);
+      setPdfViewer({ base64: data.contenido, nombre });
+    } catch {
+      showConfirmMessage('error', 'No se pudo abrir el comprobante');
+    }
+  };
+
+  const verOrdenPagoBeneficiario = async (beneficiarioId: string | null, nombre: string | null) => {
+    if (!beneficiarioId) {
+      showConfirmMessage('error', 'El depósito no tiene un beneficiario vinculado');
+      return;
+    }
+    try {
+      const { data } = await api.get(`/fam-beneficios/${id}/beneficiario/${beneficiarioId}/orden-pago`);
+      setPdfViewer({ base64: data.contenido, nombre: `Orden de pago - ${nombre || 'Beneficiario'}` });
+    } catch {
+      showConfirmMessage('error', 'No se pudo abrir la orden de pago');
+    }
+  };
 
   const ESTADOS_FLUJO = ['PENDIENTE', 'EN_REVISION', 'APROBADA', 'PAGADA'];
   const idxActual = ESTADOS_FLUJO.indexOf(detalle.estado);
@@ -454,36 +527,50 @@ export default function DetalleExpedientePage() {
       </nav>
 
       {/* Header principal */}
-      <div className="bg-white border border-border rounded-xl p-5">
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-4">
+      <div className="bg-white border border-border rounded-xl p-4 sm:p-5">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+          <div className="flex items-center gap-3 sm:gap-4 min-w-0">
             <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
               <span className="text-lg font-bold text-primary">{detalle.NOMBRE_COLEGIADO?.charAt(0) || '?'}</span>
             </div>
             <div>
-              <div className="flex items-center gap-3">
-                <h1 className="text-xl font-bold text-text-main">{detalle.NOMBRE_COLEGIADO}</h1>
+              <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                <h1 className="text-base sm:text-xl font-bold text-text-main truncate">{detalle.NOMBRE_COLEGIADO}</h1>
                 <span className={`inline-flex px-2.5 py-1 rounded-full text-[10px] font-bold ${ESTADO_COLORS[detalle.estado] || 'bg-gray-100 text-gray-600'}`}>
                   {detalle.estado.replace('_', ' ')}
                 </span>
               </div>
-              <div className="flex items-center gap-4 mt-1 text-xs text-text-sec">
+              <div className="flex items-center gap-x-4 gap-y-1 mt-1 text-xs text-text-sec flex-wrap">
                 <span className="font-semibold text-primary">CIP: {detalle.NUM_COLEGIATURA}</span>
                 <span>DNI: {detalle.DNI}</span>
                 <span className={detalle.ESTADO_COLEGIADO === 'HABILITADO' ? 'text-green-600 font-semibold' : ''}>{detalle.ESTADO_COLEGIADO}</span>
               </div>
             </div>
           </div>
-          <div className="text-right">
-            <p className="text-2xl font-bold text-text-main">{fmtMonto(detalle.monto)}</p>
-            {detalle.montoFinal != null && detalle.montoFinal !== detalle.monto && (
-              <p className="text-xs text-green-600 font-semibold">Neto: {fmtMonto(detalle.montoFinal)}</p>
+          <div className="text-left sm:text-right flex-shrink-0 space-y-2">
+            <div>
+              <p className="text-xl sm:text-2xl font-bold text-text-main">{fmtMonto(detalle.monto)}</p>
+              {detalle.montoFinal != null && detalle.montoFinal !== detalle.monto && (
+                <p className="text-xs text-green-600 font-semibold">Neto: {fmtMonto(detalle.montoFinal)}</p>
+              )}
+            </div>
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={eliminarExpediente}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+                Eliminar expediente
+              </button>
             )}
           </div>
         </div>
 
         {/* Info rápida */}
-        <div className="grid grid-cols-5 gap-4 mt-4 pt-4 border-t border-border">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mt-4 pt-4 border-t border-border">
           {[
             { label: 'Tipo', value: detalle.tipoBeneficio?.nombre || '—' },
             { label: 'Modalidad', value: MODALIDAD_LABELS[detalle.modalidadBeneficio || ''] || '—' },
@@ -497,6 +584,46 @@ export default function DetalleExpedientePage() {
             </div>
           ))}
         </div>
+
+        {(detalle.fechaDefuncion || detalle.causaFallecimiento || detalle.fechaDiagnostico || detalle.diagnosticoMedico || detalle.fechaAccidente || detalle.descripcionAccidente) && (
+          <div className="mt-4 pt-4 border-t border-border">
+            <p className="text-[10px] font-semibold text-text-sec uppercase tracking-wider mb-2">Datos del Beneficio</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
+              {detalle.fechaDefuncion && (<div><span className="text-text-sec">F. Fallecimiento:</span> <span className="font-medium text-text-main">{fmt(detalle.fechaDefuncion)}</span></div>)}
+              {detalle.causaFallecimiento && (<div><span className="text-text-sec">Causa:</span> <span className="font-medium text-text-main">{detalle.causaFallecimiento}</span></div>)}
+              {detalle.fechaDiagnostico && (<div><span className="text-text-sec">F. Diagnóstico:</span> <span className="font-medium text-text-main">{fmt(detalle.fechaDiagnostico)}</span></div>)}
+              {detalle.diagnosticoMedico && (<div><span className="text-text-sec">Diagnóstico:</span> <span className="font-medium text-text-main">{detalle.diagnosticoMedico}</span></div>)}
+              {detalle.fechaAccidente && (<div><span className="text-text-sec">F. Accidente:</span> <span className="font-medium text-text-main">{fmt(detalle.fechaAccidente)}</span></div>)}
+              {detalle.descripcionAccidente && (<div><span className="text-text-sec">Accidente:</span> <span className="font-medium text-text-main">{detalle.descripcionAccidente}</span></div>)}
+            </div>
+          </div>
+        )}
+
+        {detalle.tipoBeneficio?.codigo === 'FALLECIMIENTO' && (
+          <div className="mt-4 pt-4 border-t border-border flex items-center gap-3">
+            <p className="text-[10px] font-semibold text-text-sec uppercase tracking-wider">Acta de Defunción</p>
+            {detalle.documentosDisponibles?.actaDefuncion ? (
+              <button
+                onClick={() => abrirPdf(id, 'actaDefuncion')}
+                disabled={pdfLoadingKey === `${id}:actaDefuncion`}
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline disabled:opacity-50"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                {pdfLoadingKey === `${id}:actaDefuncion` ? 'Abriendo...' : 'Ver PDF'}
+              </button>
+            ) : isAdmin ? (
+              <button
+                onClick={() => pedirDocumento(id, 'actaDefuncion')}
+                disabled={subiendoDoc === `${id}:actaDefuncion`}
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline disabled:opacity-50"
+              >
+                {subiendoDoc === `${id}:actaDefuncion` ? 'Subiendo...' : 'Subir PDF'}
+              </button>
+            ) : (
+              <span className="text-xs text-gray-400">No cargado</span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Barra de progreso */}
@@ -547,8 +674,121 @@ export default function DetalleExpedientePage() {
         </div>
       </div>
 
-      {/* Alerta roja: beneficio por Fallecimiento ya registrado (visible para todos, incl. admin) */}
-      {tieneFallecimiento && (
+      {/* Estado del reparto: expediente único con N beneficiarios */}
+      {esTipoBolsa && reparto && detalle.estado !== 'RECHAZADA' && (
+        <div className={`border rounded-xl p-4 ${reparto.pagada ? 'bg-emerald-50 border-emerald-200' : reparto.listoParaPago ? 'bg-blue-50 border-blue-200' : 'bg-amber-50 border-amber-200'}`}>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${reparto.pagada ? 'bg-emerald-600' : reparto.listoParaPago ? 'bg-primary' : 'bg-amber-500'}`}>
+                {reparto.pagada ? (
+                  <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                ) : (
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                )}
+              </div>
+              <div>
+                <h3 className={`text-sm font-bold ${reparto.pagada ? 'text-emerald-800' : reparto.listoParaPago ? 'text-primary' : 'text-amber-800'}`}>
+                  {reparto.pagada
+                    ? 'Expediente pagado'
+                    : reparto.listoParaPago
+                      ? 'Listo para pago'
+                      : reparto.completo
+                        ? 'Declaraciones juradas pendientes'
+                        : 'Expediente incompleto'}
+                </h3>
+                <p className={`text-xs mt-1 ${reparto.pagada ? 'text-emerald-700' : reparto.listoParaPago ? 'text-primary/80' : 'text-amber-700'}`}>
+                  {reparto.pagada
+                    ? `${depositos.length} depósito(s) registrado(s).`
+                    : reparto.completo
+                      ? `Reparto al 100%. Falta declaración jurada de: ${reparto.beneficiariosFaltantes.join(', ')}.`
+                      : `Reparto asignado: ${reparto.porcentajeAsignado}% de 100%. Complete los beneficiarios y sus declaraciones juradas.`}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              {!reparto.pagada && puedeOperar && (
+                <button onClick={() => setCompletarOpen(true)}
+                  className="px-3 py-1.5 text-xs font-medium text-white bg-primary rounded-lg hover:bg-primary/90 transition-colors">
+                  {reparto.completo ? 'Completar declaraciones juradas' : 'Completar expediente'}
+                </button>
+              )}
+              {!reparto.pagada && reparto.listoParaPago && puedeOperar && (
+                <button onClick={() => setPagoOpen(true)}
+                  className="px-3 py-1.5 text-xs font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors">
+                  Registrar pago
+                </button>
+              )}
+              {reparto.pagada && isAdmin && (
+                <button onClick={() => setCompletarOpen(true)}
+                  className="px-3 py-1.5 text-xs font-medium text-primary bg-white border border-primary/30 rounded-lg hover:bg-primary/10 transition-colors">
+                  Corregir declaraciones
+                </button>
+              )}
+            </div>
+          </div>
+
+          {reparto.pagada && (
+            <div className="mt-3 pt-3 border-t border-emerald-200">
+              {depositos.length === 0 ? (
+                <p className="text-xs text-emerald-700/80">Este pago no tiene depósitos individuales registrados (registro histórico).</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[640px] text-xs">
+                    <thead>
+                      <tr className="text-left text-[10px] uppercase tracking-wider text-text-sec border-b border-emerald-200">
+                        <th className="px-2 py-1.5 font-semibold">Beneficiario</th>
+                        <th className="px-2 py-1.5 font-semibold">DNI</th>
+                        <th className="px-2 py-1.5 font-semibold text-right">%</th>
+                        <th className="px-2 py-1.5 font-semibold text-right">Monto</th>
+                        <th className="px-2 py-1.5 font-semibold">Banco / Cuenta</th>
+                        <th className="px-2 py-1.5 font-semibold">F. Pago</th>
+                        <th className="px-2 py-1.5 font-semibold text-center">Comprobante</th>
+                        {isAdmin && <th className="px-2 py-1.5 font-semibold text-center">Acción</th>}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-emerald-100">
+                      {depositos.map((d) => (
+                        <tr key={d.id}>
+                          <td className="px-2 py-1.5 font-medium text-text-main">{d.nombreBeneficiario || '—'}</td>
+                          <td className="px-2 py-1.5 text-text-sec">{d.dniBeneficiario || '—'}</td>
+                          <td className="px-2 py-1.5 text-right">{d.porcentaje}%</td>
+                          <td className="px-2 py-1.5 text-right font-semibold">{fmtMonto(d.monto)}</td>
+                          <td className="px-2 py-1.5 text-text-sec">
+                            {d.banco || '—'}{d.numeroCuenta ? ` · ${d.numeroCuenta}` : d.cci ? ` · CCI ${d.cci}` : ''}
+                          </td>
+                          <td className="px-2 py-1.5 text-text-sec">{fmt(d.fechaPago)}</td>
+                          <td className="px-2 py-1.5 text-center">
+                            {d.tieneComprobante ? (
+                              <button onClick={() => verComprobanteDeposito(d.id, d.nombreBeneficiario || 'Comprobante')}
+                                className="text-primary hover:underline font-medium">Ver</button>
+                            ) : (
+                              <span className="text-gray-400">—</span>
+                            )}
+                          </td>
+                          {isAdmin && (
+                            <td className="px-2 py-1.5 text-center">
+                              <div className="flex items-center justify-center gap-3">
+                                {detalle.beneficiariosVinculados.find((b) => b.id === d.beneficiarioId)?.tieneOrdenPago && (
+                                  <button onClick={() => verOrdenPagoBeneficiario(d.beneficiarioId, d.nombreBeneficiario)}
+                                    className="text-primary hover:underline font-medium">Ver PDF</button>
+                                )}
+                                <button onClick={() => setDepositoEdit(d)} className="text-primary hover:underline font-medium">Corregir</button>
+                              </div>
+                            </td>
+                          )}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Alerta: beneficio por Fallecimiento ya cubierto en otro expediente */}
+      {tieneFallecimiento && detalle.tipoBeneficio?.codigo !== 'FALLECIMIENTO' && (
         <div className="max-w-3xl mx-auto bg-red-600 border-2 border-red-700 rounded-xl p-6 text-center">
           <div className="w-14 h-14 mx-auto mb-3 bg-white rounded-full flex items-center justify-center">
             <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -585,7 +825,18 @@ export default function DetalleExpedientePage() {
               </button>
             </>
           )}
-          {detalle.estado === 'APROBADA' && (
+          {detalle.estado === 'APROBADA' && esTipoBolsa && reparto && (
+            <button
+              onClick={() => reparto.listoParaPago
+                ? setPagoOpen(true)
+                : setCompletarOpen(true)}
+              disabled={!reparto.listoParaPago}
+              title={reparto.listoParaPago ? 'Registrar el pago del expediente' : 'Complete beneficiarios y declaraciones juradas para pagar'}
+              className="px-4 py-2 text-xs font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50">
+              Registrar Pago
+            </button>
+          )}
+          {detalle.estado === 'APROBADA' && !esTipoBolsa && (
             <button onClick={() => { setFormAdmin({ ...formAdmin, estado: 'PAGADA', fechaPago: new Date().toISOString().slice(0, 10) }); }}
               className="px-4 py-2 text-xs font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors">
               Registrar Pago
@@ -602,7 +853,7 @@ export default function DetalleExpedientePage() {
       )}
 
       {/* Acciones rápidas: registrar otros beneficios */}
-      {puedeRegistrarHistorico && tiposFaltantes.length > 0 && !tieneFallecimiento && (
+      {puedeRegistrarHistorico && tiposFaltantes.length > 0 && (
         <div className="bg-primary/5 border border-primary/20 rounded-xl p-4">
           <div className="flex items-center justify-between mb-2.5">
             <h4 className="text-xs font-semibold text-primary uppercase tracking-wider">Registrar otros beneficios para este colegiado</h4>
@@ -625,16 +876,16 @@ export default function DetalleExpedientePage() {
 
       {/* Tabs */}
       <div className="bg-white border border-border rounded-xl overflow-hidden">
-        <div className="flex border-b border-border">
+        <div className="flex border-b border-border overflow-x-auto">
           {[
             { key: 'montos', label: 'Montos' },
             { key: 'docs', label: 'Documentos' },
             { key: 'benef', label: `Beneficiarios (${detalle.beneficiariosVinculados.length})` },
-            { key: 'trazabilidad', label: `Historial (${trazabilidad.length})` },
+            { key: 'historial', label: 'Historial' },
             ...(isAdmin ? [{ key: 'admin', label: 'Admin' }] : []),
           ].map((t) => (
             <button key={t.key} onClick={() => setActiveTab(t.key as any)}
-              className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors ${
+              className={`px-4 sm:px-5 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap flex-shrink-0 ${
                 activeTab === t.key ? 'border-primary text-primary bg-primary/5' : 'border-transparent text-text-sec hover:text-text-main hover:bg-gray-50'
               }`}>
               {t.label}
@@ -642,12 +893,12 @@ export default function DetalleExpedientePage() {
           ))}
         </div>
 
-        <div className="p-5">
+        <div className="p-3 sm:p-5">
           {/* TAB: MONTOS */}
           {activeTab === 'montos' && (
             <div className="space-y-4">
               <div className="overflow-x-auto">
-                <table className="w-full">
+                <table className="w-full min-w-[720px]">
                   <thead>
                     <tr className="bg-gray-50 border-b border-border">
                       <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-text-sec uppercase tracking-wider">Concepto</th>
@@ -734,7 +985,7 @@ export default function DetalleExpedientePage() {
               <p className="text-[11px] text-text-sec italic">Haz clic en un concepto o en el N.° de expediente para ver los documentos adjuntos.</p>
 
               {/* Resumen */}
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-center">
                   <p className="text-[10px] font-semibold text-green-700 uppercase">Base Total</p>
                   <p className="text-lg font-bold text-green-800 mt-1">{fmtMonto(baseTotalMontos)}</p>
@@ -799,7 +1050,7 @@ export default function DetalleExpedientePage() {
               ) : (
                 <div className="space-y-4">
                   {/* Subpestañas: un beneficio por cada uno con documentos subidos */}
-                  <div className="flex border-b border-border">
+                  <div className="flex border-b border-border overflow-x-auto">
                     {gruposDocs.map((g) => (
                       <button key={g.tipo} onClick={() => setDocsGrupoSel(g.tipo)}
                         className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${grupoDocsSel?.tipo === g.tipo ? 'border-primary text-primary bg-primary/5' : 'border-transparent text-text-sec hover:text-text-main'}`}>
@@ -820,8 +1071,16 @@ export default function DetalleExpedientePage() {
                           {reg.esActual && <span className="text-[10px] font-bold text-primary">ACTUAL</span>}
                         </div>
                       )}
-                      <div className="grid grid-cols-2 gap-2">
-                        {Object.entries(DOCS_LABELS).map(([campo, label]) => {
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {Object.entries(DOCS_LABELS)
+                          .filter(([campo]) => {
+                            if (campo !== 'ordenPago' && campo !== 'declaracionJurada') return true;
+                            const benefCount = reg.id === id
+                              ? (detalle?.beneficiariosVinculados?.length || 0)
+                              : (docsOtros[reg.id]?.benefCount || 0);
+                            return benefCount <= 1;
+                          })
+                          .map(([campo, label]) => {
                           const disponible = Boolean(docsDeExpediente(reg.id)[campo]);
                           const loadKey = `${reg.id}:${campo}`;
                           return (
@@ -829,6 +1088,11 @@ export default function DetalleExpedientePage() {
                               <div className="flex items-center gap-2">
                                 <span className={`w-2 h-2 rounded-full ${disponible ? 'bg-green-500' : 'bg-gray-300'}`} />
                                 <span className="text-sm text-text-main">{label}</span>
+                                {campo === 'declaracionJurada' && ((reg.id === id ? detalle?.declaracionJuradaDni : docsOtros[reg.id]?.dniDJ) || '') && (
+                                  <span className="text-[10px] font-medium bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">
+                                    DNI {reg.id === id ? detalle?.declaracionJuradaDni : docsOtros[reg.id]?.dniDJ}
+                                  </span>
+                                )}
                               </div>
                               <div className="flex items-center gap-3">
                                 {disponible && (
@@ -860,14 +1124,25 @@ export default function DetalleExpedientePage() {
           {/* TAB: BENEFICIARIOS */}
           {activeTab === 'benef' && (
             <div>
+              {esTipoBolsa && puedeOperar && detalle.estado !== 'PAGADA' && (
+                <div className="flex justify-end mb-3">
+                  <button onClick={() => setCompletarOpen(true)}
+                    className="px-3 py-1.5 text-xs font-medium text-white bg-primary rounded-lg hover:bg-primary/90">
+                    Agregar / editar beneficiarios
+                  </button>
+                </div>
+              )}
               {detalle.beneficiariosVinculados.length > 0 ? (
-                <table className="w-full">
+                <div className="overflow-x-auto">
+                <table className="w-full min-w-[720px]">
                   <thead>
                     <tr className="bg-gray-50 border-b border-border">
                       <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-text-sec uppercase">Nombre</th>
                       <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-text-sec uppercase">DNI</th>
                       <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-text-sec uppercase">Parentesco</th>
                       <th className="px-4 py-2.5 text-right text-[10px] font-semibold text-text-sec uppercase">% Asignado</th>
+                      <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-text-sec uppercase">Declaración jurada</th>
+                      <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-text-sec uppercase">Orden de pago</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
@@ -877,48 +1152,56 @@ export default function DetalleExpedientePage() {
                         <td className="px-4 py-3 text-sm text-text-sec">{b.dni || '—'}</td>
                         <td className="px-4 py-3 text-sm text-text-sec">{b.parentesco}</td>
                         <td className="px-4 py-3 text-sm text-right font-semibold">{b.porcentajeAsignado}%</td>
+                        <td className="px-4 py-3 text-sm">
+                          {b.tieneDeclaracionJurada ? (
+                            <button
+                              onClick={async () => {
+                                try {
+                                  const { data } = await api.get(`/fam-beneficios/${id}/beneficiario/${b.id}/declaracion`);
+                                  setPdfViewer({ base64: data.contenido, nombre: `Declaración jurada - ${b.nombre}` });
+                                } catch {
+                                  showConfirmMessage('error', 'No se pudo abrir la declaración jurada');
+                                }
+                              }}
+                              className="text-primary hover:underline font-medium text-xs">
+                              Ver PDF{b.declaracionJuradaDni ? ` (DNI ${b.declaracionJuradaDni})` : ''}
+                            </button>
+                          ) : (
+                            <span className="text-xs font-semibold text-amber-600">Pendiente</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          {b.tieneOrdenPago ? (
+                            <button
+                              onClick={async () => {
+                                try {
+                                  const { data } = await api.get(`/fam-beneficios/${id}/beneficiario/${b.id}/orden-pago`);
+                                  setPdfViewer({ base64: data.contenido, nombre: `Orden de pago - ${b.nombre}` });
+                                } catch {
+                                  showConfirmMessage('error', 'No se pudo abrir la orden de pago');
+                                }
+                              }}
+                              className="text-primary hover:underline font-medium text-xs">
+                              Ver PDF
+                            </button>
+                          ) : (
+                            <span className="text-xs font-semibold text-amber-600">Pendiente</span>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
+                </div>
               ) : (
                 <p className="text-sm text-text-sec text-center py-8">No hay beneficiarios vinculados</p>
               )}
             </div>
           )}
 
-          {/* TAB: TRAZABILIDAD */}
-          {activeTab === 'trazabilidad' && (
-            <div>
-              {trazabilidad.length > 0 ? (
-                <div className="relative pl-6">
-                  <div className="absolute left-[15px] top-0 bottom-0 w-0.5 bg-gray-200" />
-                  {trazabilidad.map((item: any, idx: number) => (
-                    <div key={item.id || idx} className="relative flex items-start gap-3 pb-5 last:pb-0">
-                      <div className={`absolute -left-6 top-0.5 z-10 w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${
-                        item.accion === 'CREATE' ? 'bg-green-100 text-green-600' :
-                        item.accion === 'DELETE' ? 'bg-red-100 text-red-600' :
-                        'bg-blue-100 text-blue-600'
-                      }`}>
-                        {item.accion === 'CREATE' ? (
-                          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" /></svg>
-                        ) : item.accion === 'DELETE' ? (
-                          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
-                        ) : (
-                          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" /></svg>
-                        )}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-sm text-text-main">{item.mensaje}</p>
-                        <p className="text-[10px] text-text-sec mt-0.5">{new Date(item.fecha).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' })} · {new Date(item.fecha).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-text-sec text-center py-8">Sin registros de historial</p>
-              )}
-            </div>
+          {/* TAB: HISTORIAL */}
+          {activeTab === 'historial' && (
+            <HistorialExpediente expedienteId={id} onUpdated={recargar} />
           )}
 
           {/* TAB: ADMIN */}
@@ -972,9 +1255,9 @@ export default function DetalleExpedientePage() {
               )}
 
               <div className="flex justify-between pt-3 border-t border-border">
-                <button onClick={eliminarExpediente} disabled={eliminando}
-                  className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50">
-                  {eliminando ? 'Eliminando...' : 'Eliminar'}
+                <button onClick={eliminarExpediente}
+                  className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700">
+                  Eliminar
                 </button>
                 <div className="flex gap-2">
                   <button onClick={() => {
@@ -1010,6 +1293,44 @@ export default function DetalleExpedientePage() {
         <PdfViewerModal base64={pdfViewer.base64} nombre={pdfViewer.nombre} onClose={() => setPdfViewer(null)} />
       )}
 
+      {completarOpen && detalle && (
+        <CompletarBeneficiariosModal
+          isOpen={completarOpen}
+          onClose={() => setCompletarOpen(false)}
+          onSaved={recargar}
+          expedienteId={id}
+          colegiadoId={detalle.colegiadoId}
+          pagada={detalle.estado === 'PAGADA'}
+          isAdmin={isAdmin}
+          modalidad={detalle.modalidadBeneficio}
+          vinculados={detalle.beneficiariosVinculados}
+        />
+      )}
+
+      {pagoOpen && detalle && (
+        <PagoExpedienteModal
+          isOpen={pagoOpen}
+          onClose={() => setPagoOpen(false)}
+          onSaved={recargar}
+          expedienteId={id}
+          monto={detalle.montoFinal ?? detalle.monto}
+          bancoSugerido={detalle.banco}
+          beneficiarios={detalle.beneficiariosVinculados}
+          solicitanteNombre={detalle.solicitanteNombre}
+          solicitanteDni={detalle.solicitanteDni}
+        />
+      )}
+
+      {depositoEdit && (
+        <EditarDepositoModal
+          isOpen={Boolean(depositoEdit)}
+          onClose={() => setDepositoEdit(null)}
+          onSaved={recargar}
+          expedienteId={id}
+          deposito={depositoEdit}
+        />
+      )}
+
       {editHistorialId && (
         <EditarExpedienteModal
           expedienteId={editHistorialId}
@@ -1037,6 +1358,17 @@ export default function DetalleExpedientePage() {
               }).catch(() => {});
             }
           }}
+        />
+      )}
+
+      {detalle && (
+        <EliminarExpedienteModal
+          isOpen={eliminarAbierto}
+          onClose={() => setEliminarAbierto(false)}
+          expedienteId={id}
+          expedienteNumero={detalle.expedienteNumero}
+          estado={detalle.estado}
+          onDeleted={() => router.push('/dashboard/fam/expedientes')}
         />
       )}
     </div>

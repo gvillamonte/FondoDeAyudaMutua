@@ -194,6 +194,8 @@ model FamBeneficiario {
   imagenes       FamImagenBeneficiario?
   vinculos       FamSolicitudBeneficiario[]
   vinculosCovid  FamCovidAsignacionBeneficiario[]
+  depositos      FamDepositoBeneficiario[]
+  herederosSucesion FamSucesionBeneficiario[]
 
   @@index([colegiadoId])
   @@index([activo])
@@ -232,6 +234,10 @@ model FamSolicitudBeneficio {
   solicitanteNombre   String?   @map("solicitante_nombre") @db.NVarChar(200)
   solicitanteDni      String?   @map("solicitante_dni") @db.VarChar(20)
   sucesionIntestada   String?   @map("sucesion_intestada") @db.NVarChar(MAX)
+  declaracionJurada   String?   @map("declaracion_jurada") @db.NVarChar(MAX)
+  declaracionJuradaDni String?  @map("declaracion_jurada_dni") @db.VarChar(20)
+  actaDefuncion       String?   @map("acta_defuncion") @db.NVarChar(MAX)
+  otrosDocumentos     String?   @map("otros_documentos") @db.NVarChar(MAX)
   observaciones       String?   @db.NVarChar(1000)
   registradoPor       String?   @map("registrado_por") @db.NVarChar(36)
   createdAt           DateTime  @default(now()) @map("created_at")
@@ -255,8 +261,17 @@ model FamSolicitudBeneficio {
   descuentoCovid           Decimal  @default(0) @map("descuento_covid") @db.Decimal(12, 2)
   montoFinal               Decimal? @map("monto_final") @db.Decimal(12, 2)
 
+  fechaDefuncion           DateTime? @map("fecha_defuncion")
+  causaFallecimiento       String?   @map("causa_fallecimiento") @db.NVarChar(300)
+  fechaDiagnostico         DateTime? @map("fecha_diagnostico")
+  diagnosticoMedico        String?   @map("diagnostico_medico") @db.NVarChar(500)
+  fechaAccidente           DateTime? @map("fecha_accidente")
+  descripcionAccidente     String?   @map("descripcion_accidente") @db.NVarChar(500)
+
   tipoBeneficio TipoBeneficio @relation(fields: [tipoBeneficioId], references: [id])
   vinculos      FamSolicitudBeneficiario[]
+  depositos     FamDepositoBeneficiario[]
+  sucesionIntestadaDetalle FamSucesionIntestada?
 
   @@index([colegiadoId])
   @@index([tipoBeneficioId])
@@ -270,6 +285,9 @@ model FamSolicitudBeneficiario {
   solicitudId        String  @map("solicitud_id") @db.NVarChar(36)
   beneficiarioId     String  @map("beneficiario_id") @db.NVarChar(36)
   porcentajeAsignado Decimal @default(0) @map("porcentaje_asignado") @db.Decimal(5, 2)
+  declaracionJurada    String? @map("declaracion_jurada") @db.NVarChar(MAX)
+  declaracionJuradaDni String? @map("declaracion_jurada_dni") @db.VarChar(20)
+  ordenPago            String? @map("orden_pago") @db.NVarChar(MAX)
   createdAt          DateTime @default(now()) @map("created_at")
 
   solicitud    FamSolicitudBeneficio @relation(fields: [solicitudId], references: [id], onDelete: Cascade)
@@ -278,6 +296,32 @@ model FamSolicitudBeneficiario {
   @@unique([solicitudId, beneficiarioId])
   @@index([solicitudId])
   @@map("fam_solicitud_beneficiarios")
+}
+
+model FamDepositoBeneficiario {
+  id                 String   @id @default(uuid()) @db.NVarChar(36)
+  solicitudId        String   @map("solicitud_id") @db.NVarChar(36)
+  beneficiarioId     String?  @map("beneficiario_id") @db.NVarChar(36)
+  nombreBeneficiario String?  @map("nombre_beneficiario") @db.NVarChar(200)
+  dniBeneficiario    String?  @map("dni_beneficiario") @db.VarChar(20)
+  porcentaje         Decimal  @default(0) @db.Decimal(5, 2)
+  monto              Decimal  @db.Decimal(12, 2)
+  banco              String?  @db.VarChar(100)
+  numeroCuenta       String?  @map("numero_cuenta") @db.VarChar(50)
+  cci                String?  @db.VarChar(30)
+  fechaPago          DateTime? @map("fecha_pago") @db.DateTime2
+  comprobantePdf     String?  @map("comprobante_pdf") @db.NVarChar(MAX)
+  estado             String   @default("PAGADO") @db.VarChar(20)
+  registradoPor      String?  @map("registrado_por") @db.NVarChar(36)
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  solicitud    FamSolicitudBeneficio @relation(fields: [solicitudId], references: [id], onDelete: Cascade)
+  beneficiario FamBeneficiario?      @relation(fields: [beneficiarioId], references: [id])
+
+  @@unique([solicitudId, beneficiarioId])
+  @@index([solicitudId])
+  @@map("fam_depositos_beneficiario")
 }
 
 model FamConfiguracion {
@@ -506,3 +550,116 @@ model FamDuplicadoDocumento {
   @@index([duplicadoId])
   @@map("fam_duplicado_documentos")
 }
+
+// ============= ACTUALIZACIÓN DE DATOS DE COLEGIADOS =============
+
+model ColegiadoActualizacion {
+  id                      String   @id @default(uuid()) @db.NVarChar(36)
+  colegiadoId             String   @map("colegiado_id") @db.VarChar(50)
+  cip                     String   @db.VarChar(50)
+  dni                     String   @db.VarChar(20)
+  nombres                 String   @db.NVarChar(200)
+  emailAnterior           String?  @map("email_anterior") @db.VarChar(255)
+  emailNuevo              String?  @map("email_nuevo") @db.VarChar(255)
+  celularAnterior         String?  @map("celular_anterior") @db.VarChar(50)
+  celularNuevo            String?  @map("celular_nuevo") @db.VarChar(50)
+  fechaNacimientoAnterior String?  @map("fecha_nacimiento_anterior") @db.VarChar(50)
+  fechaNacimientoNuevo    String?  @map("fecha_nacimiento_nuevo") @db.VarChar(50)
+  sexoAnterior            String?  @map("sexo_anterior") @db.VarChar(20)
+  sexoNuevo               String?  @map("sexo_nuevo") @db.VarChar(20)
+  direccionAnterior       String?  @map("direccion_anterior") @db.NVarChar(300)
+  direccionNuevo          String?  @map("direccion_nuevo") @db.NVarChar(300)
+  departamentoAnterior    String?  @map("departamento_anterior") @db.NVarChar(100)
+  departamentoNuevo       String?  @map("departamento_nuevo") @db.NVarChar(100)
+  provinciaAnterior       String?  @map("provincia_anterior") @db.NVarChar(100)
+  provinciaNuevo          String?  @map("provincia_nuevo") @db.NVarChar(100)
+  distritoAnterior        String?  @map("distrito_anterior") @db.NVarChar(100)
+  distritoNuevo           String?  @map("distrito_nuevo") @db.NVarChar(100)
+  referenciaAnterior      String?  @map("referencia_anterior") @db.NVarChar(300)
+  referenciaNuevo         String?  @map("referencia_nuevo") @db.NVarChar(300)
+  estadoCivilAnterior     String?  @map("estado_civil_anterior") @db.VarChar(50)
+  estadoCivilNuevo        String?  @map("estado_civil_nuevo") @db.VarChar(50)
+  ipAddress               String?  @map("ip_address") @db.VarChar(45)
+  userAgent               String?  @map("user_agent") @db.VarChar(500)
+  estado                  String   @default("ACTUALIZADO") @db.VarChar(30)
+  createdAt               DateTime @default(now()) @map("created_at")
+  updatedAt               DateTime @updatedAt @map("updated_at")
+
+  @@index([colegiadoId])
+  @@index([cip])
+  @@index([dni])
+  @@index([createdAt])
+  @@map("colegiado_actualizaciones")
+}
+
+// ============= SUCESIÓN INTESTADA (MÚLTIPLES BENEFICIARIOS) =============
+
+model FamSucesionIntestada {
+  id                      String    @id @default(uuid()) @db.NVarChar(36)
+  solicitudId             String    @unique @map("solicitud_id") @db.NVarChar(36)
+  colegiadoId             String    @map("colegiado_id") @db.VarChar(50)
+  numeroPartidaRegistral  String?   @map("numero_partida_registral") @db.VarChar(50)
+  notariaJuzgado          String?   @map("notaria_juzgado") @db.NVarChar(200)
+  fechaEmisionDocumento   DateTime? @map("fecha_emision_documento") @db.DateTime2
+  sustentoPdf             String    @map("sustento_pdf") @db.NVarChar(MAX)
+  montoTotal              Decimal   @map("monto_total") @db.Decimal(12, 2)
+  estadoTramite           String    @default("BORRADOR") @map("estado_tramite") @db.VarChar(30)
+  versionActual           Int       @default(1) @map("version_actual")
+  observaciones           String?   @db.NVarChar(1000)
+  registradoPor           String?   @map("registrado_por") @db.NVarChar(36)
+  createdAt               DateTime  @default(now()) @map("created_at")
+  updatedAt               DateTime  @updatedAt @map("updated_at")
+
+  solicitud               FamSolicitudBeneficio      @relation(fields: [solicitudId], references: [id], onDelete: Cascade)
+  herederos               FamSucesionBeneficiario[]
+  versiones               FamSucesionVersion[]
+
+  @@index([colegiadoId])
+  @@index([solicitudId])
+  @@map("fam_sucesiones_intestadas")
+}
+
+model FamSucesionBeneficiario {
+  id                    String    @id @default(uuid()) @db.NVarChar(36)
+  sucesionId            String    @map("sucesion_id") @db.NVarChar(36)
+  beneficiarioId        String?   @map("beneficiario_id") @db.NVarChar(36)
+  tipoDocumento         String    @default("DNI") @map("tipo_documento") @db.VarChar(10)
+  numeroDocumento       String    @map("numero_documento") @db.VarChar(20)
+  nombres               String    @db.NVarChar(100)
+  apellidos             String    @db.NVarChar(100)
+  parentesco            String    @db.VarChar(50)
+  porcentaje            Decimal   @db.Decimal(5, 2)
+  monto                 Decimal   @db.Decimal(12, 2)
+  telefono              String?   @db.VarChar(30)
+  email                 String?   @db.VarChar(150)
+  declaracionJuradaPdf  String?   @map("declaracion_jurada_pdf") @db.NVarChar(MAX)
+  ordenPagoPdf          String?   @map("orden_pago_pdf") @db.NVarChar(MAX)
+  orden                 Int       @default(1)
+  createdAt             DateTime  @default(now()) @map("created_at")
+
+  sucesion              FamSucesionIntestada  @relation(fields: [sucesionId], references: [id], onDelete: Cascade)
+  beneficiario          FamBeneficiario?      @relation(fields: [beneficiarioId], references: [id])
+
+  @@unique([sucesionId, tipoDocumento, numeroDocumento])
+  @@index([sucesionId])
+  @@map("fam_sucesion_beneficiarios")
+}
+
+model FamSucesionVersion {
+  id                        String   @id @default(uuid()) @db.NVarChar(36)
+  sucesionId                String   @map("sucesion_id") @db.NVarChar(36)
+  numeroVersion             Int      @map("numero_version")
+  snapshotDistribucionJson  String   @map("snapshot_distribucion_json") @db.NVarChar(MAX)
+  motivoModificacion        String   @map("motivo_modificacion") @db.NVarChar(500)
+  modificadoPor             String?  @map("modificado_por") @db.NVarChar(36)
+  ipAddress                 String?  @map("ip_address") @db.VarChar(45)
+  createdAt                 DateTime @default(now()) @map("created_at")
+
+  sucesion                  FamSucesionIntestada @relation(fields: [sucesionId], references: [id], onDelete: Cascade)
+
+  @@unique([sucesionId, numeroVersion])
+  @@index([sucesionId])
+  @@map("fam_sucesion_versiones")
+}
+
+

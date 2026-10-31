@@ -62,7 +62,7 @@ describe('ActualizarFamSolicitudDto', () => {
     expect(await validar({ memorando: PDF_BASE64 })).toHaveLength(0);
   });
 
-  it('acepta los seis campos de documento', async () => {
+  it('acepta los siete campos de documento', async () => {
     expect(
       await validar({
         fichaAdmisibilidad: PDF_BASE64,
@@ -71,8 +71,28 @@ describe('ActualizarFamSolicitudDto', () => {
         memorando: PDF_BASE64,
         ordenPago: PDF_BASE64,
         sucesionIntestada: PDF_BASE64,
+        declaracionJurada: PDF_BASE64,
+        declaracionJuradaDni: '12345678',
       }),
     ).toHaveLength(0);
+  });
+
+  it('acepta la Declaracion Jurada junto con el DNI del declarante', async () => {
+    expect(
+      await validar({ declaracionJurada: PDF_BASE64, declaracionJuradaDni: '12345678' }),
+    ).toHaveLength(0);
+  });
+
+  it('rechaza un DNI de declarante que no tiene exactamente 8 digitos', async () => {
+    for (const dni of ['1234567', '123456789', '1234567a', '12 45678']) {
+      const errores = await validar({ declaracionJuradaDni: dni });
+      expect(clavesDeError(errores)).toContain('matches');
+    }
+  });
+
+  it('rechaza una Declaracion Jurada que no es PDF', async () => {
+    const errores = await validar({ declaracionJurada: 'no-es-un-pdf' });
+    expect(clavesDeError(errores)).toContain('pdfBase64');
   });
 
   it('acepta un payload sin documentos (solo metadatos)', async () => {
@@ -101,5 +121,25 @@ describe('ActualizarFamSolicitudDto', () => {
   it('rechaza documentacionCompleta que no es booleano', async () => {
     const errores = await validar({ documentacionCompleta: 'SI' });
     expect(clavesDeError(errores)).toContain('isBoolean');
+  });
+
+  it('acepta los datos especiales de fallecimiento, diagnostico y accidente', async () => {
+    expect(
+      await validar({
+        fechaDefuncion: '2026-10-01',
+        causaFallecimiento: 'Infarto',
+        fechaDiagnostico: '2026-09-15',
+        diagnosticoMedico: 'Cancer terminal',
+        fechaAccidente: '2026-08-20',
+        descripcionAccidente: 'Caida en obra',
+      }),
+    ).toHaveLength(0);
+  });
+
+  it('rechaza fechas invalidas en los datos especiales', async () => {
+    for (const campo of ['fechaDefuncion', 'fechaDiagnostico', 'fechaAccidente']) {
+      const errores = await validar({ [campo]: 'no-es-fecha' });
+      expect(clavesDeError(errores)).toContain('isDateString');
+    }
   });
 });

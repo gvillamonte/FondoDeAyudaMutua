@@ -32,6 +32,18 @@ const menuItems: MenuItem[] = [
     ),
   },
   {
+    label: 'Act. de Datos',
+    icon: (
+      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+      </svg>
+    ),
+    children: [
+      { label: 'Quiénes actualizaron datos', href: '/dashboard/actualizacion-datos' },
+      { label: 'Portal Colegiado', href: '/actualizar-datos' },
+    ],
+  },
+  {
     label: 'Beneficios',
     href: '/dashboard/beneficios',
     icon: (
@@ -132,7 +144,7 @@ const menuItems: MenuItem[] = [
   },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ mobileOpen = false, onClose }: { mobileOpen?: boolean; onClose?: () => void }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [openGroups, setOpenGroups] = useState<string[]>([]);
@@ -162,17 +174,30 @@ export default function Sidebar() {
   };
 
   return (
-    <aside className={`bg-primary text-white transition-all duration-300 flex flex-col ${collapsed ? 'w-16' : 'w-64'}`}>
+    <aside
+      className={`bg-primary text-white transition-transform lg:transition-all duration-300 flex flex-col flex-shrink-0
+        fixed inset-y-0 left-0 z-50 w-64
+        lg:static lg:z-auto lg:translate-x-0 lg:inset-auto
+        ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}
+        ${collapsed ? 'lg:w-16' : 'lg:w-64'}`}
+    >
       <div className="flex items-center justify-between p-4 border-b border-primary-dark">
-        {!collapsed && <span className="text-lg font-semibold">Sistema CIP</span>}
-        <button onClick={() => setCollapsed(!collapsed)} className="p-1 rounded hover:bg-primary-dark transition-colors">
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            {collapsed ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /> : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />}
-          </svg>
-        </button>
+        <span className={`text-lg font-semibold ${collapsed ? 'lg:hidden' : ''}`}>Sistema CIP</span>
+        <div className="flex items-center gap-1">
+          <button onClick={onClose} className="lg:hidden p-1 rounded hover:bg-primary-dark transition-colors" aria-label="Cerrar menú">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          <button onClick={() => setCollapsed(!collapsed)} className="p-1 rounded hover:bg-primary-dark transition-colors hidden lg:block" aria-label={collapsed ? 'Expandir menú' : 'Colapsar menú'}>
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              {collapsed ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /> : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />}
+            </svg>
+          </button>
+        </div>
       </div>
 
-      <nav className="flex-1 py-4">
+      <nav className="flex-1 py-4 overflow-y-auto">
         {visibleItems.map((item) => {
           if (item.children) {
             const isGroupOpen = openGroups.includes(item.label);
@@ -187,23 +212,22 @@ export default function Sidebar() {
                   title={collapsed ? item.label : undefined}
                 >
                   <span className="flex-shrink-0">{item.icon}</span>
-                  {!collapsed && (
-                    <>
-                      <span className="ml-3 flex-1 text-left">{item.label}</span>
-                      <svg className={`w-4 h-4 transition-transform ${isGroupOpen ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                    </>
-                  )}
+                  <>
+                    <span className={`ml-3 flex-1 text-left ${collapsed ? 'lg:hidden' : ''}`}>{item.label}</span>
+                    <svg className={`w-4 h-4 transition-transform ${isGroupOpen ? 'rotate-90' : ''} ${collapsed ? 'lg:hidden' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </>
                 </button>
-                {!collapsed && isGroupOpen && (
-                  <div className="bg-primary-dark/30">
+                {isGroupOpen && (
+                  <div className={`bg-primary-dark/30 ${collapsed ? 'lg:hidden' : ''}`}>
                     {item.children.map((child) => {
                       const isActive = pathname === child.href;
                       return (
                         <Link
                           key={child.href}
                           href={child.href}
+                          onClick={onClose}
                           className={`flex items-center pl-14 pr-4 py-2 text-sm transition-colors ${
                             isActive ? 'bg-primary-dark text-white font-medium' : 'text-blue-200 hover:bg-primary-dark/50 hover:text-white'
                           }`}
@@ -223,20 +247,21 @@ export default function Sidebar() {
             <Link
               key={item.href}
               href={item.href!}
+              onClick={onClose}
               className={`flex items-center px-4 py-3 text-sm font-medium transition-colors ${
                 isActive ? 'bg-primary-dark text-white' : 'text-blue-100 hover:bg-primary-dark hover:text-white'
               }`}
               title={collapsed ? item.label : undefined}
             >
               <span className="flex-shrink-0">{item.icon}</span>
-              {!collapsed && <span className="ml-3">{item.label}</span>}
+              <span className={`ml-3 ${collapsed ? 'lg:hidden' : ''}`}>{item.label}</span>
             </Link>
           );
         })}
       </nav>
 
       <div className="p-4 border-t border-primary-dark">
-        {!collapsed && <p className="text-xs text-blue-200 text-center">v1.0.0 - Sistema CIP</p>}
+        <p className={`text-xs text-blue-200 text-center ${collapsed ? 'lg:hidden' : ''}`}>v1.0.0 - Sistema CIP</p>
       </div>
     </aside>
   );

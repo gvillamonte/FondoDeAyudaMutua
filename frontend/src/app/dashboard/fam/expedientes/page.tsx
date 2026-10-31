@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
 import ReporteEntregas from '@/components/fam/ReporteEntregas';
 import DuplicadosPanel from '@/components/fam/DuplicadosPanel';
+import EliminarExpedienteModal from '@/components/fam/EliminarExpedienteModal';
 
 interface Expediente {
   id: string;
@@ -27,6 +28,22 @@ interface Expediente {
   expedienteNumero: string | null;
   descuentoCovid: number | null;
   montoFinal: number | null;
+  createdAt?: string;
+  updatedAt?: string;
+  banco?: string | null;
+  beneficiarios?: Array<{
+    beneficiarioId?: string | null;
+    nombre: string;
+    dni: string;
+    parentesco: string;
+    porcentaje: number;
+    monto: number;
+    banco: string;
+    numeroCuenta: string;
+    cci: string;
+    fechaPago: string | null;
+    estado: string;
+  }>;
 }
 
 interface ColegiadoGrupo {
@@ -111,6 +128,8 @@ export default function ExpedientesPage() {
   const router = useRouter();
   const [tab, setTab] = useState<'historial' | 'todos' | 'reporte' | 'duplicados'>('historial');
   const [puedeCrear, setPuedeCrear] = useState(false);
+  const [esAdmin, setEsAdmin] = useState(false);
+  const [eliminarTarget, setEliminarTarget] = useState<Expediente | null>(null);
 
   const [expedientes, setExpedientes] = useState<Expediente[]>([]);
   const [loading, setLoading] = useState(true);
@@ -134,6 +153,7 @@ export default function ExpedientesPage() {
   useEffect(() => {
     const user = getCurrentUser();
     setPuedeCrear(!!user && user.rol !== 'AUDITOR');
+    setEsAdmin(user?.rol === 'ADMINISTRADOR');
     api.get('/tipos-beneficio-config', { params: { activos: 'true' } })
       .then(({ data }) => setTipos(Array.isArray(data) ? data : []))
       .catch(() => setTipos([]));
@@ -206,12 +226,20 @@ export default function ExpedientesPage() {
           g.ultimaFechaPago = exp.fechaPago;
         }
       }
-      const recNombre = exp.solicitanteNombre || (exp.estado === 'PAGADA' ? exp.NOMBRE_COLEGIADO : '');
-      if (recNombre) {
-        const recDni = exp.solicitanteDni || exp.DNI || '';
-        const clave = recDni || recNombre;
-        if (!g.beneficiariosUnicos.some((b) => (b.dni || b.nombre) === clave)) {
-          g.beneficiariosUnicos.push({ nombre: recNombre, dni: recDni });
+      if (Array.isArray(exp.beneficiarios) && exp.beneficiarios.length > 0) {
+        for (const b of exp.beneficiarios) {
+          if (b.nombre && !g.beneficiariosUnicos.some((u) => (u.dni && u.dni === b.dni) || u.nombre === b.nombre)) {
+            g.beneficiariosUnicos.push({ nombre: b.nombre, dni: b.dni || '' });
+          }
+        }
+      } else {
+        const recNombre = exp.solicitanteNombre || (exp.estado === 'PAGADA' ? exp.NOMBRE_COLEGIADO : '');
+        if (recNombre) {
+          const recDni = exp.solicitanteDni || exp.DNI || '';
+          const clave = recDni || recNombre;
+          if (!g.beneficiariosUnicos.some((b) => (b.dni || b.nombre) === clave)) {
+            g.beneficiariosUnicos.push({ nombre: recNombre, dni: recDni });
+          }
         }
       }
       if (exp.fechaSolicitud && exp.fechaSolicitud > g.ultimaFecha) {
@@ -257,16 +285,20 @@ export default function ExpedientesPage() {
   };
 
   const nombreRecibidoExp = (exp: Expediente) => {
+    if (exp.beneficiarios && exp.beneficiarios.length > 0) {
+      if (exp.beneficiarios.length === 1) return exp.beneficiarios[0].nombre;
+      return `${exp.beneficiarios.length} beneficiarios`;
+    }
     if (exp.estado !== 'PAGADA') return null;
     return exp.solicitanteNombre || exp.NOMBRE_COLEGIADO || null;
   };
 
   const handleExportar = async () => {
     try {
-      const all: any[] = [];
+      const all: Expediente[] = [];
       let totalPagesExport = 1;
       for (let p = 1; p <= totalPagesExport && p <= 40; p++) {
-        const params: Record<string, string | number> = { page: p, limit: 100 };
+        const params: Record<string, string | number> = { page: p, limit: 100, ordenarPor: 'ingreso' };
         if (tab === 'historial') params.estado = 'PAGADA';
         else if (estadoFiltro) params.estado = estadoFiltro;
         if (search) params.search = search;
@@ -282,23 +314,89 @@ export default function ExpedientesPage() {
 
       if (!all.length) { alert('No hay expedientes para exportar con los filtros seleccionados.'); return; }
 
-      const ws = XLSX.utils.json_to_sheet(all.map((r) => ({
-        'N.° Expediente': r.expedienteNumero || '',
-        'CIP': r.NUM_COLEGIATURA,
-        'DNI': r.DNI,
-        'Colegiado': r.NOMBRE_COLEGIADO,
-        'Tipo Beneficio': r.tipoBeneficio?.nombre || '',
-        'Monto S/': Number(r.monto),
-        'Descuento COVID S/': r.descuentoCovid ?? '',
-        'Monto Final S/': r.montoFinal != null ? Number(r.montoFinal) : '',
-        'Estado': r.estado,
-        'Documentación': r.documentacionCompleta ? 'COMPLETA' : 'INCOMPLETA',
-        'Solicitante': [r.solicitanteNombre, r.solicitanteDni].filter(Boolean).join(' · ') || '',
-        'F. Recepción': r.fechaSolicitud ? new Date(r.fechaSolicitud).toISOString().slice(0, 10) : '',
-        'F. Pago': r.fechaPago ? new Date(r.fechaPago).toISOString().slice(0, 10) : '',
-      })));
+      // Hoja 1: Entregas por Beneficiario (detalle por cada persona y el monto exacto asignado/entregado)
+      const filasDetalle: any[] = [];
+      for (const r of all) {
+        const bens = Array.isArray(r.beneficiarios) && r.beneficiarios.length > 0
+          ? r.beneficiarios
+          : [{
+              nombre: r.solicitanteNombre || r.NOMBRE_COLEGIADO || 'Sin registro',
+              dni: r.solicitanteDni || r.DNI || '',
+              parentesco: r.solicitanteDni && r.solicitanteDni === r.DNI ? 'Colegiado / Titular' : 'Solicitante',
+              porcentaje: 100,
+              monto: Number(r.montoFinal ?? r.monto) || 0,
+              banco: r.banco || '',
+              numeroCuenta: '',
+              cci: '',
+              fechaPago: r.fechaPago || null,
+              estado: r.estado,
+            }];
+
+        for (const b of bens) {
+          filasDetalle.push({
+            'N.° Expediente': r.expedienteNumero || 'S/N',
+            'F. Ingreso / Registro': r.createdAt ? new Date(r.createdAt).toLocaleString('es-PE') : '',
+            'F. Recepción': r.fechaSolicitud ? new Date(r.fechaSolicitud).toISOString().slice(0, 10) : '',
+            'CIP Colegiado': r.NUM_COLEGIATURA || '',
+            'DNI Colegiado': r.DNI || '',
+            'Colegiado': r.NOMBRE_COLEGIADO || '',
+            'Tipo de Beneficio': r.tipoBeneficio?.nombre || '',
+            'Beneficiario': b.nombre || '',
+            'DNI Beneficiario': b.dni || '',
+            'Parentesco': b.parentesco || '',
+            '% Asignado': b.porcentaje ? `${Number(b.porcentaje)}%` : '100%',
+            'Monto Asignado / Entregado (S/)': Number((b.monto || 0).toFixed(2)),
+            'Banco': b.banco || r.banco || '',
+            'N.° Cuenta / CCI': [b.numeroCuenta, b.cci ? `CCI: ${b.cci}` : ''].filter(Boolean).join(' / ') || '',
+            'F. Pago': b.fechaPago ? new Date(b.fechaPago).toISOString().slice(0, 10) : (r.fechaPago ? new Date(r.fechaPago).toISOString().slice(0, 10) : ''),
+            'Estado Pago': b.estado || r.estado,
+            'Monto Total Exp. (S/)': Number((r.montoFinal ?? r.monto).toFixed(2)),
+            'Descuento COVID (S/)': Number(r.descuentoCovid || 0),
+            'Documentación': r.documentacionCompleta ? 'COMPLETA' : 'INCOMPLETA',
+          });
+        }
+      }
+
+      // Hoja 2: Resumen por Expediente
+      const filasResumen = all.map((r) => {
+        const desgloseBens = (r.beneficiarios || []).map((b) => `${b.nombre} (${b.porcentaje}% - S/ ${Number(b.monto || 0).toFixed(2)})`).join('; ');
+        return {
+          'N.° Expediente': r.expedienteNumero || 'S/N',
+          'F. Ingreso / Registro': r.createdAt ? new Date(r.createdAt).toLocaleString('es-PE') : '',
+          'F. Recepción': r.fechaSolicitud ? new Date(r.fechaSolicitud).toISOString().slice(0, 10) : '',
+          'CIP': r.NUM_COLEGIATURA || '',
+          'DNI': r.DNI || '',
+          'Colegiado': r.NOMBRE_COLEGIADO || '',
+          'Tipo Beneficio': r.tipoBeneficio?.nombre || '',
+          'Monto S/': Number(r.monto),
+          'Descuento COVID S/': Number(r.descuentoCovid || 0),
+          'Monto Final S/': Number((r.montoFinal ?? r.monto).toFixed(2)),
+          'N.° Beneficiarios': (r.beneficiarios && r.beneficiarios.length) || 1,
+          'Beneficiarios y Montos Asignados': desgloseBens || [r.solicitanteNombre, r.solicitanteDni].filter(Boolean).join(' · ') || '',
+          'Estado': r.estado,
+          'Documentación': r.documentacionCompleta ? 'COMPLETA' : 'INCOMPLETA',
+          'F. Pago': r.fechaPago ? new Date(r.fechaPago).toISOString().slice(0, 10) : '',
+        };
+      });
+
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Expedientes');
+      const wsDetalle = XLSX.utils.json_to_sheet(filasDetalle);
+      const wsResumen = XLSX.utils.json_to_sheet(filasResumen);
+
+      wsDetalle['!cols'] = [
+        { wch: 16 }, { wch: 20 }, { wch: 12 }, { wch: 10 }, { wch: 12 },
+        { wch: 32 }, { wch: 22 }, { wch: 32 }, { wch: 14 }, { wch: 15 },
+        { wch: 12 }, { wch: 28 }, { wch: 16 }, { wch: 24 }, { wch: 12 },
+        { wch: 14 }, { wch: 18 }, { wch: 16 }, { wch: 16 },
+      ];
+      wsResumen['!cols'] = [
+        { wch: 16 }, { wch: 20 }, { wch: 12 }, { wch: 10 }, { wch: 12 },
+        { wch: 32 }, { wch: 22 }, { wch: 14 }, { wch: 16 }, { wch: 16 },
+        { wch: 16 }, { wch: 45 }, { wch: 14 }, { wch: 16 }, { wch: 12 },
+      ];
+
+      XLSX.utils.book_append_sheet(wb, wsDetalle, 'Entregas por Beneficiario');
+      XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen Expedientes');
       XLSX.writeFile(wb, `Expedientes_FAM_${new Date().toISOString().slice(0, 10)}.xlsx`);
     } catch {
       alert('Error al generar el archivo Excel.');
@@ -328,11 +426,11 @@ export default function ExpedientesPage() {
     <div className="space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h2 className="text-2xl font-semibold text-text-main">Expedientes de Beneficio</h2>
+        <div className="min-w-0">
+          <h2 className="text-xl sm:text-xl sm:text-2xl font-semibold text-text-main">Expedientes de Beneficio</h2>
           <p className="text-text-sec text-sm mt-0.5">Gestión, seguimiento y reporte de beneficios del FAM</p>
         </div>
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 flex-wrap">
           {(tab === 'historial' || tab === 'todos') && (
             <button onClick={handleExportar}
               className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-text-sec bg-white border border-border-main rounded-lg hover:bg-gray-50 transition-colors">
@@ -371,10 +469,10 @@ export default function ExpedientesPage() {
       )}
 
       {/* Tabs */}
-      <div className="flex gap-5 border-b border-border-main">
+      <div className="-mx-3 sm:mx-0 px-3 sm:px-0 flex gap-5 border-b border-border-main overflow-x-auto">
         {TABS.map((t) => (
           <button key={t.key} onClick={() => setTab(t.key)}
-            className={`pb-2.5 px-1 text-left border-b-2 transition-colors ${tab === t.key ? 'border-primary' : 'border-transparent hover:border-gray-300'}`}>
+            className={`pb-2.5 px-1 text-left border-b-2 transition-colors whitespace-nowrap flex-shrink-0 ${tab === t.key ? 'border-primary' : 'border-transparent hover:border-gray-300'}`}>
             <span className={`block text-sm font-medium ${tab === t.key ? 'text-primary' : 'text-text-sec hover:text-text-main'}`}>{t.label}</span>
             <span className={`block text-[10px] mt-0.5 ${tab === t.key ? 'text-primary/70' : 'text-text-sec/70'}`}>{t.desc}</span>
           </button>
@@ -408,9 +506,9 @@ export default function ExpedientesPage() {
       ) : (
         <div className="bg-white border border-border-main rounded-xl overflow-hidden shadow-sm">
           {/* Search & Filters */}
-          <div className="p-4 border-b border-border-main bg-gray-50/50">
-            <div className="flex flex-wrap items-center gap-2.5">
-              <div className="relative flex-1 min-w-[240px] max-w-md">
+          <div className="p-3 sm:p-4 border-b border-border-main bg-gray-50/50">
+            <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2.5">
+              <div className="relative w-full sm:flex-1 sm:min-w-[220px] sm:max-w-md">
                 <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-sec" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                 <input type="text" placeholder="Buscar por CIP, DNI o nombre..." value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
@@ -418,19 +516,19 @@ export default function ExpedientesPage() {
                   className="w-full pl-10 pr-4 py-2 border border-border-main rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white" />
               </div>
               <select value={tipoFiltro} onChange={(e) => setTipoFiltro(e.target.value)}
-                className="border border-border-main rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30">
+                className="w-full sm:w-auto border border-border-main rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30">
                 <option value="">Todos los tipos</option>
                 {tipos.map((t) => <option key={t.id} value={t.id}>{t.nombre}</option>)}
               </select>
               {tab === 'todos' && (
                 <select value={estadoFiltro} onChange={(e) => setEstadoFiltro(e.target.value)}
-                  className="border border-border-main rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30">
+                  className="w-full sm:w-auto border border-border-main rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30">
                   <option value="">Todos los estados</option>
                   {ESTADO_OPTIONS.map((e) => <option key={e} value={e}>{ESTADO_LABELS[e]}</option>)}
                 </select>
               )}
               <select value={docsFiltro} onChange={(e) => setDocsFiltro(e.target.value)}
-                className="border border-border-main rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30">
+                className="w-full sm:w-auto border border-border-main rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30">
                 <option value="">Toda documentación</option>
                 <option value="SI">Documentación completa</option>
                 <option value="NO">Documentación incompleta</option>
@@ -438,22 +536,24 @@ export default function ExpedientesPage() {
               {tab === 'todos' && (
                 <div className="flex items-center gap-1.5">
                   <input type="date" value={fechaDesde} onChange={(e) => setFechaDesde(e.target.value)}
-                    className="border border-border-main rounded-lg px-2.5 py-2 text-sm bg-white" />
+                    className="flex-1 sm:flex-none border border-border-main rounded-lg px-2.5 py-2 text-sm bg-white min-w-0" />
                   <span className="text-xs text-text-sec">a</span>
                   <input type="date" value={fechaHasta} onChange={(e) => setFechaHasta(e.target.value)}
-                    className="border border-border-main rounded-lg px-2.5 py-2 text-sm bg-white" />
+                    className="flex-1 sm:flex-none border border-border-main rounded-lg px-2.5 py-2 text-sm bg-white min-w-0" />
                 </div>
               )}
-              <button onClick={() => { setSearch(searchInput); setPage(1); }}
-                className="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary/90 transition-colors">
-                Buscar
-              </button>
-              {filtrosActivos && (
-                <button onClick={() => { setSearchInput(''); setSearch(''); setTipoFiltro(''); setEstadoFiltro(''); setDocsFiltro(''); setFechaDesde(''); setFechaHasta(''); }}
-                  className="px-3 py-2 text-sm text-text-sec bg-white border border-border-main rounded-lg hover:bg-gray-50 transition-colors">
-                  Limpiar
+              <div className="flex items-center gap-2">
+                <button onClick={() => { setSearch(searchInput); setPage(1); }}
+                  className="flex-1 sm:flex-none px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary/90 transition-colors">
+                  Buscar
                 </button>
-              )}
+                {filtrosActivos && (
+                  <button onClick={() => { setSearchInput(''); setSearch(''); setTipoFiltro(''); setEstadoFiltro(''); setDocsFiltro(''); setFechaDesde(''); setFechaHasta(''); }}
+                    className="flex-1 sm:flex-none px-3 py-2 text-sm text-text-sec bg-white border border-border-main rounded-lg hover:bg-gray-50 transition-colors">
+                    Limpiar
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
@@ -461,7 +561,7 @@ export default function ExpedientesPage() {
 
           {/* Table */}
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full min-w-[900px]">
               <thead>
                 <tr className="bg-gray-50 border-b border-border-main">
                   <th className="w-8 px-3 py-3"></th>
@@ -612,11 +712,20 @@ export default function ExpedientesPage() {
                             <td className="px-4 py-3.5" onClick={(e) => e.stopPropagation()}>
                               <div className="flex items-center gap-1 justify-center">
                                 {soloUno ? (
+                                  <>
                                   <button onClick={() => router.push(`/dashboard/fam/expedientes/${grupo.expedientes[0].id}`)}
                                     className="p-1.5 rounded-lg hover:bg-primary/10 text-primary transition-colors" title="Ver detalle del expediente"
                                     aria-label="Ver detalle del expediente">
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                                   </button>
+                                  {esAdmin && (
+                                    <button onClick={() => setEliminarTarget(grupo.expedientes[0])}
+                                      className="p-1.5 rounded-lg hover:bg-red-50 text-red-500 transition-colors" title="Eliminar expediente"
+                                      aria-label="Eliminar expediente">
+                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                    </button>
+                                  )}
+                                  </>
                                 ) : (
                                   <>
                                     <button onClick={() => toggleGrupo(expKey)}
@@ -652,7 +761,15 @@ export default function ExpedientesPage() {
                                   <span className="text-xs text-text-sec">{exp.tipoBeneficio?.nombre || '—'}</span>
                                 </td>
                                 <td className="px-4 py-2.5">
-                                  {recibeExp ? (
+                                  {exp.beneficiarios && exp.beneficiarios.length > 1 ? (
+                                    <div className="min-w-0 max-w-[180px] space-y-0.5">
+                                      {exp.beneficiarios.map((b, bi) => (
+                                        <p key={bi} className="text-[11px] text-text-main truncate" title={`${b.nombre} (${b.porcentaje}% · S/ ${b.monto.toFixed(2)})`}>
+                                          <span className="font-medium">{b.nombre}</span> <span className="text-primary font-semibold">({b.porcentaje}%)</span>
+                                        </p>
+                                      ))}
+                                    </div>
+                                  ) : recibeExp ? (
                                     <div className="min-w-0 max-w-[160px]">
                                       <p className="text-xs font-medium text-text-main truncate" title={exp.solicitanteDni ? `${recibeExp} · DNI ${exp.solicitanteDni}` : recibeExp}>{recibeExp}</p>
                                       {exp.solicitanteDni && <p className="text-[10px] text-text-sec">DNI: {exp.solicitanteDni}</p>}
@@ -696,6 +813,13 @@ export default function ExpedientesPage() {
                                       aria-label="Ver detalle del expediente">
                                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
                                     </button>
+                                    {esAdmin && (
+                                      <button onClick={() => setEliminarTarget(exp)}
+                                        className="p-1 rounded hover:bg-red-50 text-red-500 transition-colors" title="Eliminar expediente"
+                                        aria-label="Eliminar expediente">
+                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                      </button>
+                                    )}
                                   </div>
                                 </td>
                               </tr>
@@ -711,18 +835,18 @@ export default function ExpedientesPage() {
           </div>
 
           {/* Pagination */}
-          <div className="px-4 py-3 border-t border-border-main flex flex-wrap items-center justify-between gap-3 bg-gray-50/80">
-            <div className="flex items-center gap-2">
-              <p className="text-sm text-text-sec">{total > 0 ? `Mostrando ${desde.toLocaleString('es-PE')} a ${hasta.toLocaleString('es-PE')} de ${total.toLocaleString('es-PE')}` : 'Sin registros'}</p>
-              <span className="text-xs text-text-sec">·</span>
-              <span className="text-xs text-text-sec">{grupos.length} colegiado{grupos.length !== 1 ? 's' : ''} en esta página</span>
+          <div className="px-3 sm:px-4 py-3 border-t border-border-main flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gray-50/80">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-xs sm:text-sm text-text-sec">{total > 0 ? `Mostrando ${desde.toLocaleString('es-PE')} a ${hasta.toLocaleString('es-PE')} de ${total.toLocaleString('es-PE')}` : 'Sin registros'}</p>
+              <span className="text-xs text-text-sec hidden sm:inline">·</span>
+              <span className="text-xs text-text-sec hidden sm:inline">{grupos.length} colegiado{grupos.length !== 1 ? 's' : ''} en esta página</span>
               <span className="text-xs text-text-sec ml-1">Mostrar</span>
               <select value={limit} onChange={(e) => setLimit(Number(e.target.value))}
                 className="border border-border-main rounded px-2 py-1 text-xs bg-white">
                 <option value={10}>10</option><option value={25}>25</option><option value={50}>50</option>
               </select>
             </div>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 flex-wrap">
               <button onClick={() => setPage(1)} disabled={page === 1} className="px-2 py-1.5 text-sm border border-border-main rounded hover:bg-white disabled:opacity-30 disabled:cursor-not-allowed">{'<<'}</button>
               <button onClick={() => setPage(page - 1)} disabled={page === 1} className="px-2 py-1.5 text-sm border border-border-main rounded hover:bg-white disabled:opacity-30 disabled:cursor-not-allowed">{'<'}</button>
               {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
@@ -739,6 +863,20 @@ export default function ExpedientesPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {eliminarTarget && (
+        <EliminarExpedienteModal
+          isOpen={Boolean(eliminarTarget)}
+          onClose={() => setEliminarTarget(null)}
+          expedienteId={eliminarTarget.id}
+          expedienteNumero={eliminarTarget.expedienteNumero}
+          estado={eliminarTarget.estado}
+          onDeleted={() => {
+            setEliminarTarget(null);
+            fetchExpedientes();
+          }}
+        />
       )}
     </div>
   );

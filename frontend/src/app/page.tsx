@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { parseJsonSafe } from '@/lib/safe-json';
 
@@ -158,6 +159,43 @@ export default function LoginPage() {
               )}
             </button>
           </form>
+
+          {/* Acceso Directo Colegiados - Actualización de Datos */}
+          <div
+            className="mt-6 p-4 rounded-xl border transition-all duration-150"
+            style={{ backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' }}
+          >
+            <div className="flex items-start gap-3">
+              <div
+                className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
+                style={{ backgroundColor: '#3258CA', color: '#FFFFFF' }}
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h3 className="text-sm font-bold" style={{ color: '#1E3A8A' }}>
+                  ¿Eres Colegiado del CIP?
+                </h3>
+                <p className="text-xs mt-0.5" style={{ color: '#1E40AF' }}>
+                  Ingresa tu CIP y DNI para consultar tu estado y actualizar tu correo, celular, fecha de nacimiento y sexo.
+                </p>
+                <Link
+                  href="/actualizar-datos"
+                  className="mt-3 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold text-white shadow-sm transition-colors duration-150"
+                  style={{ backgroundColor: '#3258CA' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#2848A8'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#3258CA'; }}
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                  Actualizar Mis Datos Aquí
+                </Link>
+              </div>
+            </div>
+          </div>
 
           <div className="mt-8 pt-6 border-t" style={{ borderColor: '#E2E8F0' }}>
             <p className="text-xs font-medium uppercase tracking-wider mb-3" style={{ color: '#64748B' }}>

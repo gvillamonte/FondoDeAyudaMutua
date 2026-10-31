@@ -20,8 +20,8 @@ export class AuditInterceptor implements NestInterceptor {
       return next.handle();
     }
 
-    // No auditar endpoints de autenticacion (login / refresh)
-    if (url.includes('/auth/login') || url.includes('/auth/refresh')) {
+    // No auditar endpoints de autenticacion (login / refresh) ni actualizacion-datos (maneja su propio log estructurado)
+    if (url.includes('/auth/login') || url.includes('/auth/refresh') || url.includes('/actualizacion-datos')) {
       return next.handle();
     }
 
@@ -47,9 +47,16 @@ export class AuditInterceptor implements NestInterceptor {
             });
           }
 
+          const isValidUuid = (val: string) =>
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+          const auditUserId =
+            user?.sub && isValidUuid(String(user.sub))
+              ? String(user.sub)
+              : '00000000-0000-0000-0000-000000000000';
+
           await this.prisma.auditLog.create({
             data: {
-              userId: user?.sub || 'system',
+              userId: auditUserId,
               action,
               entity,
               entityId: String(entityId),

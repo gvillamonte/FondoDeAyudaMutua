@@ -52,7 +52,7 @@ export class FamController {
 
   @Get('parentescos')
   @Roles('ADMINISTRADOR', 'OPERADOR_PAGOS', 'AUDITOR')
-  @ApiOperation({ summary: 'Lista de parentescos desde Tconstantes (LEGACY_DB)' })
+  @ApiOperation({ summary: 'Lista de parentescos desde TConstante (LEGACY_DB)' })
   async parentescos() {
     return this.famService.obtenerParentescosDesdeLegado();
   }

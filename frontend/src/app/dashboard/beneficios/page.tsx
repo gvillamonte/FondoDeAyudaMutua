@@ -96,7 +96,7 @@ export default function BeneficiosPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-semibold text-text-main">Beneficios</h2>
+          <h2 className="text-xl sm:text-2xl font-semibold text-text-main">Beneficios</h2>
           <p className="text-text-sec mt-1">Catalogo de beneficios disponibles</p>
         </div>
         <Button onClick={() => { setSelectedBeneficio(null); setDrawerOpen(true); }}>
@@ -112,7 +112,7 @@ export default function BeneficiosPage() {
         pageSize={limit}
         onPageChange={setPage}
         onPageSizeChange={setLimit}
-        onSearch={setSearch}
+        onSearch={(term) => { setSearch(term); setPage(1); }}
         loading={loading}
         emptyMessage="No se encontraron beneficios"
         actions={(item) => (

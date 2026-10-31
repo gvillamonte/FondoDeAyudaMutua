@@ -109,8 +109,8 @@ export default function EditarExpedienteModal({
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative bg-white rounded-xl shadow-2xl w-[700px] max-h-[90vh] flex flex-col border border-border-main">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border-main">
+      <div className="relative bg-white rounded-xl shadow-2xl w-full sm:w-[700px] sm:max-w-[96vw] max-h-[95vh] sm:max-h-[90vh] flex flex-col border border-border-main">
+        <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-3 sm:py-4 border-b border-border-main">
           <div>
             <h3 className="text-lg font-semibold text-text-main">Editar beneficio del historial</h3>
             <p className="text-xs text-text-sec mt-0.5">
@@ -122,7 +122,7 @@ export default function EditarExpedienteModal({
           </button>
         </div>
 
-        <div className="flex-1 overflow-auto px-6 py-5 space-y-5">
+        <div className="flex-1 overflow-auto px-4 sm:px-6 py-4 sm:py-5 space-y-5">
           {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">{error}</div>}
 
           {loading ? (
@@ -132,7 +132,7 @@ export default function EditarExpedienteModal({
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-text-sec uppercase mb-1">Estado</label>
                   <select value={form.estado} onChange={(e) => setForm({ ...form, estado: e.target.value })} className={INPUT_CLS}>
@@ -151,7 +151,7 @@ export default function EditarExpedienteModal({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-text-sec uppercase mb-1">F. Recepción</label>
                   <input type="date" value={form.fechaSolicitud}
@@ -164,7 +164,7 @@ export default function EditarExpedienteModal({
                 </div>
               </div>
 
-              <div className="border-t border-border-main pt-4 grid grid-cols-2 gap-4">
+              <div className="border-t border-border-main pt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-text-sec uppercase mb-1">N.° de Carta</label>
                   <input value={form.cartaNumero} onChange={(e) => setForm({ ...form, cartaNumero: e.target.value })} className={INPUT_CLS} />
@@ -203,7 +203,7 @@ export default function EditarExpedienteModal({
           )}
         </div>
 
-        <div className="px-6 py-3.5 border-t border-border-main flex items-center justify-end gap-3">
+        <div className="px-4 sm:px-6 py-3.5 border-t border-border-main flex items-center justify-end gap-3">
           <button onClick={onClose}
             className="px-4 py-2 text-sm font-medium text-text-sec bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
             Cancelar

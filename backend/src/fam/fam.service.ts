@@ -2,13 +2,19 @@ import { Injectable, Logger, OnModuleInit, OnModuleDestroy, BadRequestException 
 import { ConfigService } from '@nestjs/config';
 import * as sql from 'mssql';
 import { PrismaClient } from '@prisma/client';
-import { createLegacyPool } from '../legacy/legacy-sql.helper';
+import {
+  createLegacyPool,
+  queryWithLegacyRetry,
+  startLegacyKeepalive,
+  closePoolSafely,
+} from '../legacy/legacy-sql.helper';
 
 @Injectable()
 export class FamService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(FamService.name);
   private pool: sql.ConnectionPool | null = null;
   private isConnected = false;
+  private keepaliveTimer: NodeJS.Timeout | null = null;
   private prisma: PrismaClient;
 
   private parentescosCache: { codigo: string; descripcion: string }[] = [];
@@ -34,6 +40,28 @@ export class FamService implements OnModuleInit, OnModuleDestroy {
     // No bloquear el arranque del servidor: la conexion legacy se intenta
     // en segundo plano para que app.listen() no dependa de LEGACY_DB.
     void this.initLegacyPool();
+    this.keepaliveTimer = startLegacyKeepalive(
+      () => this.pingLegacy(),
+      (error) => this.logger.warn(`Ping legacy fallo (${error.message}); se reintentara en el proximo ciclo`),
+    );
+  }
+
+  /**
+   * Ping periodico: evita que las conexiones del pool ODBC queden ociosas y
+   * se cuelguen (primera consulta tras inactividad = `Query timeout expired`).
+   */
+  private async pingLegacy(): Promise<void> {
+    if (!this.isConnected || !this.pool) return;
+    try {
+      await this.runQuery((request) => request.query('SELECT 1 AS ok'));
+    } catch (error: any) {
+      this.logger.warn(`Ping legacy fallo (${error.message}); reconectando pool`);
+      try {
+        await this.reconnect();
+      } catch (e: any) {
+        this.logger.error(`No se pudo reconectar el pool legacy (${e.message})`);
+      }
+    }
   }
 
   private async initLegacyPool() {
@@ -52,8 +80,12 @@ export class FamService implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleDestroy() {
+    if (this.keepaliveTimer) {
+      clearInterval(this.keepaliveTimer);
+      this.keepaliveTimer = null;
+    }
     if (this.pool && this.isConnected) {
-      await this.pool.close();
+      await closePoolSafely(this.pool);
     }
   }
 
@@ -72,9 +104,10 @@ export class FamService implements OnModuleInit, OnModuleDestroy {
     if (!this.pool || !this.isConnected) return [];
     const request = this.pool.request();
     const query = `
-      SELECT cConsValor AS codigo, cConsDescripcion AS descripcion
-      FROM Tconstantes
-      WHERE nIdGrupo = 1110 AND bActivo = 1
+      SELECT cConsValor AS codigo, cConsdescripcion AS descripcion
+      FROM TConstante
+      WHERE nConsCod = 1110 AND bEstado = 1
+        AND cConsValor <> CAST(nConsCod AS VARCHAR(20))
       ORDER BY cConsValor
     `;
     this.enforceReadOnly(query);
@@ -109,7 +142,9 @@ export class FamService implements OnModuleInit, OnModuleDestroy {
 
     const checkPar = this.pool.request();
     checkPar.input('cod', sql.VarChar, data.parentescoCod.trim());
-    const parExists = await checkPar.query(`SELECT 1 FROM Tconstantes WHERE nIdGrupo = 1110 AND cConsValor = @cod`);
+    const parExists = await checkPar.query(
+      `SELECT 1 FROM TConstante WHERE nConsCod = 1110 AND cConsValor = @cod AND cConsValor <> CAST(nConsCod AS VARCHAR(20))`,
+    );
     if (parExists.recordset.length === 0) throw new BadRequestException('Parentesco inválido');
 
     const transaction = new sql.Transaction(this.pool);
@@ -166,6 +201,47 @@ export class FamService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  /**
+   * Garantiza un pool vivo antes de consultar. Si el pool cayo, lo recrea.
+   */
+  async ensureConnected(): Promise<boolean> {
+    if (this.isConnected && this.pool) return true;
+    try {
+      await this.initLegacyPool();
+    } catch {
+      // initLegacyPool() ya loguea el error
+    }
+    return this.isConnected && this.pool !== null;
+  }
+
+  private async reconnect(): Promise<void> {
+    const old = this.pool;
+    this.pool = null;
+    this.isConnected = false;
+    await closePoolSafely(old);
+    await this.initLegacyPool();
+  }
+
+  /**
+   * Ejecuta una consulta con un Request propio y reintento unico si el fallo
+   * es reintentable (conexion colgada o timeout de consulta). LEGACY_DB es
+   * solo lectura, por lo que reconectar y repetir la consulta es seguro.
+   */
+  async runQuery<T>(build: (request: sql.Request) => Promise<T>): Promise<T> {
+    const execute = async (): Promise<T> => {
+      if (!this.pool) {
+        throw new BadRequestException('Base de datos legacy no disponible');
+      }
+      return build(this.pool.request());
+    };
+
+    return queryWithLegacyRetry(
+      execute,
+      () => this.reconnect(),
+      (error) => this.logger.warn(`Conexion legacy perdida, reintentando (${error.message})`),
+    );
+  }
+
   async search(params: {
     search?: string;
     page?: number;
@@ -173,13 +249,15 @@ export class FamService implements OnModuleInit, OnModuleDestroy {
     estado?: string;
     conBeneficiarios?: string;
   }) {
-    if (!this.pool || !this.isConnected) {
-      return { data: [], total: 0, page: 1, limit: 25, totalPages: 0 };
+    const page = Math.max(1, Number(params.page) || 1);
+    const limit = Math.max(1, Math.min(100, Number(params.limit) || 25));
+
+    const disponible = await this.ensureConnected();
+    if (!disponible) {
+      return { data: [], total: 0, page, limit, totalPages: 0 };
     }
 
     const search = (params.search || '').trim();
-    const page = Math.max(1, Number(params.page) || 1);
-    const limit = Math.max(1, Math.min(100, Number(params.limit) || 25));
     const offset = (page - 1) * limit;
 
     let whereClause = '1=1';
@@ -250,25 +328,20 @@ export class FamService implements OnModuleInit, OnModuleDestroy {
     this.enforceReadOnly(countQuery);
     this.enforceReadOnly(dataQuery);
 
-    const countReq = this.pool.request();
-    const dataReq = this.pool.request();
+    const bindParams = (request: sql.Request) => {
+      if (search) {
+        request.input('search', sql.VarChar, `%${search}%`);
+        request.input('searchExact', sql.VarChar, search);
+      }
+      request.input('offset', sql.Int, offset);
+      request.input('limit', sql.Int, limit);
+      return request;
+    };
 
-    if (search) {
-      countReq.input('search', sql.VarChar, `%${search}%`);
-      countReq.input('searchExact', sql.VarChar, search);
-      dataReq.input('search', sql.VarChar, `%${search}%`);
-      dataReq.input('searchExact', sql.VarChar, search);
-    }
-
-    countReq.input('offset', sql.Int, offset);
-    countReq.input('limit', sql.Int, limit);
-    dataReq.input('offset', sql.Int, offset);
-    dataReq.input('limit', sql.Int, limit);
-
-    const [countResult, dataResult] = await Promise.all([
-      countReq.query(countQuery),
-      dataReq.query(dataQuery),
-    ]);
+    // Secuencial y con Request propio por consulta: el pool ODBC de Windows
+    // no tolera bien consultas concurrentes y provoca cuelgues de ~90s.
+    const countResult = await this.runQuery((request) => bindParams(request).query(countQuery));
+    const dataResult = await this.runQuery((request) => bindParams(request).query(dataQuery));
 
     const total = Number(countResult.recordset[0]?.total || 0);
 
@@ -296,11 +369,10 @@ export class FamService implements OnModuleInit, OnModuleDestroy {
 
   async buscarColegiadosPorIds(ids: string[]): Promise<Map<string, { NUM_COLEGIATURA: string; DNI: string; NOMBRE_COLEGIADO: string; ESTADO: string; FECHA_ULTIMO_PAGO: string | null }>> {
     const mapa = new Map<string, { NUM_COLEGIATURA: string; DNI: string; NOMBRE_COLEGIADO: string; ESTADO: string; FECHA_ULTIMO_PAGO: string | null }>();
-    if (!this.pool || !this.isConnected || !ids.length) return mapa;
+    if (!ids.length) return mapa;
+    if (!(await this.ensureConnected())) return mapa;
 
     const unicos = [...new Set(ids.map((i) => String(i).trim()).filter(Boolean))].slice(0, 500);
-    const request = this.pool.request();
-    unicos.forEach((id, idx) => request.input(`id${idx}`, sql.VarChar, id));
 
     const placeholders = unicos.map((_, idx) => `@id${idx}`).join(', ');
     const query = `
@@ -318,7 +390,10 @@ export class FamService implements OnModuleInit, OnModuleDestroy {
     `;
 
     this.enforceReadOnly(query);
-    const result = await request.query(query);
+    const result = await this.runQuery((request) => {
+      unicos.forEach((id, idx) => request.input(`id${idx}`, sql.VarChar, id));
+      return request.query(query);
+    });
     result.recordset.forEach((r: any) => {
       mapa.set(String(r.COLEGIADO_ID), {
         NUM_COLEGIATURA: r.NUM_COLEGIATURA,
@@ -332,11 +407,8 @@ export class FamService implements OnModuleInit, OnModuleDestroy {
   }
 
   async buscarPersonas(term: string) {
-    if (!this.pool || !this.isConnected) return [];
     if (!term || term.trim().length < 2) return [];
-
-    const request = this.pool.request();
-    request.input('term', sql.VarChar, `%${term.trim()}%`);
+    if (!(await this.ensureConnected())) return [];
 
     const query = `
       SELECT TOP 20
@@ -360,7 +432,10 @@ export class FamService implements OnModuleInit, OnModuleDestroy {
     `;
 
     this.enforceReadOnly(query);
-    const result = await request.query(query);
+    const result = await this.runQuery((request) => {
+      request.input('term', sql.VarChar, `%${term.trim()}%`);
+      return request.query(query);
+    });
 
     return result.recordset.map((r: any) => ({
       PERSONA_ID: String(r.PERSONA_ID),
@@ -392,11 +467,8 @@ export class FamService implements OnModuleInit, OnModuleDestroy {
   async getBeneficiariosByColegiado(colegiadoId: string) {
     // Fuente 1: LEGACY_DB (padron historico de beneficiarios FAM)
     const legacy: any[] = [];
-    if (this.pool && this.isConnected) {
+    if (await this.ensureConnected()) {
       try {
-        const request = this.pool.request();
-        request.input('id', sql.VarChar, colegiadoId.trim());
-
         const query = `
           SELECT
             b.nIdBeneficiario AS FAM_ID,
@@ -413,7 +485,10 @@ export class FamService implements OnModuleInit, OnModuleDestroy {
         `;
 
         this.enforceReadOnly(query);
-        const result = await request.query(query);
+        const result = await this.runQuery((request) => {
+          request.input('id', sql.VarChar, colegiadoId.trim());
+          return request.query(query);
+        });
         legacy.push(...result.recordset);
       } catch {
         // Si la fuente legada falla, continuamos con la del sistema
@@ -615,7 +690,8 @@ export class FamService implements OnModuleInit, OnModuleDestroy {
   }
 
   async getResumen() {
-    if (!this.pool || !this.isConnected) {
+    const disponible = await this.ensureConnected();
+    if (!disponible) {
       return { resumen: {}, porParentesco: [], porColegiado: [], porTipoAsociado: [] };
     }
 
@@ -661,12 +737,10 @@ export class FamService implements OnModuleInit, OnModuleDestroy {
       GROUP BY c.cConsValorTipoAsociado
     `;
 
-    const [resumen, porParentesco, porColegiado, porTipo] = await Promise.all([
-      this.pool.request().query(totalQuery),
-      this.pool.request().query(porParentescoQuery),
-      this.pool.request().query(porColegiadoQuery),
-      this.pool.request().query(porTipoQuery),
-    ]);
+    const resumen = await this.runQuery((request) => request.query(totalQuery));
+    const porParentesco = await this.runQuery((request) => request.query(porParentescoQuery));
+    const porColegiado = await this.runQuery((request) => request.query(porColegiadoQuery));
+    const porTipo = await this.runQuery((request) => request.query(porTipoQuery));
 
     return {
       resumen: resumen.recordset[0] || {},

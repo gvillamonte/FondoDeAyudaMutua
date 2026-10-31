@@ -229,7 +229,7 @@ export class ReportesService {
     cip: string,
     desde?: string,
   ): Promise<ReporteEstadosHabilidad> {
-    if (!this.legacyService.databaseAvailable) {
+    if (!(await this.legacyService.ensureConnected())) {
       throw new NotFoundException('Base de datos legado no disponible');
     }
 
@@ -255,10 +255,9 @@ export class ReportesService {
       .trim();
 
     // --- Datos mensuales ---
-    const [calendario, mensual] = await Promise.all([
-      this.obtenerCalendario(colegiadoId),
-      this.obtenerMensual(colegiadoId),
-    ]);
+    // Secuencial: el pool ODBC de Windows no tolera consultas concurrentes.
+    const calendario = await this.obtenerCalendario(colegiadoId);
+    const mensual = await this.obtenerMensual(colegiadoId);
 
     const calendarioPorMes = new Map<string, RowCalendario>();
     // En meses duplicados, preferir la fila con estado '1' (paga) que lleva comprobante

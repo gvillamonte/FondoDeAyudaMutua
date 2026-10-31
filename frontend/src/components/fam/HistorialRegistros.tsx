@@ -243,14 +243,14 @@ export default function HistorialRegistros() {
       {formOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={() => setFormOpen(false)} />
-          <div className="relative bg-white rounded-xl shadow-2xl w-[700px] max-h-[90vh] flex flex-col">
+          <div className="relative bg-white rounded-xl shadow-2xl w-full sm:w-[700px] sm:max-w-[96vw] max-h-[95vh] sm:max-h-[90vh] flex flex-col">
             <div className="flex items-center justify-between px-6 py-4 border-b border-border">
               <h3 className="text-lg font-semibold text-text-main">Editar Registro</h3>
               <button onClick={() => setFormOpen(false)} className="p-1.5 rounded-lg hover:bg-gray-100"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
             </div>
             <div className="flex-1 overflow-auto px-6 py-5 space-y-5">
               {formError && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">{formError}</div>}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-text-sec uppercase mb-1">Tipo de Beneficio *</label>
                   <select value={form.tipoBeneficioId} onChange={(e) => setForm({ ...form, tipoBeneficioId: e.target.value })}
@@ -270,7 +270,7 @@ export default function HistorialRegistros() {
                 <textarea value={form.observaciones} onChange={(e) => setForm({ ...form, observaciones: e.target.value })}
                   className="w-full px-3 py-2 border border-border rounded-lg text-sm" rows={2} />
               </div>
-              <div className="border-t border-border pt-4 grid grid-cols-2 gap-4">
+              <div className="border-t border-border pt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-text-sec uppercase mb-1">N.° de Carta</label>
                   <input type="text" value={form.cartaNumero} onChange={(e) => setForm({ ...form, cartaNumero: e.target.value })} className="w-full px-3 py-2 border border-border rounded-lg text-sm" />
@@ -323,13 +323,13 @@ export default function HistorialRegistros() {
       {detailOpen && selectedSolicitud && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={() => setDetailOpen(false)} />
-          <div className="relative bg-white rounded-xl shadow-2xl w-[800px] max-h-[90vh] flex flex-col">
+          <div className="relative bg-white rounded-xl shadow-2xl w-full sm:w-[800px] sm:max-w-[96vw] max-h-[95vh] sm:max-h-[90vh] flex flex-col">
             <div className="flex items-center justify-between px-6 py-4 border-b border-border">
               <h3 className="text-lg font-semibold text-text-main">Detalle del Registro</h3>
               <button onClick={() => setDetailOpen(false)} className="p-1.5 rounded-lg hover:bg-gray-100"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
             </div>
             <div className="flex-1 overflow-auto px-6 py-5 space-y-4">
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                 <div className="space-y-4">
                   <div className="bg-gray-50 rounded-lg p-4">
                     <h4 className="text-xs font-semibold text-text-sec uppercase tracking-wider mb-3">Información General</h4>

@@ -12,6 +12,12 @@ const service = {
   obtenerPorId: jest.fn(),
   actualizar: jest.fn(),
   eliminar: jest.fn(),
+  obtenerExpedienteActivoResumen: jest.fn(),
+  actualizarBeneficiarios: jest.fn(),
+  pagar: jest.fn(),
+  actualizarDeposito: jest.fn(),
+  obtenerDeclaracionBeneficiario: jest.fn(),
+  obtenerComprobanteDeposito: jest.fn(),
 };
 
 const controller = new FamBeneficiosController(service as any);
@@ -68,6 +74,32 @@ describe('FamBeneficiosController - control de acceso por rol', () => {
     expect(guards).toContain(RolesGuard);
     expect(guards.length).toBeGreaterThanOrEqual(2);
   });
+
+  it('los endpoints de reparto exigen ADMINISTRADOR y OPERADOR_PAGOS', () => {
+    expect(rolesDe('actualizarBeneficiarios')).toEqual(['ADMINISTRADOR', 'OPERADOR_PAGOS']);
+    expect(rolesDe('pagar')).toEqual(['ADMINISTRADOR', 'OPERADOR_PAGOS']);
+    expect(rolesDe('actualizarDeposito')).toEqual(['ADMINISTRADOR']);
+  });
+
+  it('la consulta del expediente activo y los PDFs son de lectura para los 3 roles', () => {
+    expect(rolesDe('obtenerActivo')).toEqual(['ADMINISTRADOR', 'OPERADOR_PAGOS', 'AUDITOR']);
+    expect(rolesDe('obtenerDeclaracion')).toEqual([
+      'ADMINISTRADOR',
+      'OPERADOR_PAGOS',
+      'AUDITOR',
+    ]);
+    expect(rolesDe('obtenerComprobante')).toEqual([
+      'ADMINISTRADOR',
+      'OPERADOR_PAGOS',
+      'AUDITOR',
+    ]);
+  });
+
+  it('el guard impide que el AUDITOR cobre o corrija depositos', () => {
+    expect(guard.canActivate(contextGuard('pagar', 'AUDITOR'))).toBe(false);
+    expect(guard.canActivate(contextGuard('actualizarDeposito', 'OPERADOR_PAGOS'))).toBe(false);
+    expect(guard.canActivate(contextGuard('actualizarDeposito', 'ADMINISTRADOR'))).toBe(true);
+  });
 });
 
 describe('FamBeneficiosController - delegacion al service', () => {
@@ -77,7 +109,7 @@ describe('FamBeneficiosController - delegacion al service', () => {
     service.actualizar.mockResolvedValue({ ok: true });
     const dto = { memorando: 'abc' } as any;
 
-    await controller.actualizar('exp-1', dto, { user: { role: 'ADMINISTRADOR' } } as any);
+    await controller.actualizar('exp-1', dto, { user: { rol: 'ADMINISTRADOR' } } as any);
 
     expect(service.actualizar).toHaveBeenCalledWith('exp-1', dto, 'ADMINISTRADOR');
   });
@@ -96,5 +128,60 @@ describe('FamBeneficiosController - delegacion al service', () => {
     await controller.obtenerDocumento('exp-1', 'memorando');
 
     expect(service.obtenerDocumento).toHaveBeenCalledWith('exp-1', 'memorando');
+  });
+
+  it('obtenerActivo pasa el colegiado y el tipo de configuracion', async () => {
+    service.obtenerExpedienteActivoResumen.mockResolvedValue(null);
+
+    await controller.obtenerActivo('C-7148', undefined, '7');
+
+    expect(service.obtenerExpedienteActivoResumen).toHaveBeenCalledWith('C-7148', undefined, '7');
+  });
+
+  it('actualizarBeneficiarios delega usuario, rol e IP', async () => {
+    service.actualizarBeneficiarios.mockResolvedValue({ id: 'exp-1' });
+    const dto = { beneficiarios: [] } as any;
+
+    await controller.actualizarBeneficiarios('exp-1', dto, {
+      user: { sub: 'u-1', rol: 'OPERADOR_PAGOS' },
+      ip: '10.0.0.8',
+    } as any);
+
+    expect(service.actualizarBeneficiarios).toHaveBeenCalledWith(
+      'exp-1',
+      dto,
+      'u-1',
+      'OPERADOR_PAGOS',
+      '10.0.0.8',
+    );
+  });
+
+  it('pagar delega usuario e IP', async () => {
+    service.pagar.mockResolvedValue({ id: 'exp-1' });
+
+    await controller.pagar('exp-1', { depositos: [] } as any, {
+      user: { sub: 'u-1' },
+      ip: '10.0.0.9',
+    } as any);
+
+    expect(service.pagar).toHaveBeenCalledWith('exp-1', { depositos: [] }, 'u-1', '10.0.0.9');
+  });
+
+  it('actualizarDeposito delega usuario, rol e IP', async () => {
+    service.actualizarDeposito.mockResolvedValue({ id: 'dep-1' });
+
+    await controller.actualizarDeposito('exp-1', 'dep-1', { banco: 'BCP' } as any, {
+      user: { sub: 'admin-1', rol: 'ADMINISTRADOR' },
+      ip: '10.0.0.10',
+    } as any);
+
+    expect(service.actualizarDeposito).toHaveBeenCalledWith(
+      'exp-1',
+      'dep-1',
+      { banco: 'BCP' },
+      'admin-1',
+      'ADMINISTRADOR',
+      '10.0.0.10',
+    );
   });
 });

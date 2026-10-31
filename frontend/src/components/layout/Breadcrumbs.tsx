@@ -19,8 +19,8 @@ export default function Breadcrumbs() {
   if (segments.length <= 1) return null;
 
   return (
-    <nav className="flex items-center text-sm text-text-sec py-3 px-6 bg-bg-layout border-b border-border-main">
-      <Link href="/dashboard" className="hover:text-primary transition-colors">
+    <nav className="flex items-center text-xs sm:text-sm text-text-sec py-2.5 sm:py-3 px-3 sm:px-6 bg-bg-layout border-b border-border-main overflow-x-auto whitespace-nowrap">
+      <Link href="/dashboard" className="hover:text-primary transition-colors flex-shrink-0">
         Inicio
       </Link>
       {segments.slice(1).map((segment, index) => {

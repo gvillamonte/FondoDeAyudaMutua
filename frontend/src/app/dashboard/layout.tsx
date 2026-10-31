@@ -13,6 +13,7 @@ export default function DashboardLayout({
 }) {
   const router = useRouter();
   const [authorized, setAuthorized] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem('accessToken');
@@ -22,6 +23,13 @@ export default function DashboardLayout({
       setAuthorized(true);
     }
   }, [router]);
+
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setMobileOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [mobileOpen]);
 
   if (!authorized) {
     return (
@@ -36,12 +44,19 @@ export default function DashboardLayout({
 
   return (
     <div className="min-h-screen flex flex-col bg-bg-layout">
-      <Header />
-      <div className="flex flex-1">
-        <Sidebar />
-        <main className="flex-1 flex flex-col overflow-hidden">
+      <Header onMenuClick={() => setMobileOpen(true)} />
+      <div className="flex flex-1 min-h-0">
+        <Sidebar mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} />
+        {mobileOpen && (
+          <div
+            className="fixed inset-0 bg-black/40 z-40 lg:hidden"
+            onClick={() => setMobileOpen(false)}
+            aria-hidden="true"
+          />
+        )}
+        <main className="flex-1 flex flex-col min-w-0 lg:overflow-hidden">
           <Breadcrumbs />
-          <div className="flex-1 overflow-y-auto p-6">
+          <div className="flex-1 lg:overflow-y-auto p-3 sm:p-4 lg:p-6">
             {children}
           </div>
         </main>

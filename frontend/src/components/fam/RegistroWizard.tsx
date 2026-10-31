@@ -485,7 +485,7 @@ export default function RegistroWizard() {
             </div>
             <p className="text-xs text-text-sec mb-4">Se registrar&aacute; en la tabla TPersona de la base de datos legacy (DBCIPCusco).</p>
             <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-text-sec uppercase mb-1">Nombres *</label>
                   <input value={crearBeneficiarioData.nombres} onChange={(e) => setCrearBeneficiarioData({ ...crearBeneficiarioData, nombres: e.target.value })}
@@ -497,7 +497,7 @@ export default function RegistroWizard() {
                     className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" placeholder="8 dígitos" />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-text-sec uppercase mb-1">Apellido Paterno *</label>
                   <input value={crearBeneficiarioData.apPaterno} onChange={(e) => setCrearBeneficiarioData({ ...crearBeneficiarioData, apPaterno: e.target.value })}
@@ -509,7 +509,7 @@ export default function RegistroWizard() {
                     className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-text-sec uppercase mb-1">Sexo *</label>
                   <select value={crearBeneficiarioData.sexo} onChange={(e) => setCrearBeneficiarioData({ ...crearBeneficiarioData, sexo: e.target.value as 'M' | 'F' })}
@@ -532,7 +532,7 @@ export default function RegistroWizard() {
                 <input type="date" value={crearBeneficiarioData.fechaNac} onChange={(e) => setCrearBeneficiarioData({ ...crearBeneficiarioData, fechaNac: e.target.value })}
                   className="w-full px-3 py-2 border border-border rounded-lg text-sm" />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-text-sec uppercase mb-1">Celular</label>
                   <input value={crearBeneficiarioData.celular} onChange={(e) => setCrearBeneficiarioData({ ...crearBeneficiarioData, celular: e.target.value })}
@@ -629,7 +629,7 @@ export default function RegistroWizard() {
           <div>
             <h3 className="font-semibold text-text-main mb-1">Tipo de distribuci&oacute;n del beneficio</h3>
             <p className="text-xs text-text-sec mb-3">Define c&oacute;mo se reparte el monto entre los beneficiarios</p>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {MODALIDAD_BENEFICIO_OPCIONES.map((opt) => (
                 <button key={opt.value} onClick={() => {
                   setModalidadBeneficio(opt.value);
@@ -658,7 +658,7 @@ export default function RegistroWizard() {
           </div>
 
           {/* Tipo de beneficio y monto */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium text-text-sec uppercase mb-1">Tipo de Beneficio *</label>
               <select value={solicitud.tipoBeneficioConfigId ?? ''} onChange={(e) => seleccionarTipo(e.target.value)}
@@ -943,7 +943,7 @@ export default function RegistroWizard() {
           </div>
           <div className="bg-white border border-border rounded-lg p-6">
             <h3 className="font-semibold text-text-main mb-2">Solicitud</h3>
-            <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-sm">
               <span className="text-text-sec">Evento:</span><span className="text-text-main font-medium">{tipos.find((t) => t.id === solicitud.tipoBeneficioConfigId)?.nombre || '-'}</span>
               <span className="text-text-sec">Monto:</span><span className="text-text-main font-medium">S/ {Number(solicitud.monto).toFixed(2)}</span>
               <span className="text-text-sec">Modalidad:</span><span className="text-text-main font-medium">{MODALIDAD_LABEL[modalidadBeneficio]}</span>

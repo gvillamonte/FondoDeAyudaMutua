@@ -13,6 +13,11 @@ interface BeneficiarioVinculado {
   dni: string | null;
   parentesco: string;
   porcentajeAsignado: number;
+  declaracionJurada?: string;
+  declaracionJuradaDni?: string;
+  declaracionSize?: number;
+  ordenPago?: string;
+  ordenPagoSize?: number;
 }
 
 interface TipoBeneficioOpt { id: number; nombre: string; descripcion?: string; }
@@ -32,7 +37,11 @@ const DOCS_PDF = [
   { key: 'cartaRemision', label: 'Carta de Remisión' },
   { key: 'memorando', label: 'Memorándum' },
   { key: 'ordenPago', label: 'Orden de Pago' },
+  { key: 'declaracionJurada', label: 'Declaración Jurada' },
+  { key: 'actaDefuncion', label: 'Acta de Defunción' },
+  { key: 'otrosDocumentos', label: 'Otros / Documentación Completa' },
 ];
+const DNI_KEY = 'declaracionJurada';
 
 const MONTOS_BASE: Record<string, number> = { 'Fallecimiento': 3000, 'Accidente Grave': 2000, 'Enfermedad Terminal': 2000 };
 const FORMA_PAGO_OPTIONS = ['TRANSFERENCIA', 'DEPOSITO', 'CHEQUE', 'EFECTIVO'];
@@ -54,7 +63,6 @@ function RegistrarHistoricoContent() {
   const [covidMontoTotal, setCovidMontoTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [tieneFallecimiento, setTieneFallecimiento] = useState(false);
 
   const [tipoSeleccionado, setTipoSeleccionado] = useState('');
   const [monto, setMonto] = useState('');
@@ -79,15 +87,17 @@ function RegistrarHistoricoContent() {
   const [catalogoMemorandos, setCatalogoMemorandos] = useState<any[]>([]);
 
   const [docsPresentados, setDocsPresentados] = useState<Record<string, boolean>>({
-    fichaAdmisibilidad: false, solicitudAsignacion: false, cartaRemision: false, memorando: false, ordenPago: false,
+    fichaAdmisibilidad: false, solicitudAsignacion: false, cartaRemision: false, memorando: false, ordenPago: false, declaracionJurada: false, actaDefuncion: false, otrosDocumentos: false,
   });
   const [docsPdf, setDocsPdf] = useState<Record<string, { base64: string; size: number } | null>>({
-    fichaAdmisibilidad: null, solicitudAsignacion: null, cartaRemision: null, memorando: null, ordenPago: null,
+    fichaAdmisibilidad: null, solicitudAsignacion: null, cartaRemision: null, memorando: null, ordenPago: null, declaracionJurada: null, actaDefuncion: null, otrosDocumentos: null,
   });
+  const [dniDeclaracion, setDniDeclaracion] = useState('');
 
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState('');
   const [showHistorial, setShowHistorial] = useState(false);
+  const [colegiadoFallecido, setColegiadoFallecido] = useState(false);
 
   useEffect(() => {
     const user = getCurrentUser();
@@ -108,8 +118,44 @@ function RegistrarHistoricoContent() {
     reader.readAsDataURL(file);
   };
 
+  const handleDeclaracionBeneficiario = (id: string, file: File) => {
+    if (file.type !== 'application/pdf') {
+      showConfirmMessage('error', 'Declaración jurada: formato inválido', 'Solo se permiten archivos PDF (.pdf)');
+      return;
+    }
+    if (file.size > MAX_PDF_MB * 1024 * 1024) {
+      showConfirmMessage('error', 'Declaración jurada: archivo demasiado grande', `Máximo: ${MAX_PDF_MB}MB`);
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const base64 = ((e.target?.result as string) || '').split(',')[1] || '';
+      setBeneficiarios((prev) => prev.map((b) => (b.id === id ? { ...b, declaracionJurada: base64, declaracionSize: file.size } : b)));
+      showConfirmMessage('success', 'Declaración jurada cargada', `Tamaño: ${(file.size / 1024 / 1024).toFixed(2)}MB`);
+    };
+    reader.readAsDataURL(file);
+  };
+
   const [pdfViewer, setPdfViewer] = useState<{ base64: string; nombre: string } | null>(null);
   const abrirPdfBase64 = (base64: string, nombre: string) => setPdfViewer({ base64, nombre });
+
+  const handleOrdenPagoBeneficiario = (id: string, file: File) => {
+    if (file.type !== 'application/pdf') {
+      showConfirmMessage('error', 'Orden de pago: formato inválido', 'Solo se permiten archivos PDF (.pdf)');
+      return;
+    }
+    if (file.size > MAX_PDF_MB * 1024 * 1024) {
+      showConfirmMessage('error', 'Orden de pago: archivo demasiado grande', `Máximo: ${MAX_PDF_MB}MB`);
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const base64 = ((e.target?.result as string) || '').split(',')[1] || '';
+      setBeneficiarios((prev) => prev.map((b) => (b.id === id ? { ...b, ordenPago: base64, ordenPagoSize: file.size } : b)));
+      showConfirmMessage('success', 'Orden de pago cargada', `Tamaño: ${(file.size / 1024 / 1024).toFixed(2)}MB`);
+    };
+    reader.readAsDataURL(file);
+  };
 
   useEffect(() => {
     if (!colegiadoId) { setLoading(false); return; }
@@ -128,6 +174,7 @@ function RegistrarHistoricoContent() {
         id: b.FAM_ID ? String(b.FAM_ID) : (b.id || ''),
         nombre: b.NOMBRE_BENEFICIARIO || b.nombre || '',
         dni: b.DNI || b.dni || null,
+        declaracionJuradaDni: b.DNI || b.dni || '',
         parentesco: b.PARENTESCO || b.parentesco || 'Otros',
         porcentajeAsignado: Math.min(100, Math.max(0, b.PORCENTAJE != null ? Number(b.PORCENTAJE) : (b.porcentaje || 0))),
       }));
@@ -149,9 +196,18 @@ function RegistrarHistoricoContent() {
 
       const expedientes = histRes.data?.data || [];
       setHistorial(expedientes);
-      setTieneFallecimiento(
-        expedientes.some((e: any) => e.tipoBeneficio?.codigo === 'FALLECIMIENTO' && e.estado !== 'RECHAZADA')
+      const tieneFallecimiento = expedientes.some(
+        (e: any) =>
+          (e.tipoBeneficio?.codigo === 'FALLECIMIENTO' ||
+           (e.tipoBeneficio?.nombre || '').toUpperCase().includes('FALLECIMIENTO') ||
+           e.fechaDefuncion != null ||
+           e.actaDefuncion != null) &&
+          e.estado !== 'RECHAZADA'
       );
+      if (tieneFallecimiento) {
+        setColegiadoFallecido(true);
+        setError('No se pueden registrar más beneficios porque el colegiado está fallecido.');
+      }
       let covidTotal = 0;
       expedientes.forEach((e: any) => {
         if (e.tipoBeneficio?.codigo === 'COVID_19' && (e.estado === 'PAGADA' || e.estado === 'APROBADA')) covidTotal += e.monto || 0;
@@ -195,24 +251,32 @@ function RegistrarHistoricoContent() {
   const descuento = esEnfTerminal ? covidMontoTotal : 0;
   const montoNumerico = parseFloat(monto) || 0;
   const montoFinal = Math.max(0, montoNumerico - descuento);
-  const todosPresentados = Object.values(docsPresentados).every(Boolean);
+  const multiplesBeneficiarios = beneficiarios.length > 1;
+  const docsRequeridos = DOCS_PDF.filter(({ key }) => {
+    if (key === 'actaDefuncion' && !esFallecimiento) return false;
+    if (multiplesBeneficiarios && (key === 'ordenPago' || key === 'declaracionJurada')) return false;
+    return true;
+  });
+  const todosPresentados = docsRequeridos.every(({ key }) => docsPresentados[key]);
 
   const validar = (): string => {
+    if (colegiadoFallecido) return 'No se pueden registrar más beneficios porque el colegiado está fallecido.';
     if (!tipoSeleccionado) return 'Seleccione un tipo de beneficio';
     if (!montoNumerico || montoNumerico <= 0) return 'Ingrese un monto válido';
     if (!fechaSolicitud) return 'Ingrese la fecha de recepción';
     const disponible = getDisponible(getTipoNombre(tipoSeleccionado));
     if (montoNumerico > disponible) return `El monto ${fmtMonto(montoNumerico)} excede el disponible (${fmtMonto(disponible)})`;
+    const dni = dniDeclaracion.trim();
+    if (dni && !/^\d{8}$/.test(dni)) return 'El DNI de la Declaración Jurada debe tener exactamente 8 dígitos';
+    for (const b of beneficiarios) {
+      const dniDecl = (b.declaracionJuradaDni || '').trim() || (b.dni || '').trim();
+      if (dniDecl && !/^\d{8}$/.test(dniDecl)) return `El DNI del declarante de ${b.nombre} debe tener 8 dígitos`;
+      if (b.declaracionJurada && !dniDecl) return `Indique el DNI del declarante de ${b.nombre}`;
+    }
     return '';
   };
 
   const guardar = async () => {
-    if (tieneFallecimiento) {
-      const msg = 'El colegiado ya tiene un beneficio por Fallecimiento registrado. No se pueden registrar más beneficios.';
-      setError(msg);
-      showConfirmMessage('error', msg);
-      return;
-    }
     const err = validar();
     if (err) { setError(err); return; }
     setError('');
@@ -224,6 +288,11 @@ function RegistrarHistoricoContent() {
         beneficiarios: beneficiarios.map((b) => ({
           id: b.id, nombre: b.nombre, dni: b.dni || undefined,
           parentesco: b.parentesco, porcentaje: b.porcentajeAsignado,
+          ...(b.declaracionJurada && { declaracionJurada: b.declaracionJurada }),
+          ...((b.declaracionJuradaDni?.trim() || (b.dni || '').trim()) && {
+            declaracionJuradaDni: b.declaracionJuradaDni?.trim() || (b.dni || '').trim(),
+          }),
+          ...(b.ordenPago && { ordenPago: b.ordenPago }),
         })),
         tipoBeneficioConfigId: Number(tipoSeleccionado), monto: montoNumerico,
         moneda: 'PEN', modalidadBeneficio: 'monto_compartido',
@@ -243,6 +312,7 @@ function RegistrarHistoricoContent() {
         ...(esAccidenteGrave && { fechaAccidente: fechaAccidente || undefined, descripcionAccidente: descripcionAccidente || undefined }),
       };
       DOCS_PDF.forEach(({ key }) => { if (docsPdf[key]?.base64) body[key] = docsPdf[key]!.base64; });
+      if (body.declaracionJurada && dniDeclaracion.trim()) body.declaracionJuradaDni = dniDeclaracion.trim();
       await api.post('/fam-registros', body);
       showConfirmMessage('success', 'Beneficio registrado correctamente');
       setTimeout(() => router.push('/dashboard/fam/expedientes'), 1200);
@@ -294,6 +364,18 @@ function RegistrarHistoricoContent() {
         </div>
       </div>
 
+      {colegiadoFallecido && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3 text-sm">
+          <span className="text-xl shrink-0">⚠️</span>
+          <div>
+            <h4 className="font-bold text-red-800">Colegiado Fallecido - Registro Bloqueado</h4>
+            <p className="text-xs text-red-700 mt-0.5 font-medium">
+              No se pueden registrar más beneficios porque el colegiado está fallecido.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Panel de historial colapsable */}
       {showHistorial && (
         <div className="bg-white border border-border rounded-lg overflow-hidden">
@@ -342,26 +424,9 @@ function RegistrarHistoricoContent() {
 
       {error && <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{error}</div>}
 
-      {/* Alerta roja: beneficio por Fallecimiento ya registrado - restringe nuevos registros */}
-      {tieneFallecimiento && (
-        <div className="max-w-3xl mx-auto bg-red-600 border-2 border-red-700 rounded-xl p-6 text-center">
-          <div className="w-14 h-14 mx-auto mb-3 bg-white rounded-full flex items-center justify-center">
-            <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-            </svg>
-          </div>
-          <h3 className="text-lg font-bold text-white uppercase tracking-wide">Beneficio por Fallecimiento ya registrado</h3>
-          <p className="text-sm text-white/90 mt-2 leading-relaxed">
-            Este colegiado ya cuenta con un beneficio por Fallecimiento. No se pueden registrar más beneficios para este colegiado.
-          </p>
-          <p className="text-xs text-white/75 mt-1.5">Los registros existentes pueden editarse normalmente.</p>
-        </div>
-      )}
-
-      {!tieneFallecimiento && (
-      <div className="grid grid-cols-12 gap-5">
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-5">
         {/* Columna izquierda — Formulario completo */}
-        <div className="col-span-8 space-y-5">
+        <div className="xl:col-span-8 space-y-5 min-w-0">
 
           {/* 1. Selección de tipo */}
           <div className="bg-white border border-border rounded-lg p-5">
@@ -369,7 +434,7 @@ function RegistrarHistoricoContent() {
               <div className="w-5 h-5 rounded-full bg-primary text-white flex items-center justify-center text-[10px] font-bold">1</div>
               Tipo de Beneficio
             </h3>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {(['Fallecimiento', 'Accidente Grave', 'Enfermedad Terminal'] as const).map((nombre) => {
                 const disponible = getDisponible(nombre);
                 const agotado = disponible <= 0;
@@ -397,7 +462,7 @@ function RegistrarHistoricoContent() {
               <div className="w-5 h-5 rounded-full bg-primary text-white flex items-center justify-center text-[10px] font-bold">2</div>
               Datos del Beneficio
             </h3>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-text-sec uppercase mb-1">Monto (S/) *</label>
                 <input type="number" min={0} step="0.01" value={monto} onChange={(e) => setMonto(e.target.value)}
@@ -425,13 +490,86 @@ function RegistrarHistoricoContent() {
             </div>
           </div>
 
+          {/* 2b. Declaraciones juradas por beneficiario */}
+          {beneficiarios.length > 0 && (
+            <div className="bg-white border border-border rounded-lg p-5">
+              <h3 className="text-xs font-semibold text-text-sec uppercase tracking-wider mb-3 flex items-center gap-2">
+                <div className="w-5 h-5 rounded-full bg-primary text-white flex items-center justify-center text-[10px] font-bold">2b</div>
+                Documentos por Beneficiario
+              </h3>
+              <div className="space-y-2">
+                {beneficiarios.map((b) => (
+                  <div key={b.id} className="flex flex-col sm:flex-row sm:items-center gap-2 border rounded-lg px-3 py-2.5 border-border bg-white">
+                    <div className="min-w-0 sm:w-64">
+                      <p className="text-sm font-medium text-text-main truncate">{b.nombre}</p>
+                      <p className="text-[10px] text-text-sec">DNI: {b.dni || '—'} · {b.porcentajeAsignado}%</p>
+                    </div>
+                    {b.declaracionJurada ? (
+                      <>
+                        <span className="text-[10px] text-green-700 bg-green-100 px-2 py-0.5 rounded-full">
+                          ✓ {((b.declaracionSize || 0) / 1024 / 1024).toFixed(2)} MB
+                        </span>
+                        <button type="button" onClick={() => abrirPdfBase64(b.declaracionJurada!, `Declaración jurada - ${b.nombre}`)}
+                          className="text-xs text-primary hover:underline font-medium">Ver</button>
+                        <label className="cursor-pointer text-xs text-text-sec hover:underline">
+                          Reemplazar
+                          <input type="file" accept="application/pdf,.pdf" className="hidden"
+                            onChange={(e) => { if (e.target.files?.[0]) handleDeclaracionBeneficiario(b.id, e.target.files[0]); }} />
+                        </label>
+                      </>
+                    ) : (
+                      <label className="cursor-pointer inline-flex items-center gap-1 text-xs font-medium text-amber-700 hover:underline">
+                        + Cargar PDF
+                        <input type="file" accept="application/pdf,.pdf" className="hidden"
+                          onChange={(e) => { if (e.target.files?.[0]) handleDeclaracionBeneficiario(b.id, e.target.files[0]); }} />
+                      </label>
+                    )}
+                    <label className="inline-flex items-center gap-1.5 text-xs text-text-sec sm:ml-auto">
+                      DNI declarante
+                      <input type="text" inputMode="numeric" maxLength={8}
+                        value={b.declaracionJuradaDni || ''}
+                        onChange={(e) => {
+                          const valor = e.target.value.replace(/\D/g, '');
+                          setBeneficiarios((prev) => prev.map((x) => (x.id === b.id ? { ...x, declaracionJuradaDni: valor } : x)));
+                        }}
+                        placeholder="8 dígitos" className="w-24 px-2 py-1.5 border border-border rounded-lg text-sm" />
+                    </label>
+                    <div className="flex items-center gap-2 sm:border-l sm:border-border sm:pl-3">
+                      <span className="text-[10px] font-semibold text-text-sec uppercase">Orden de pago</span>
+                      {b.ordenPago ? (
+                        <>
+                          <span className="text-[10px] text-green-700 bg-green-100 px-2 py-0.5 rounded-full">
+                            ✓ {((b.ordenPagoSize || 0) / 1024 / 1024).toFixed(2)} MB
+                          </span>
+                          <button type="button" onClick={() => abrirPdfBase64(b.ordenPago!, `Orden de pago - ${b.nombre}`)}
+                            className="text-xs text-primary hover:underline font-medium">Ver</button>
+                          <label className="cursor-pointer text-xs text-text-sec hover:underline">
+                            Reemplazar
+                            <input type="file" accept="application/pdf,.pdf" className="hidden"
+                              onChange={(e) => { if (e.target.files?.[0]) handleOrdenPagoBeneficiario(b.id, e.target.files[0]); }} />
+                          </label>
+                        </>
+                      ) : (
+                        <label className="cursor-pointer inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
+                          + Cargar PDF
+                          <input type="file" accept="application/pdf,.pdf" className="hidden"
+                            onChange={(e) => { if (e.target.files?.[0]) handleOrdenPagoBeneficiario(b.id, e.target.files[0]); }} />
+                        </label>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* 3. Fechas */}
           <div className="bg-white border border-border rounded-lg p-5">
             <h3 className="text-xs font-semibold text-text-sec uppercase tracking-wider mb-3 flex items-center gap-2">
               <div className="w-5 h-5 rounded-full bg-primary text-white flex items-center justify-center text-[10px] font-bold">3</div>
               Fechas
             </h3>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-text-sec uppercase mb-1">F. Recepción *</label>
                 <input type="date" value={fechaSolicitud} onChange={(e) => setFechaSolicitud(e.target.value)}
@@ -451,15 +589,27 @@ function RegistrarHistoricoContent() {
             <h3 className="text-xs font-semibold text-text-sec uppercase tracking-wider mb-3 flex items-center gap-2">
               <div className="w-5 h-5 rounded-full bg-primary text-white flex items-center justify-center text-[10px] font-bold">4</div>
               Documentación (PDF, máx. {MAX_PDF_MB}MB c/u)
-              <span className="ml-auto text-xs font-normal text-text-sec">{Object.values(docsPresentados).filter(Boolean).length}/{DOCS_PDF.length}</span>
+              <span className="ml-auto text-xs font-normal text-text-sec">{docsRequeridos.filter(({ key }) => docsPresentados[key]).length}/{docsRequeridos.length}</span>
             </h3>
             <div className="space-y-2">
-              {DOCS_PDF.map(({ key, label }) => {
+              {docsRequeridos.map(({ key, label }) => {
                 const presentado = docsPresentados[key];
                 const doc = docsPdf[key];
                 return (
                   <div key={key} className={`flex items-center gap-3 border rounded-lg px-3 py-2.5 transition-colors ${presentado ? 'border-border bg-white' : 'border-amber-300 bg-amber-50'}`}>
                     <span className="text-sm text-text-main w-48">{label}</span>
+                    {key === DNI_KEY && (
+                      <label className="inline-flex items-center gap-1.5 text-xs text-text-sec">
+                        DNI
+                        <input
+                          type="text" inputMode="numeric" maxLength={8}
+                          value={dniDeclaracion}
+                          onChange={(e) => setDniDeclaracion(e.target.value.replace(/\D/g, ''))}
+                          placeholder="8 dígitos"
+                          className="w-28 px-2 py-1.5 border border-border rounded-lg text-sm"
+                        />
+                      </label>
+                    )}
                     {doc ? (
                       <>
                         <span className="text-[10px] text-green-700 bg-green-100 px-2 py-0.5 rounded-full">✓ {(doc.size / 1024 / 1024).toFixed(2)} MB</span>
@@ -498,7 +648,7 @@ function RegistrarHistoricoContent() {
               <div className="w-5 h-5 rounded-full bg-primary text-white flex items-center justify-center text-[10px] font-bold">5</div>
               Datos Administrativos
             </h3>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-text-sec uppercase mb-1">N.° Carta</label>
                 <select value={cartaNumero} onChange={(e) => {
@@ -553,7 +703,7 @@ function RegistrarHistoricoContent() {
                 <div className="w-5 h-5 rounded-full bg-primary text-white flex items-center justify-center text-[10px] font-bold">5b</div>
                 {esFallecimiento ? 'Datos del Fallecimiento' : esEnfTerminal ? 'Datos del Diagnóstico' : 'Datos del Accidente'}
               </h3>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {esFallecimiento && (
                   <>
                     <div>
@@ -613,11 +763,11 @@ function RegistrarHistoricoContent() {
           {/* Botones */}
           <div className="flex justify-between items-center pb-6">
             <div className="text-xs text-text-sec">
-              {!todosPresentados && <span className="text-amber-600">⚠ {DOCS_PDF.filter(({ key }) => !docsPresentados[key]).length} documentos pendientes</span>}
+              {!todosPresentados && <span className="text-amber-600">⚠  {docsRequeridos.filter(({ key }) => !docsPresentados[key]).length} documentos pendientes</span>}
             </div>
             <div className="flex gap-3">
               <button onClick={() => router.back()} className="px-5 py-2.5 text-sm font-medium text-text-sec bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">Cancelar</button>
-              <button onClick={guardar} disabled={guardando}
+              <button onClick={guardar} disabled={guardando || colegiadoFallecido}
                 className="px-7 py-2.5 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary/90 disabled:opacity-50 inline-flex items-center gap-2 transition-colors shadow-md">
                 {guardando && <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>}
                 Registrar Beneficio
@@ -627,7 +777,7 @@ function RegistrarHistoricoContent() {
         </div>
 
         {/* Columna derecha — Resumen */}
-        <div className="col-span-4 space-y-4">
+        <div className="xl:col-span-4 space-y-4 min-w-0">
           <div className="bg-white border border-border rounded-lg p-4 sticky top-4 space-y-3">
             <h4 className="text-xs font-semibold text-text-sec uppercase tracking-wider">Resumen</h4>
             <div className="space-y-2 text-xs">
@@ -638,7 +788,7 @@ function RegistrarHistoricoContent() {
               <div className="border-t border-border pt-2 mt-2">
                 <div className="flex justify-between"><span className="text-text-sec">Solicitante</span><span className="font-medium text-right truncate max-w-[140px]">{beneficiarios.find((b) => b.id === solicitanteId)?.nombre || '—'}</span></div>
               </div>
-              <div className="flex justify-between"><span className="text-text-sec">Documentos</span><span className={`font-medium ${todosPresentados ? 'text-green-600' : 'text-amber-600'}`}>{Object.values(docsPresentados).filter(Boolean).length}/{DOCS_PDF.length}</span></div>
+              <div className="flex justify-between"><span className="text-text-sec">Documentos</span><span className={`font-medium ${todosPresentados ? 'text-green-600' : 'text-amber-600'}`}>{docsRequeridos.filter(({ key }) => docsPresentados[key]).length}/{docsRequeridos.length}</span></div>
             </div>
           </div>
 
@@ -688,7 +838,6 @@ function RegistrarHistoricoContent() {
           )}
         </div>
       </div>
-      )}
 
       {pdfViewer && (
         <PdfViewerModal base64={pdfViewer.base64} nombre={pdfViewer.nombre} onClose={() => setPdfViewer(null)} />

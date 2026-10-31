@@ -166,7 +166,7 @@ export default function PagosEstimadosPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-semibold text-text-main">Pagos Estimados FAM</h2>
+          <h2 className="text-xl sm:text-2xl font-semibold text-text-main">Pagos Estimados FAM</h2>
           <p className="text-text-sec text-sm mt-1">Detalle de montos por beneficiario seg&uacute;n beneficios configurados</p>
         </div>
         <div className="flex items-center gap-3">

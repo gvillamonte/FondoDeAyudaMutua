@@ -16,7 +16,7 @@ function RegistroTabs() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-semibold text-text-main">Registro FAM</h2>
+        <h2 className="text-xl sm:text-2xl font-semibold text-text-main">Registro FAM</h2>
         <p className="text-text-sec text-sm mt-1">
           Registrar casos completos del Fondo de Asistencia Mutual: beneficiarios, solicitud y documentación
         </p>

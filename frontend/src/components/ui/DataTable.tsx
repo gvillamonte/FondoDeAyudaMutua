@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 interface Column<T> {
   key: string;
@@ -43,9 +43,14 @@ export default function DataTable<T extends Record<string, any>>({
 
   const totalPages = Math.ceil(totalItems / pageSize);
 
+  // Debounce: sin esto se dispara una consulta al servidor por cada tecla.
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (searchTimer.current) clearTimeout(searchTimer.current); }, []);
+
   const handleSearch = (term: string) => {
     setSearchTerm(term);
-    onSearch?.(term);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => onSearch?.(term), 450);
   };
 
   const handleSort = (key: string) => {
@@ -62,17 +67,17 @@ export default function DataTable<T extends Record<string, any>>({
   return (
     <div className="card p-0 overflow-hidden">
       {/* Barra de búsqueda y paginación */}
-      <div className="p-4 border-b border-border-main flex items-center justify-between gap-4">
-        <div className="flex-1 max-w-md">
+      <div className="p-3 sm:p-4 border-b border-border-main flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex-1 w-full sm:max-w-md">
           <input
             type="text"
-            placeholder="Buscar..."
+            placeholder="Buscar por DNI, N° colegiatura o nombre..."
             value={searchTerm}
             onChange={(e) => handleSearch(e.target.value)}
             className="input-field"
           />
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-shrink-0">
           <span className="text-sm text-text-sec">Mostrar:</span>
           <select
             value={pageSize}
@@ -89,7 +94,7 @@ export default function DataTable<T extends Record<string, any>>({
 
       {/* Tabla */}
       <div className="overflow-x-auto">
-        <table className="w-full">
+        <table className="w-full min-w-[640px]">
           <thead>
             <tr className="table-header">
               {columns.map((col) => (
@@ -139,12 +144,12 @@ export default function DataTable<T extends Record<string, any>>({
       </div>
 
       {/* Paginación */}
-      <div className="p-4 border-t border-border-main flex items-center justify-between">
-        <p className="text-sm text-text-sec">
+      <div className="p-3 sm:p-4 border-t border-border-main flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <p className="text-xs sm:text-sm text-text-sec">
           Mostrando {((currentPage - 1) * pageSize) + 1} a{' '}
           {Math.min(currentPage * pageSize, totalItems)} de {totalItems} registros
         </p>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 justify-between sm:justify-end">
           <button
             onClick={() => onPageChange(currentPage - 1)}
             disabled={currentPage === 1}

@@ -22,6 +22,21 @@ interface ExpedientePago {
   expedienteNumero: string | null;
   descuentoCovid: number | null;
   montoFinal: number | null;
+  createdAt?: string;
+  banco?: string | null;
+  beneficiarios?: Array<{
+    beneficiarioId?: string | null;
+    nombre: string;
+    dni: string;
+    parentesco: string;
+    porcentaje: number;
+    monto: number;
+    banco: string;
+    numeroCuenta: string;
+    cci: string;
+    fechaPago: string | null;
+    estado: string;
+  }>;
 }
 
 interface TipoBeneficioOpt {
@@ -72,7 +87,7 @@ export default function ReporteEntregas({ tipos }: { tipos: TipoBeneficioOpt[] }
       let pagina = 1;
       let totalPages = 1;
       do {
-        const params: Record<string, string | number> = { page: pagina, limit: 100, estado: 'PAGADA' };
+        const params: Record<string, string | number> = { page: pagina, limit: 100, estado: 'PAGADA', ordenarPor: 'ingreso' };
         if (search) params.search = search;
         if (tipoFiltro) params.tipoBeneficioId = tipoFiltro;
         const { data } = await api.get('/fam-beneficios', { params });
@@ -106,17 +121,35 @@ export default function ReporteEntregas({ tipos }: { tipos: TipoBeneficioOpt[] }
   const beneficiarios: BeneficiarioReporte[] = (() => {
     const map = new Map<string, BeneficiarioReporte>();
     for (const r of filtradas) {
-      const nombre = r.solicitanteNombre || r.NOMBRE_COLEGIADO || 'Sin registro';
-      const dni = r.solicitanteDni || r.DNI || '';
-      const clave = dni || nombre;
-      const b = map.get(clave) || {
-        clave, nombre, dni, colegiados: [], totalEntregas: 0, montoRecibido: 0, ultimaFechaPago: null,
-      };
-      if (r.NUM_COLEGIATURA && !b.colegiados.includes(r.NUM_COLEGIATURA)) b.colegiados.push(r.NUM_COLEGIATURA);
-      b.totalEntregas += 1;
-      b.montoRecibido += Number(r.montoFinal ?? r.monto) || 0;
-      if (r.fechaPago && (!b.ultimaFechaPago || r.fechaPago > b.ultimaFechaPago)) b.ultimaFechaPago = r.fechaPago;
-      map.set(clave, b);
+      const bens = Array.isArray(r.beneficiarios) && r.beneficiarios.length > 0
+        ? r.beneficiarios
+        : [{
+            nombre: r.solicitanteNombre || r.NOMBRE_COLEGIADO || 'Sin registro',
+            dni: r.solicitanteDni || r.DNI || '',
+            parentesco: '',
+            porcentaje: 100,
+            monto: Number(r.montoFinal ?? r.monto) || 0,
+            banco: r.banco || '',
+            numeroCuenta: '',
+            cci: '',
+            fechaPago: r.fechaPago,
+            estado: r.estado,
+          }];
+
+      for (const b of bens) {
+        const nombre = b.nombre || r.solicitanteNombre || r.NOMBRE_COLEGIADO || 'Sin registro';
+        const dni = b.dni || r.solicitanteDni || r.DNI || '';
+        const clave = dni || nombre;
+        const reg = map.get(clave) || {
+          clave, nombre, dni, colegiados: [], totalEntregas: 0, montoRecibido: 0, ultimaFechaPago: null,
+        };
+        if (r.NUM_COLEGIATURA && !reg.colegiados.includes(r.NUM_COLEGIATURA)) reg.colegiados.push(r.NUM_COLEGIATURA);
+        reg.totalEntregas += 1;
+        reg.montoRecibido += Number(b.monto) || 0;
+        const fPago = b.fechaPago || r.fechaPago;
+        if (fPago && (!reg.ultimaFechaPago || fPago > reg.ultimaFechaPago)) reg.ultimaFechaPago = fPago;
+        map.set(clave, reg);
+      }
     }
     const arr = Array.from(map.values());
     arr.sort((a, b) => {
@@ -151,30 +184,96 @@ export default function ReporteEntregas({ tipos }: { tipos: TipoBeneficioOpt[] }
         alert('No hay entregas para exportar con los filtros seleccionados.');
         return;
       }
+
+      // Hoja 1: Entregas por Beneficiario (detalle por cada beneficiario y su monto exacto entregado)
+      const filasDetalle: any[] = [];
+      for (const r of filtradas) {
+        const bens = Array.isArray(r.beneficiarios) && r.beneficiarios.length > 0
+          ? r.beneficiarios
+          : [{
+              nombre: r.solicitanteNombre || r.NOMBRE_COLEGIADO || 'Sin registro',
+              dni: r.solicitanteDni || r.DNI || '',
+              parentesco: r.solicitanteDni && r.solicitanteDni === r.DNI ? 'Colegiado / Titular' : 'Solicitante',
+              porcentaje: 100,
+              monto: Number(r.montoFinal ?? r.monto) || 0,
+              banco: r.banco || '',
+              numeroCuenta: '',
+              cci: '',
+              fechaPago: r.fechaPago || null,
+              estado: r.estado,
+            }];
+
+        for (const b of bens) {
+          filasDetalle.push({
+            'N.° Expediente': r.expedienteNumero || 'S/N',
+            'F. Ingreso / Registro': r.createdAt ? new Date(r.createdAt).toLocaleString('es-PE') : '',
+            'CIP Colegiado': r.NUM_COLEGIATURA || '',
+            'DNI Colegiado': r.DNI || '',
+            'Colegiado': r.NOMBRE_COLEGIADO || '',
+            'Tipo Beneficio': r.tipoBeneficio?.nombre || '',
+            'Beneficiario': b.nombre || '',
+            'DNI Beneficiario': b.dni || '',
+            'Parentesco': b.parentesco || '',
+            '% Asignado': b.porcentaje ? `${Number(b.porcentaje)}%` : '100%',
+            'Monto Entregado S/': Number((b.monto || 0).toFixed(2)),
+            'Banco': b.banco || r.banco || '',
+            'N.° Cuenta / CCI': [b.numeroCuenta, b.cci ? `CCI: ${b.cci}` : ''].filter(Boolean).join(' / ') || '',
+            'F. Pago': b.fechaPago ? b.fechaPago.slice(0, 10) : (r.fechaPago ? r.fechaPago.slice(0, 10) : ''),
+            'Estado': b.estado || r.estado,
+            'Monto Total Exp. S/': Number((r.montoFinal ?? r.monto).toFixed(2)),
+            'Descuento COVID S/': Number(r.descuentoCovid || 0),
+          });
+        }
+      }
+
+      // Hoja 2: Consolidado por Beneficiario
       const wsResumen = XLSX.utils.json_to_sheet(beneficiarios.map((b) => ({
         'Beneficiario': b.nombre,
         'DNI': b.dni,
         'Colegiados (CIP)': b.colegiados.join(', '),
         'N.° Entregas': b.totalEntregas,
-        'Monto Recibido S/': Number(b.montoRecibido.toFixed(2)),
-        'Ultima F. Pago': b.ultimaFechaPago ? b.ultimaFechaPago.slice(0, 10) : '',
+        'Monto Total Recibido S/': Number(b.montoRecibido.toFixed(2)),
+        'Última F. Pago': b.ultimaFechaPago ? b.ultimaFechaPago.slice(0, 10) : '',
       })));
-      const wsDetalle = XLSX.utils.json_to_sheet(filtradas.map((r) => ({
-        'N.° Expediente': r.expedienteNumero || '',
-        'CIP': r.NUM_COLEGIATURA,
-        'Colegiado': r.NOMBRE_COLEGIADO,
-        'Tipo Beneficio': r.tipoBeneficio?.nombre || '',
-        'Beneficiario': r.solicitanteNombre || r.NOMBRE_COLEGIADO || '',
-        'DNI': r.solicitanteDni || r.DNI || '',
-        'Monto S/': Number(r.monto),
-        'Descuento COVID S/': r.descuentoCovid ?? 0,
-        'Monto Recibido S/': r.montoFinal != null ? Number(r.montoFinal) : Number(r.monto),
-        'F. Pago': r.fechaPago ? r.fechaPago.slice(0, 10) : '',
-        'Estado': r.estado,
-      })));
+
+      // Hoja 3: Resumen por Expediente
+      const wsExpedientes = XLSX.utils.json_to_sheet(filtradas.map((r) => {
+        const desgloseBens = (r.beneficiarios || []).map((b) => `${b.nombre} (${b.porcentaje}% - S/ ${Number(b.monto || 0).toFixed(2)})`).join('; ');
+        return {
+          'N.° Expediente': r.expedienteNumero || 'S/N',
+          'F. Ingreso / Registro': r.createdAt ? new Date(r.createdAt).toLocaleString('es-PE') : '',
+          'CIP': r.NUM_COLEGIATURA,
+          'Colegiado': r.NOMBRE_COLEGIADO,
+          'Tipo Beneficio': r.tipoBeneficio?.nombre || '',
+          'Monto S/': Number(r.monto),
+          'Descuento COVID S/': Number(r.descuentoCovid || 0),
+          'Monto Recibido S/': Number((r.montoFinal ?? r.monto).toFixed(2)),
+          'Beneficiarios y Montos Asignados': desgloseBens || [r.solicitanteNombre, r.solicitanteDni].filter(Boolean).join(' · ') || '',
+          'F. Pago': r.fechaPago ? r.fechaPago.slice(0, 10) : '',
+          'Estado': r.estado,
+        };
+      }));
+
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, wsResumen, 'Por beneficiario');
-      XLSX.utils.book_append_sheet(wb, wsDetalle, 'Detalle entregas');
+      const wsDetalle = XLSX.utils.json_to_sheet(filasDetalle);
+
+      wsDetalle['!cols'] = [
+        { wch: 16 }, { wch: 20 }, { wch: 10 }, { wch: 12 }, { wch: 32 },
+        { wch: 22 }, { wch: 32 }, { wch: 14 }, { wch: 15 }, { wch: 12 },
+        { wch: 20 }, { wch: 16 }, { wch: 24 }, { wch: 12 }, { wch: 14 },
+        { wch: 18 }, { wch: 16 },
+      ];
+      wsResumen['!cols'] = [
+        { wch: 32 }, { wch: 14 }, { wch: 20 }, { wch: 14 }, { wch: 22 }, { wch: 14 },
+      ];
+      wsExpedientes['!cols'] = [
+        { wch: 16 }, { wch: 20 }, { wch: 10 }, { wch: 32 }, { wch: 22 },
+        { wch: 14 }, { wch: 16 }, { wch: 18 }, { wch: 45 }, { wch: 12 }, { wch: 14 },
+      ];
+
+      XLSX.utils.book_append_sheet(wb, wsDetalle, 'Entregas por Beneficiario');
+      XLSX.utils.book_append_sheet(wb, wsResumen, 'Por Beneficiario (Consolidado)');
+      XLSX.utils.book_append_sheet(wb, wsExpedientes, 'Resumen Expedientes');
       XLSX.writeFile(wb, `Reporte_Entregas_FAM_${new Date().toISOString().slice(0, 10)}.xlsx`);
     } catch {
       alert('Error al generar el archivo Excel.');
@@ -365,17 +464,49 @@ export default function ReporteEntregas({ tipos }: { tipos: TipoBeneficioOpt[] }
                   </td>
                   <td className="px-4 py-3 text-xs text-text-sec">{r.tipoBeneficio?.nombre || '—'}</td>
                   <td className="px-4 py-3">
-                    <p className="text-sm text-text-main truncate max-w-[180px]" title={r.solicitanteNombre || r.NOMBRE_COLEGIADO}>
-                      {r.solicitanteNombre || r.NOMBRE_COLEGIADO || '—'}
-                    </p>
-                    <p className="text-[10px] text-text-sec">DNI: {r.solicitanteDni || r.DNI || '—'}</p>
+                    {r.beneficiarios && r.beneficiarios.length > 1 ? (
+                      <div className="space-y-1">
+                        {r.beneficiarios.map((b, bi) => (
+                          <div key={bi} className="text-xs">
+                            <span className="font-semibold text-text-main">{b.nombre}</span>
+                            <span className="text-[10px] text-text-sec ml-1">({b.parentesco || 'Ben.'} · DNI: {b.dni || '—'})</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <>
+                        <p className="text-sm text-text-main truncate max-w-[180px]" title={r.beneficiarios?.[0]?.nombre || r.solicitanteNombre || r.NOMBRE_COLEGIADO}>
+                          {r.beneficiarios?.[0]?.nombre || r.solicitanteNombre || r.NOMBRE_COLEGIADO || '—'}
+                        </p>
+                        <p className="text-[10px] text-text-sec">
+                          {r.beneficiarios?.[0]?.parentesco ? `${r.beneficiarios[0].parentesco} · ` : ''}
+                          DNI: {r.beneficiarios?.[0]?.dni || r.solicitanteDni || r.DNI || '—'}
+                        </p>
+                      </>
+                    )}
                   </td>
                   <td className="px-4 py-3">
-                    <span className="text-sm font-bold text-text-main">{fmtMonto(Number(r.montoFinal ?? r.monto))}</span>
-                    {r.descuentoCovid != null && r.descuentoCovid > 0 && (
-                      <span className="block text-[10px] text-amber-600 font-medium" title={`Monto original: ${fmtMonto(r.monto)} · Descuento COVID: ${fmtMonto(r.descuentoCovid)}`}>
-                        Dto. COVID {fmtMonto(r.descuentoCovid)}
-                      </span>
+                    {r.beneficiarios && r.beneficiarios.length > 1 ? (
+                      <div className="space-y-1">
+                        {r.beneficiarios.map((b, bi) => (
+                          <div key={bi} className="text-xs">
+                            <span className="font-bold text-primary">{fmtMonto(b.monto)}</span>
+                            <span className="text-[10px] text-text-sec ml-1">({b.porcentaje}%)</span>
+                          </div>
+                        ))}
+                        <div className="pt-0.5 border-t border-border-main text-[11px] font-bold text-text-main">
+                          Total: {fmtMonto(Number(r.montoFinal ?? r.monto))}
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <span className="text-sm font-bold text-text-main">{fmtMonto(Number(r.montoFinal ?? r.monto))}</span>
+                        {r.descuentoCovid != null && r.descuentoCovid > 0 && (
+                          <span className="block text-[10px] text-amber-600 font-medium" title={`Monto original: ${fmtMonto(r.monto)} · Descuento COVID: ${fmtMonto(r.descuentoCovid)}`}>
+                            Dto. COVID {fmtMonto(r.descuentoCovid)}
+                          </span>
+                        )}
+                      </>
                     )}
                   </td>
                   <td className="px-4 py-3 text-xs text-text-sec whitespace-nowrap">{fmtFecha(r.fechaPago)}</td>

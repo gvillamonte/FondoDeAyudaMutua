@@ -51,6 +51,9 @@ const DOCS = [
   'memorando',
   'ordenPago',
   'sucesionIntestada',
+  'declaracionJurada',
+  'actaDefuncion',
+  'otrosDocumentos',
 ] as const;
 
 const documentosIncompletos: Record<string, boolean> = {
@@ -60,6 +63,9 @@ const documentosIncompletos: Record<string, boolean> = {
   memorando: false,
   ordenPago: false,
   sucesionIntestada: false,
+  declaracionJurada: false,
+  actaDefuncion: false,
+  otrosDocumentos: false,
 };
 
 const construirDetalle = (documentos: Record<string, boolean> = documentosIncompletos) => ({
@@ -93,6 +99,7 @@ const construirDetalle = (documentos: Record<string, boolean> = documentosIncomp
   montoFinal: 2000,
   modalidadBeneficio: null,
   documentosDisponibles: documentos,
+  declaracionJuradaDni: null as string | null,
   beneficiariosVinculados: [],
   covidMontoTotal: 0,
   tieneFallecimiento: false,
@@ -140,7 +147,7 @@ const renderDocumentos = async () => {
   return utils;
 };
 
-const iniciarSubida = (container: HTMLElement, etiquetaDocumento: string) => {
+const iniciarSubida = (container: HTMLElement, etiquetaDocumento: string | RegExp) => {
   const fila = screen
     .getByText(etiquetaDocumento)
     .closest('div.flex.items-center.justify-between') as HTMLElement;
@@ -296,6 +303,71 @@ describe('Documentos - lectura', () => {
         `/fam-beneficios/${ctx.EXP_ID}/documento/fichaAdmisibilidad`,
       ),
     );
+    expect(apiPut).not.toHaveBeenCalled();
+  });
+});
+
+describe('Documentos - Declaracion Jurada', () => {
+  let promptSpy: any;
+
+  beforeEach(() => {
+    promptSpy = vi.spyOn(window, 'prompt').mockReturnValue('12345678');
+  });
+
+  it('muestra el DNI del declarante cuando ya fue registrado', async () => {
+    preparar({
+      ...construirDetalle({ ...documentosIncompletos, declaracionJurada: true }),
+      declaracionJuradaDni: '87654321',
+    });
+    await renderDocumentos();
+
+    expect(screen.getByText(/Declaraci.n Jurada/)).not.toBeNull();
+    expect(screen.getByText(/DNI 87654321/)).not.toBeNull();
+  });
+
+  it('pide el DNI y lo envia junto con la Declaracion Jurada', async () => {
+    preparar();
+    const { container } = await renderDocumentos();
+
+    const input = iniciarSubida(container, /Declaraci.n Jurada/);
+    fireEvent.change(input, {
+      target: { files: [new File(['%PDF-1.4 dj'], 'dj.pdf', { type: 'application/pdf' })] },
+    });
+
+    await waitFor(() => expect(apiPut).toHaveBeenCalledTimes(1));
+    expect(promptSpy).toHaveBeenCalledTimes(1);
+
+    const [, body] = apiPut.mock.calls[0] as [string, Record<string, unknown>];
+    expect(body.declaracionJuradaDni).toBe('12345678');
+    expect(String(body.declaracionJurada)).toMatch(/^JVBERi/);
+  });
+
+  it('no sube nada si el usuario cancela el DNI', async () => {
+    preparar();
+    promptSpy.mockReturnValue(null);
+    const { container } = await renderDocumentos();
+
+    const input = iniciarSubida(container, /Declaraci.n Jurada/);
+    fireEvent.change(input, {
+      target: { files: [new File(['%PDF-1.4 dj'], 'dj.pdf', { type: 'application/pdf' })] },
+    });
+
+    await waitFor(() => expect(promptSpy).toHaveBeenCalled());
+    expect(apiPut).not.toHaveBeenCalled();
+  });
+
+  it('rechaza un DNI que no tiene 8 digitos', async () => {
+    preparar();
+    promptSpy.mockReturnValue('123');
+    const { container } = await renderDocumentos();
+
+    const input = iniciarSubida(container, /Declaraci.n Jurada/);
+    fireEvent.change(input, {
+      target: { files: [new File(['%PDF-1.4 dj'], 'dj.pdf', { type: 'application/pdf' })] },
+    });
+
+    await waitFor(() => expect(showConfirmMessage).toHaveBeenCalled());
+    expect(vi.mocked(showConfirmMessage).mock.calls[0][0]).toBe('error');
     expect(apiPut).not.toHaveBeenCalled();
   });
 });

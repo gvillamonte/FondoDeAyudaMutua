@@ -1,16 +1,22 @@
 # Dependencias
 node_modules/
 **/node_modules/
+jspm_packages/
+web_modules/
 
 # Compilaciones (Builds)
 dist/
 .next/
 out/
 build/
+.nuxt/
+.output/
 
 # Variables de entorno (¡CRÍTICO!)
 .env
 **/.env
+.env.*
+!.env.example
 .env.local
 **/.env.local
 .env.*.local
@@ -18,19 +24,26 @@ build/
 .env.linux
 **/.env.linux
 
-# Archivos de registro (Logs)
+# Logs
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+lerna-debug.log*
 
-# Caché de TypeScript y pruebas
+# Caché de TypeScript, linters y pruebas
 *.tsbuildinfo
 tsc_output.txt
 coverage/
 test-prismajs/
+.eslintcache
+.stylelintcache
+.cache
+.parcel-cache
+.turbo
 
-# Respaldos de base de datos y pruebas temporales
+# Respaldos de base de datos y temporales
 _backup_pre_fam_registro_*
 *.sqlite
 *.db
@@ -42,11 +55,9 @@ reiniciar-sqlserver.bat
 *.bat
 *.ps1
 
-# Archivos de sistema operativo
+# Archivos de sistema operativo y editores
 .DS_Store
 Thumbs.db
-
-# Configuración de IDE
 .vscode/
 .idea/
 *.swp

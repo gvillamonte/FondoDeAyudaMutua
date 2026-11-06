@@ -198,7 +198,20 @@ export default function DetalleExpedienteModal({ id, onClose, onDelete }: { id: 
       window.open(url, '_blank');
       setTimeout(() => URL.revokeObjectURL(url), 30000);
     } catch {
-      alert('No se pudo abrir la orden de pago.');
+      alert('No se pudo abrir el voucher / orden de pago.');
+    }
+  };
+
+  const abrirDeclaracionBeneficiario = async (beneficiarioId: string) => {
+    try {
+      const { data } = await api.get(`/fam-beneficios/${id}/beneficiario/${beneficiarioId}/declaracion`);
+      const bytes = Uint8Array.from(atob(data.contenido), (c) => c.charCodeAt(0));
+      const blob = new Blob([bytes], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 30000);
+    } catch {
+      alert('No se pudo abrir la declaración jurada.');
     }
   };
 
@@ -608,7 +621,8 @@ export default function DetalleExpedienteModal({ id, onClose, onDelete }: { id: 
                             <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-text-sec uppercase">Parentesco</th>
                             <th className="px-4 py-2.5 text-right text-[10px] font-semibold text-text-sec uppercase">% Asignado</th>
                             <th className="px-4 py-2.5 text-right text-[10px] font-semibold text-text-sec uppercase">Monto</th>
-                            <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-text-sec uppercase">Orden de pago</th>
+                            <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-text-sec uppercase">Declaración Jurada</th>
+                            <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-text-sec uppercase">Voucher / Orden</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-border">
@@ -625,9 +639,18 @@ export default function DetalleExpedienteModal({ id, onClose, onDelete }: { id: 
                                 <td className="px-4 py-3 text-sm text-right font-semibold text-primary">{b.porcentajeAsignado}%</td>
                                 <td className="px-4 py-3 text-sm text-right font-semibold text-green-700">{fmtMonto(corresponde)}</td>
                                 <td className="px-4 py-3 text-sm">
+                                  {b.tieneDeclaracionJurada ? (
+                                    <button type="button" onClick={() => abrirDeclaracionBeneficiario(b.id)} className="text-xs font-semibold text-[#3258CA] hover:underline">
+                                      📄 Ver DJ (PDF)
+                                    </button>
+                                  ) : (
+                                    <span className="text-xs font-semibold text-amber-600">Pendiente</span>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3 text-sm">
                                   {b.tieneOrdenPago ? (
-                                    <button type="button" onClick={() => abrirOrdenPagoBeneficiario(b.id)} className="text-xs font-medium text-primary hover:underline">
-                                      Ver PDF
+                                    <button type="button" onClick={() => abrirOrdenPagoBeneficiario(b.id)} className="text-xs font-semibold text-green-700 hover:underline">
+                                      🧾 Ver Voucher
                                     </button>
                                   ) : (
                                     <span className="text-xs font-semibold text-amber-600">Pendiente</span>

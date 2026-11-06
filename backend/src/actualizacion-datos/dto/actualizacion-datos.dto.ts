@@ -12,8 +12,8 @@ export class ConsultarColegiadoDto {
   @IsNotEmpty({ message: 'El número de CIP es obligatorio' })
   cip: string;
 
-  @IsString({ message: 'El DNI debe ser una cadena de texto' })
-  @Matches(/^\d{8}$/, { message: 'El DNI debe contener exactamente 8 dígitos numéricos' })
+  @IsString({ message: 'El documento de identidad debe ser una cadena de texto' })
+  @Matches(/^[0-9a-zA-Z-]{4,15}$/, { message: 'El documento de identidad debe contener entre 4 y 15 caracteres alfanuméricos' })
   dni: string;
 }
 
@@ -23,7 +23,7 @@ export class ActualizarDatosColegiadoDto {
   cip: string;
 
   @IsString()
-  @Matches(/^\d{8}$/, { message: 'El DNI debe contener exactamente 8 dígitos numéricos' })
+  @Matches(/^[0-9a-zA-Z-]{4,15}$/, { message: 'El documento de identidad debe contener entre 4 y 15 caracteres alfanuméricos' })
   dni: string;
 
   @IsEmail({}, { message: 'El correo electrónico no tiene un formato válido' })

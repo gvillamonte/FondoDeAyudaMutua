@@ -136,11 +136,9 @@ export class FamBeneficiosService {
         throw new BadRequestException('Debe seleccionar quien es el solicitante entre los beneficiarios registrados');
       }
     } else {
-      if (!dto.sucesionIntestada?.trim()) {
-        throw new BadRequestException('Sin beneficiarios registrados es obligatorio adjuntar la Sucesión Intestada (PDF)');
-      }
+      // 0 beneficiarios registrados
       if (!dto.solicitanteNombre?.trim()) {
-        throw new BadRequestException('Sin beneficiarios registrados debe indicar el nombre del solicitante según la sucesión intestada');
+        throw new BadRequestException('Sin beneficiarios registrados debe indicar el nombre del solicitante');
       }
     }
   }
@@ -484,8 +482,8 @@ export class FamBeneficiosService {
       switch (dto.modalidadBeneficio) {
         case 'monto_unico':
           // 0 beneficiarios solo permitido con sucesion intestada adjunta
-          if (dto.beneficiarios.length === 0 && !dto.sucesionIntestada?.trim()) {
-            throw new BadRequestException('Monto Único requiere exactamente 1 beneficiario, o 0 con Sucesión Intestada adjunta');
+          if (dto.beneficiarios.length === 0 && !dto.sucesionIntestada?.trim() && !dto.observaciones?.trim()) {
+            throw new BadRequestException('Monto Único requiere al menos 1 beneficiario registrado o justificación en observaciones');
           }
           if (dto.beneficiarios.length > 1) {
             throw new BadRequestException('Monto Único admite como máximo 1 beneficiario');
@@ -1087,6 +1085,12 @@ export class FamBeneficiosService {
           },
         },
         depositos: { orderBy: { createdAt: 'asc' } },
+        sucesionIntestadaDetalle: {
+          include: {
+            herederos: { orderBy: { orden: 'asc' } },
+            versiones: { orderBy: { numeroVersion: 'desc' } },
+          },
+        },
       },
     });
 
@@ -1200,17 +1204,73 @@ export class FamBeneficiosService {
         acc[campo] = Boolean((solicitud as any)[campo]);
         return acc;
       }, {} as Record<string, boolean>),
-      beneficiariosVinculados: solicitud.vinculos.map((v) => ({
-        id: v.beneficiario.id,
-        nombre: v.beneficiario.nombre,
-        dni: v.beneficiario.dni,
-        parentesco: v.beneficiario.parentesco,
-        porcentajeAsignado: Number(v.porcentajeAsignado),
-        tieneDeclaracionJurada: Boolean(v.declaracionJurada),
-        declaracionJuradaDni: v.declaracionJuradaDni || null,
-        tieneOrdenPago:
-          Boolean(v.ordenPago) || Boolean((solicitud as any).ordenPago),
-      })),
+      beneficiariosVinculados: solicitud.vinculos.map((v) => {
+        const heredero = (solicitud as any).sucesionIntestadaDetalle?.herederos?.find(
+          (h: any) => h.beneficiarioId === v.beneficiarioId || h.numeroDocumento === v.beneficiario?.dni,
+        );
+        return {
+          id: v.beneficiario.id,
+          herederoId: heredero?.id || null,
+          nombre: v.beneficiario.nombre,
+          dni: v.beneficiario.dni,
+          parentesco: v.beneficiario.parentesco,
+          porcentajeAsignado: Number(v.porcentajeAsignado),
+          tieneDeclaracionJurada: Boolean(v.declaracionJurada || heredero?.declaracionJuradaPdf),
+          declaracionJuradaDni: v.declaracionJuradaDni || v.beneficiario.dni || null,
+          tieneOrdenPago:
+            Boolean(v.ordenPago) ||
+            Boolean(heredero?.ordenPagoPdf) ||
+            Boolean((solicitud as any).ordenPago),
+        };
+      }),
+      sucesionIntestadaDetalle: (solicitud as any).sucesionIntestadaDetalle
+        ? {
+            id: (solicitud as any).sucesionIntestadaDetalle.id,
+            solicitudId: (solicitud as any).sucesionIntestadaDetalle.solicitudId,
+            colegiadoId: (solicitud as any).sucesionIntestadaDetalle.colegiadoId,
+            numeroPartidaRegistral: (solicitud as any).sucesionIntestadaDetalle.numeroPartidaRegistral,
+            notariaJuzgado: (solicitud as any).sucesionIntestadaDetalle.notariaJuzgado,
+            fechaEmisionDocumento: (solicitud as any).sucesionIntestadaDetalle.fechaEmisionDocumento,
+            montoTotal: Number((solicitud as any).sucesionIntestadaDetalle.montoTotal),
+            estadoTramite: (solicitud as any).sucesionIntestadaDetalle.estadoTramite,
+            versionActual: (solicitud as any).sucesionIntestadaDetalle.versionActual,
+            observaciones: (solicitud as any).sucesionIntestadaDetalle.observaciones,
+            tieneSustento: Boolean((solicitud as any).sucesionIntestadaDetalle.sustentoPdf),
+            herederos: ((solicitud as any).sucesionIntestadaDetalle.herederos || []).map((h: any) => ({
+              id: h.id,
+              sucesionId: h.sucesionId,
+              beneficiarioId: h.beneficiarioId,
+              tipoDocumento: h.tipoDocumento,
+              numeroDocumento: h.numeroDocumento,
+              nombres: h.nombres,
+              apellidos: h.apellidos,
+              nombreCompleto: `${h.nombres} ${h.apellidos}`.trim(),
+              parentesco: h.parentesco,
+              porcentaje: Number(h.porcentaje),
+              monto: Number(h.monto),
+              telefono: h.telefono,
+              email: h.email,
+              tieneDeclaracionJurada: Boolean(h.declaracionJuradaPdf),
+              tieneOrdenPago: Boolean(h.ordenPagoPdf),
+              orden: h.orden,
+            })),
+            versiones: ((solicitud as any).sucesionIntestadaDetalle.versiones || []).map((ver: any) => ({
+              id: ver.id,
+              numeroVersion: ver.numeroVersion,
+              motivoModificacion: ver.motivoModificacion,
+              modificadoPor: ver.modificadoPor,
+              ipAddress: ver.ipAddress,
+              createdAt: ver.createdAt,
+              snapshotDistribucion: (() => {
+                try {
+                  return JSON.parse(ver.snapshotDistribucionJson);
+                } catch {
+                  return [];
+                }
+              })(),
+            })),
+          }
+        : null,
       depositos: (solicitud.depositos || []).map((d) => ({
         id: d.id,
         beneficiarioId: d.beneficiarioId,
@@ -1249,13 +1309,29 @@ export class FamBeneficiosService {
       where: { solicitudId_beneficiarioId: { solicitudId: id, beneficiarioId } },
       select: { declaracionJurada: true, declaracionJuradaDni: true },
     });
-    if (!vinculo) throw new NotFoundException('Beneficiario no vinculado al expediente');
-    if (!vinculo.declaracionJurada) throw new NotFoundException('Declaración jurada no cargada');
+    let contenido = vinculo?.declaracionJurada || null;
+    let declaracionJuradaDni = vinculo?.declaracionJuradaDni || null;
+
+    if (!contenido) {
+      const sucesion = await this.prisma.famSucesionIntestada.findUnique({
+        where: { solicitudId: id },
+        include: { herederos: true },
+      });
+      const heredero = sucesion?.herederos.find(
+        (h) => h.beneficiarioId === beneficiarioId || h.id === beneficiarioId,
+      );
+      if (heredero?.declaracionJuradaPdf) {
+        contenido = heredero.declaracionJuradaPdf;
+        declaracionJuradaDni = declaracionJuradaDni || heredero.numeroDocumento;
+      }
+    }
+
+    if (!contenido) throw new NotFoundException('Declaración jurada no cargada');
     return {
       solicitudId: id,
       beneficiarioId,
-      declaracionJuradaDni: vinculo.declaracionJuradaDni,
-      contenido: vinculo.declaracionJurada,
+      declaracionJuradaDni,
+      contenido,
     };
   }
 
@@ -1264,13 +1340,19 @@ export class FamBeneficiosService {
       where: { solicitudId_beneficiarioId: { solicitudId: id, beneficiarioId } },
       select: { ordenPago: true },
     });
-    if (!vinculo) throw new NotFoundException('Beneficiario no vinculado al expediente');
 
-    let contenido = vinculo.ordenPago;
+    let contenido = vinculo?.ordenPago || null;
     if (!contenido) {
-      // Compatibilidad: expedientes antiguos guardaban la orden de pago
-      // a nivel de expediente. Se usa como respaldo hasta que se cargue
-      // una orden individual por beneficiario.
+      const sucesion = await this.prisma.famSucesionIntestada.findUnique({
+        where: { solicitudId: id },
+        include: { herederos: true },
+      });
+      const heredero = sucesion?.herederos.find(
+        (h) => h.beneficiarioId === beneficiarioId || h.id === beneficiarioId,
+      );
+      contenido = heredero?.ordenPagoPdf || null;
+    }
+    if (!contenido) {
       const solicitud = await this.prisma.famSolicitudBeneficio.findUnique({
         where: { id },
         select: { ordenPago: true },
@@ -1926,6 +2008,7 @@ export class FamBeneficiosService {
         tipoBeneficio: true,
         vinculos: { include: { beneficiario: true } },
         depositos: true,
+        sucesionIntestadaDetalle: { include: { herederos: true } },
       },
     });
     if (!existing) throw new NotFoundException('Solicitud de beneficio no encontrada');
@@ -2051,6 +2134,41 @@ export class FamBeneficiosService {
           });
         }
       }
+
+      if (existing.sucesionIntestadaDetalle) {
+        const sucesionId = existing.sucesionIntestadaDetalle.id;
+        await tx.famSucesionBeneficiario.deleteMany({
+          where: { sucesionId },
+        });
+
+        const montoTotal = Number(existing.sucesionIntestadaDetalle.montoTotal || existing.monto || 0);
+
+        for (let i = 0; i < lista.length; i++) {
+          const b = lista[i];
+          const pct = Number(b.porcentaje || 0);
+          const montoIndiv = this.redondearMonto((pct / 100) * montoTotal);
+          const partes = String(b.nombre || '').trim().split(/\s+/);
+          const nombres = partes.slice(0, Math.max(1, partes.length - 2)).join(' ') || partes[0] || '';
+          const apellidos = partes.length > 1 ? partes.slice(Math.max(1, partes.length - 2)).join(' ') : '-';
+
+          await tx.famSucesionBeneficiario.create({
+            data: {
+              sucesionId,
+              beneficiarioId: b.id || undefined,
+              tipoDocumento: 'DNI',
+              numeroDocumento: String(b.dni || '').trim() || `GEN-${Date.now()}-${i}`,
+              nombres: nombres || b.nombre,
+              apellidos: apellidos || '-',
+              parentesco: b.parentesco || 'Otros',
+              porcentaje: pct,
+              monto: montoIndiv,
+              declaracionJuradaPdf: b.declaracionJurada || null,
+              ordenPagoPdf: b.ordenPago || null,
+              orden: i + 1,
+            },
+          });
+        }
+      }
     });
 
     await this.auditService.log({
@@ -2090,6 +2208,7 @@ export class FamBeneficiosService {
         tipoBeneficio: true,
         vinculos: { include: { beneficiario: true } },
         depositos: true,
+        sucesionIntestadaDetalle: { include: { herederos: true } },
       },
     });
     if (!existing) throw new NotFoundException('Solicitud de beneficio no encontrada');
@@ -2136,30 +2255,43 @@ export class FamBeneficiosService {
     const cuentas = new Map<string, any>();
     for (const d of dto.depositos || []) {
       if (d.beneficiarioId) cuentas.set(String(d.beneficiarioId), d);
+      if (d.dniBeneficiario) cuentas.set(String(d.dniBeneficiario), d);
     }
 
-    const items = vinculos.length
-      ? vinculos.map((v) => ({
-          beneficiarioId: v.beneficiarioId,
-          nombre: v.beneficiario.nombre,
-          dni: v.beneficiario.dni || undefined,
-          porcentaje: Number(v.porcentajeAsignado),
-        }))
-      : [
-          {
-            beneficiarioId: undefined,
-            nombre: existing.solicitanteNombre || undefined,
-            dni: existing.solicitanteDni || undefined,
-            porcentaje: 100,
-          },
-        ];
+    let items;
+    if (vinculos.length > 0) {
+      items = vinculos.map((v) => ({
+        beneficiarioId: v.beneficiarioId,
+        nombre: v.beneficiario.nombre,
+        dni: v.beneficiario.dni || undefined,
+        porcentaje: Number(v.porcentajeAsignado),
+      }));
+    } else if (existing.sucesionIntestadaDetalle?.herederos?.length) {
+      items = existing.sucesionIntestadaDetalle.herederos.map((h) => ({
+        beneficiarioId: h.beneficiarioId || undefined,
+        nombre: `${h.nombres} ${h.apellidos}`.trim(),
+        dni: h.numeroDocumento || undefined,
+        porcentaje: Number(h.porcentaje),
+      }));
+    } else {
+      items = [
+        {
+          beneficiarioId: undefined,
+          nombre: existing.solicitanteNombre || undefined,
+          dni: existing.solicitanteDni || undefined,
+          porcentaje: 100,
+        },
+      ];
+    }
 
     const montos = this.construirMontosDeposito(total, items);
     const fechaPago = dto.fechaPago ? new Date(dto.fechaPago) : new Date();
 
     await this.prisma.$transaction(async (tx) => {
       for (const item of montos) {
-        const cuenta = item.beneficiarioId ? cuentas.get(item.beneficiarioId) || {} : {};
+        const cuenta = item.beneficiarioId
+          ? cuentas.get(item.beneficiarioId) || (item.dni ? cuentas.get(item.dni) : null) || {}
+          : (item.dni ? cuentas.get(item.dni) : null) || dto.depositos?.[0] || {};
         await tx.famDepositoBeneficiario.create({
           data: {
             solicitudId: id,
@@ -2475,6 +2607,7 @@ export class FamBeneficiosService {
         tipoBeneficio: true,
         vinculos: { include: { beneficiario: true } },
         depositos: true,
+        sucesionIntestadaDetalle: { include: { herederos: true } },
       },
     });
     if (!existing) {

@@ -52,13 +52,22 @@ export class ActualizacionDatosService {
       .map((p) => (p.length > 2 ? p[0] + '*'.repeat(Math.min(5, p.length - 2)) + p[p.length - 1] : p))
       .join(' ');
 
+    const esVitalicio = String(colegiado.TIPO_ASOCIADO_COD || '').trim() === '2';
+    const tipoDocCod = String(colegiado.TIPO_DOC_COD || '').trim();
+    const tipoDocumento = tipoDocCod === '4' ? 'CE' : 'DNI';
+    const tipoDocumentoNombre = tipoDocCod === '4' ? 'Cédula de Extranjería' : 'DNI';
+
     return {
       valido: true,
       cip: String(colegiado.NUM_COLEGIATURA || cipNormalized).trim(),
       nombreEnmascarado,
       especialidad: colegiado.ESPECIALIDAD || '',
-      estadoColegiatura: colegiado.ESTADO_COLEGIATURA || (colegiado.HABILITADO ? 'HABILITADO' : 'NO HABILITADO'),
-      habilitado: Boolean(colegiado.HABILITADO),
+      estadoColegiatura: esVitalicio ? 'HABILITADO' : (colegiado.ESTADO_COLEGIATURA || (colegiado.HABILITADO ? 'HABILITADO' : 'NO HABILITADO')),
+      habilitado: esVitalicio ? true : Boolean(colegiado.HABILITADO),
+      esVitalicio,
+      tipoAsociado: esVitalicio ? 'Vitalicio' : 'Ordinario',
+      tipoDocumento,
+      tipoDocumentoNombre,
     };
   }
 
@@ -193,19 +202,32 @@ export class ActualizacionDatosService {
       return (texto || '').trim();
     };
 
+    const esVitalicio = String(colegiado.TIPO_ASOCIADO_COD || '').trim() === '2';
+    const tipoDocCod = String(colegiado.TIPO_DOC_COD || '').trim();
+    const tipoDocumento = tipoDocCod === '4' ? 'CE' : 'DNI';
+    const tipoDocumentoNombre = tipoDocCod === '4' ? 'Cédula de Extranjería' : 'DNI';
+
     return {
       colegiadoId: String(colegiado.COLEGIADO_ID),
       cip: cipStr,
       dni: dniStr,
+      tipoDocumento,
+      tipoDocumentoNombre,
+      esVitalicio,
+      tipoAsociado: esVitalicio ? 'Vitalicio' : 'Ordinario',
       nombres: colegiado.NOMBRES || '',
       apellidoPaterno: colegiado.APELLIDO_PATERNO || '',
       apellidoMaterno: colegiado.APELLIDO_MATERNO || '',
       nombreCompleto,
       especialidad: colegiado.ESPECIALIDAD || '',
-      estadoColegiatura: colegiado.ESTADO_COLEGIATURA || (colegiado.HABILITADO ? 'HABILITADO' : 'NO HABILITADO'),
-      habilitado: Boolean(colegiado.HABILITADO),
-      fechaUltimoPago: colegiado.FECHA_ULTIMO_PAGO ? new Date(colegiado.FECHA_ULTIMO_PAGO).toISOString().slice(0, 10) : null,
-      fechaHabilitado: colegiado.FECHA_HABILITADO ? new Date(colegiado.FECHA_HABILITADO).toISOString().slice(0, 10) : null,
+      estadoColegiatura: esVitalicio ? 'HABILITADO' : (colegiado.ESTADO_COLEGIATURA || (colegiado.HABILITADO ? 'HABILITADO' : 'NO HABILITADO')),
+      habilitado: esVitalicio ? true : Boolean(colegiado.HABILITADO),
+      fechaUltimoPago: esVitalicio
+        ? null
+        : (colegiado.FECHA_ULTIMO_PAGO ? new Date(colegiado.FECHA_ULTIMO_PAGO).toISOString().slice(0, 10) : null),
+      fechaHabilitado: esVitalicio
+        ? null
+        : (colegiado.FECHA_HABILITADO ? new Date(colegiado.FECHA_HABILITADO).toISOString().slice(0, 10) : null),
       fechaIngreso: colegiado.FECHA_INGRESO ? new Date(colegiado.FECHA_INGRESO).toISOString().slice(0, 10) : null,
       // Datos editables (priorizan la última actualización en APP_DB)
       email: ultimaActualizacion?.emailNuevo ?? colegiado.EMAIL ?? '',
@@ -612,5 +634,158 @@ export class ActualizacionDatosService {
       orderBy: { updatedAt: 'desc' },
       take: 5000,
     });
+  }
+
+  /**
+   * Reenvía la constancia de actualización por correo para un registro específico.
+   */
+  async reenviarCorreo(id: string, usuarioId?: string, ip?: string) {
+    const registro = await this.prisma.colegiadoActualizacion.findUnique({
+      where: { id },
+    });
+    if (!registro) {
+      throw new NotFoundException('Registro de actualización no encontrado');
+    }
+
+    if (!registro.emailNuevo) {
+      throw new BadRequestException('El colegiado no tiene un correo electrónico registrado.');
+    }
+
+    // Obtener datos complementarios desde legacy si están disponibles (fechaIngreso, fechaUltimoPago, etc.)
+    let fechaIngreso: string | null = null;
+    let fechaUltimoPago: string | null = null;
+    try {
+      const leg = await this.legacyService.getColegiadoByNumero(registro.cip);
+      if (leg) {
+        const esVitalicio = String(leg.TIPO_ASOCIADO_COD || '').trim() === '2';
+        fechaIngreso = leg.FECHA_INGRESO ? new Date(leg.FECHA_INGRESO).toISOString().slice(0, 10) : null;
+        fechaUltimoPago = esVitalicio
+          ? null
+          : (leg.FECHA_ULTIMO_PAGO ? new Date(leg.FECHA_ULTIMO_PAGO).toISOString().slice(0, 10) : null);
+      }
+    } catch (legErr: any) {
+      this.logger.warn(`No se pudo consultar legacy para reenviar correo CIP ${registro.cip}: ${legErr.message}`);
+    }
+
+    const emailEnviado = await this.emailService.enviarConstanciaActualizacion({
+      cip: registro.cip,
+      dni: registro.dni,
+      nombres: registro.nombres,
+      fechaIngreso,
+      fechaUltimoPago,
+      email: registro.emailNuevo,
+      celular: registro.celularNuevo || '',
+      fechaNacimiento: registro.fechaNacimientoNuevo,
+      sexo: registro.sexoNuevo,
+      estadoCivil: registro.estadoCivilNuevo,
+      departamento: registro.departamentoNuevo,
+      provincia: registro.provinciaNuevo,
+      distrito: registro.distritoNuevo,
+      direccion: registro.direccionNuevo,
+      referencia: registro.referenciaNuevo,
+      fechaRegistro: registro.updatedAt || registro.createdAt,
+      idOperacion: registro.id,
+    });
+
+    if (emailEnviado) {
+      await this.prisma.colegiadoActualizacion.update({
+        where: { id: registro.id },
+        data: { estado: 'EMAIL_ENVIADO' },
+      });
+
+      // Audit Log
+      try {
+        await this.auditService.log({
+          userId: usuarioId || '00000000-0000-0000-0000-000000000001',
+          action: 'UPDATE',
+          entity: 'colegiado_actualizacion',
+          entityId: registro.id,
+          changes: {
+            reenvioCorreo: {
+              old: registro.estado,
+              new: 'EMAIL_ENVIADO',
+            },
+            emailDestino: {
+              old: null,
+              new: registro.emailNuevo,
+            },
+          },
+          ipAddress: ip,
+        });
+      } catch (auditErr: any) {
+        this.logger.warn(`Error en auditLog de reenvío de correo: ${auditErr.message}`);
+      }
+
+      return {
+        success: true,
+        message: `Correo reenviado exitosamente a ${registro.emailNuevo}`,
+        estado: 'EMAIL_ENVIADO',
+      };
+    } else {
+      await this.prisma.colegiadoActualizacion.update({
+        where: { id: registro.id },
+        data: { estado: 'EMAIL_NO_ENVIADO' },
+      });
+
+      throw new BadRequestException(
+        `No se pudo enviar el correo a ${registro.emailNuevo}. Verifique el servicio SMTP o la dirección del destinatario.`,
+      );
+    }
+  }
+
+  /**
+   * Reenvía la constancia por correo a todos los colegiados cuyos correos están pendientes
+   * o no se enviaron previamente (estado != 'EMAIL_ENVIADO').
+   */
+  async reenviarCorreosPendientes(usuarioId?: string, ip?: string) {
+    const pendientes = await this.prisma.colegiadoActualizacion.findMany({
+      where: {
+        OR: [
+          { estado: 'EMAIL_NO_ENVIADO' },
+          { estado: 'ACTUALIZADO' },
+        ],
+        emailNuevo: { not: null },
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    if (pendientes.length === 0) {
+      return {
+        total: 0,
+        enviados: 0,
+        fallidos: 0,
+        message: 'No hay colegiados con correos pendientes de envío.',
+      };
+    }
+
+    let enviados = 0;
+    let fallidos = 0;
+    const errores: Array<{ cip: string; email: string; error: string }> = [];
+
+    for (const p of pendientes) {
+      try {
+        const res = await this.reenviarCorreo(p.id, usuarioId, ip);
+        if (res.success) {
+          enviados++;
+        } else {
+          fallidos++;
+        }
+      } catch (err: any) {
+        fallidos++;
+        errores.push({
+          cip: p.cip,
+          email: p.emailNuevo || '',
+          error: err.message || 'Error desconocido',
+        });
+      }
+    }
+
+    return {
+      total: pendientes.length,
+      enviados,
+      fallidos,
+      errores,
+      message: `Proceso completado: ${enviados} enviados con éxito, ${fallidos} no enviados de un total de ${pendientes.length}.`,
+    };
   }
 }

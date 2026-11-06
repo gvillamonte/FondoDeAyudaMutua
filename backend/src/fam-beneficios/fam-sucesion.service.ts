@@ -73,8 +73,15 @@ export class FamSucesionService {
     if (!dto.colegiadoId?.trim()) {
       throw new BadRequestException('colegiadoId es requerido');
     }
-    if (!dto.sustentoPdf?.trim()) {
-      throw new BadRequestException('El documento de sustento de Sucesión Intestada (PDF) es obligatorio');
+    const tieneSustento = Boolean(dto.sustentoPdf && dto.sustentoPdf.trim());
+    const tieneObs = Boolean(
+      (dto.observacionSinSucesion && dto.observacionSinSucesion.trim()) ||
+      (dto.observaciones && dto.observaciones.trim()),
+    );
+    if (!tieneSustento && !tieneObs) {
+      throw new BadRequestException(
+        'Cuando no se cuenta con sustento de Sucesión Intestada (PDF), debe ingresar una observación justificando el motivo por el cual no se está cargando para poder guardar.',
+      );
     }
 
     // Validar regla de negocio: el colegiado NO debe tener beneficiarios ya registrados
@@ -138,11 +145,14 @@ export class FamSucesionService {
           monto: dto.montoTotal,
           moneda: 'PEN',
           estado: estadoFinal,
-          sucesionIntestada: dto.sustentoPdf,
+          sucesionIntestada: dto.sustentoPdf || null,
           solicitanteNombre: nombresConcat.slice(0, 200),
           solicitanteDni: dnisConcat.slice(0, 20) || dto.herederos[0]?.numeroDocumento,
           modalidadBeneficio: 'monto_compartido',
-          documentacionCompleta: true,
+          documentacionCompleta: Boolean(dto.sustentoPdf),
+          documentacionObservacion: !dto.sustentoPdf
+            ? (dto.observacionSinSucesion?.trim() || dto.observaciones?.trim() || 'Sin documento de sucesión intestada')
+            : null,
           fechaSolicitud: dto.fechaSolicitud ? new Date(dto.fechaSolicitud) : new Date(),
           fechaPago: dto.fechaPago ? new Date(dto.fechaPago) : null,
           fechaDefuncion: dto.fechaDefuncion ? new Date(dto.fechaDefuncion) : null,
@@ -174,11 +184,12 @@ export class FamSucesionService {
           numeroPartidaRegistral: dto.numeroPartidaRegistral || null,
           notariaJuzgado: dto.notariaJuzgado || null,
           fechaEmisionDocumento: dto.fechaEmisionDocumento ? new Date(dto.fechaEmisionDocumento) : null,
-          sustentoPdf: dto.sustentoPdf,
+          sustentoPdf: dto.sustentoPdf || null,
           montoTotal: dto.montoTotal,
           estadoTramite: dto.estado || 'BORRADOR',
           versionActual: 1,
           observaciones: dto.observaciones || null,
+          observacionSinSucesion: dto.observacionSinSucesion || null,
           registradoPor: userId,
         },
       });
@@ -420,7 +431,52 @@ export class FamSucesionService {
         },
       });
 
-      // 5. Registrar versión en historial
+      // 5. Actualizar resumen en famSolicitudBeneficio
+      const nombresConcat = dto.herederos
+        .map((h) => `${h.nombres.trim()} ${h.apellidos.trim()}`)
+        .join(' / ');
+      const dnisConcat = dto.herederos.map((h) => h.numeroDocumento.trim()).join(' / ');
+      await tx.famSolicitudBeneficio.update({
+        where: { id: sucesion.solicitudId },
+        data: {
+          solicitanteNombre: nombresConcat.slice(0, 200),
+          solicitanteDni: dnisConcat.slice(0, 20) || dto.herederos[0]?.numeroDocumento,
+        },
+      });
+
+      // 6. Sincronizar depósitos si ya existían para este trámite
+      const depositosExistentes = await tx.famDepositoBeneficiario.findMany({
+        where: { solicitudId: sucesion.solicitudId },
+      });
+      if (depositosExistentes.length > 0) {
+        await tx.famDepositoBeneficiario.deleteMany({
+          where: { solicitudId: sucesion.solicitudId },
+        });
+        for (const h of dto.herederos) {
+          const ben = await tx.famBeneficiario.findFirst({
+            where: {
+              colegiadoId: sucesion.colegiadoId,
+              dni: h.numeroDocumento.trim(),
+            },
+          });
+          await tx.famDepositoBeneficiario.create({
+            data: {
+              solicitudId: sucesion.solicitudId,
+              beneficiarioId: ben?.id || null,
+              nombreBeneficiario: `${h.nombres.trim()} ${h.apellidos.trim()}`,
+              dniBeneficiario: h.numeroDocumento.trim(),
+              porcentaje: h.porcentaje,
+              monto: h.monto,
+              banco: depositosExistentes[0]?.banco || null,
+              fechaPago: depositosExistentes[0]?.fechaPago || new Date(),
+              estado: depositosExistentes[0]?.estado || 'PAGADO',
+              registradoPor: userId,
+            },
+          });
+        }
+      }
+
+      // 7. Registrar versión en historial
       await tx.famSucesionVersion.create({
         data: {
           sucesionId,
@@ -465,5 +521,42 @@ export class FamSucesionService {
       orderBy: { numeroVersion: 'desc' },
     });
     return versiones;
+  }
+
+  async obtenerDeclaracionHeredero(sucesionId: string, herederoId: string) {
+    const heredero = await this.prisma.famSucesionBeneficiario.findFirst({
+      where: { sucesionId, id: herederoId },
+    });
+    if (!heredero) throw new NotFoundException('Heredero no encontrado en la sucesión');
+    if (!heredero.declaracionJuradaPdf) {
+      throw new NotFoundException('Declaración jurada no cargada para este heredero');
+    }
+    return {
+      sucesionId,
+      herederoId,
+      numeroDocumento: heredero.numeroDocumento,
+      nombres: heredero.nombres,
+      apellidos: heredero.apellidos,
+      contenido: heredero.declaracionJuradaPdf,
+    };
+  }
+
+  async obtenerVoucherHeredero(sucesionId: string, herederoId: string) {
+    const heredero = await this.prisma.famSucesionBeneficiario.findFirst({
+      where: { sucesionId, id: herederoId },
+    });
+    if (!heredero) throw new NotFoundException('Heredero no encontrado en la sucesión');
+    if (!heredero.ordenPagoPdf) {
+      throw new NotFoundException('Voucher / Orden de pago no cargada para este heredero');
+    }
+    return {
+      sucesionId,
+      herederoId,
+      numeroDocumento: heredero.numeroDocumento,
+      nombres: heredero.nombres,
+      apellidos: heredero.apellidos,
+      monto: Number(heredero.monto),
+      contenido: heredero.ordenPagoPdf,
+    };
   }
 }

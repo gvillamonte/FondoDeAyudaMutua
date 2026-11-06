@@ -21,6 +21,7 @@ import { Roles } from '../auth/roles.decorator';
 
 const LECTURA = ['ADMINISTRADOR', 'OPERADOR_PAGOS', 'AUDITOR'];
 const ESCRITURA = ['ADMINISTRADOR'];
+const ESCRITURA_DOCS = ['ADMINISTRADOR', 'OPERADOR_PAGOS'];
 
 @ApiTags('Catálogos de Configuración')
 @ApiBearerAuth()
@@ -174,7 +175,7 @@ export class CatalogosController {
   }
 
   @Post('memorandos')
-  @Roles(...ESCRITURA)
+  @Roles(...ESCRITURA_DOCS)
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Crear memorándum' })
   async crearMemorando(@Body() dto: CrearMemorandoDto, @Request() req: any) {
@@ -182,7 +183,7 @@ export class CatalogosController {
   }
 
   @Put('memorandos/:id')
-  @Roles(...ESCRITURA)
+  @Roles(...ESCRITURA_DOCS)
   @ApiOperation({ summary: 'Actualizar memorándum' })
   async actualizarMemorando(
     @Param('id') id: string,
@@ -208,7 +209,7 @@ export class CatalogosController {
   }
 
   @Post('cartas')
-  @Roles(...ESCRITURA)
+  @Roles(...ESCRITURA_DOCS)
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Crear carta' })
   async crearCarta(@Body() dto: CrearCartaDto, @Request() req: any) {
@@ -216,7 +217,7 @@ export class CatalogosController {
   }
 
   @Put('cartas/:id')
-  @Roles(...ESCRITURA)
+  @Roles(...ESCRITURA_DOCS)
   @ApiOperation({ summary: 'Actualizar carta' })
   async actualizarCarta(
     @Param('id') id: string,

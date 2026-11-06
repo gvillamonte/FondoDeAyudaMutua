@@ -2,6 +2,11 @@
 
 import { useState, useId } from 'react';
 import { showConfirmMessage } from '@/components/common/ConfirmCenterMessage';
+import {
+  generarDeclaracionJuradaPdf,
+  generarVoucherOrdenPagoPdf,
+  DatosColegiadoPdf,
+} from '@/lib/pdf-generator';
 
 export interface HerederoForm {
   key: string;
@@ -15,6 +20,9 @@ export interface HerederoForm {
   telefono?: string;
   email?: string;
   declaracionJuradaPdf?: string;
+  declaracionSize?: number;
+  ordenPagoPdf?: string;
+  ordenPagoSize?: number;
 }
 
 const PARENTESCO_OPCIONES = [
@@ -34,6 +42,8 @@ const MAX_PDF_MB = 10;
 
 interface Props {
   montoTotal: number;
+  colegiado?: DatosColegiadoPdf | null;
+  expedienteNumero?: string;
   herederos: HerederoForm[];
   onChangeHerederos: (herederos: HerederoForm[]) => void;
   sucesionPdf: { base64: string; size: number } | null;
@@ -43,10 +53,16 @@ interface Props {
   notariaJuzgado: string;
   onChangeNotaria: (val: string) => void;
   onAbrirPdf: (base64: string, titulo: string) => void;
+  cuentaConSucesion?: boolean;
+  onChangeCuentaConSucesion?: (val: boolean) => void;
+  observacionSinSucesion?: string;
+  onChangeObservacionSinSucesion?: (val: string) => void;
 }
 
 export default function SucesionIntestadaMultiplesBeneficiarios({
   montoTotal,
+  colegiado,
+  expedienteNumero,
   herederos,
   onChangeHerederos,
   sucesionPdf,
@@ -56,12 +72,16 @@ export default function SucesionIntestadaMultiplesBeneficiarios({
   notariaJuzgado,
   onChangeNotaria,
   onAbrirPdf,
+  cuentaConSucesion = true,
+  onChangeCuentaConSucesion,
+  observacionSinSucesion = '',
+  onChangeObservacionSinSucesion,
 }: Props) {
   const [modoEdicion, setModoEdicion] = useState<'porcentaje' | 'monto'>('porcentaje');
   const [mostrarModalResumen, setMostrarModalResumen] = useState(false);
-  const fileInputId = useId();
+  const sustentoInputId = useId();
 
-  // Cálculos de saldo
+  // Cálculos de saldo en tiempo real
   const sumaPorcentajes = Number(
     herederos.reduce((acc, h) => acc + (Number(h.porcentaje) || 0), 0).toFixed(2),
   );
@@ -70,9 +90,10 @@ export default function SucesionIntestadaMultiplesBeneficiarios({
   );
   const porcentajeRestante = Number((100 - sumaPorcentajes).toFixed(2));
   const montoRestante = Number((montoTotal - sumaMontos).toFixed(2));
-  const esCuadreExacto = Math.abs(sumaPorcentajes - 100) <= 0.05 && Math.abs(sumaMontos - montoTotal) <= 0.05;
+  const esCuadreExacto =
+    Math.abs(sumaPorcentajes - 100) <= 0.05 && Math.abs(sumaMontos - montoTotal) <= 0.05;
 
-  // Detección de duplicados
+  // Detección de documentos duplicados
   const duplicadosSet = new Set<string>();
   const docsContados: Record<string, number> = {};
   herederos.forEach((h) => {
@@ -103,7 +124,11 @@ export default function SucesionIntestadaMultiplesBeneficiarios({
     reader.onload = (e) => {
       const base64 = ((e.target?.result as string) || '').split(',')[1] || '';
       onChangeSucesionPdf({ base64, size: file.size });
-      showConfirmMessage('success', 'Sucesión Intestada cargada correctamente', `${(file.size / 1024 / 1024).toFixed(2)} MB`);
+      showConfirmMessage(
+        'success',
+        'Sustento de Sucesión Intestada cargado correctamente',
+        `${(file.size / 1024 / 1024).toFixed(2)} MB`,
+      );
     };
     reader.readAsDataURL(file);
   };
@@ -114,7 +139,6 @@ export default function SucesionIntestadaMultiplesBeneficiarios({
       return;
     }
 
-    // Sugerir el saldo restante si es positivo
     const pctSugerido = porcentajeRestante > 0 ? porcentajeRestante : 0;
     const montoSugerido = montoRestante > 0 ? montoRestante : 0;
 
@@ -171,24 +195,211 @@ export default function SucesionIntestadaMultiplesBeneficiarios({
     const baseMonto = Number((montoTotal / n).toFixed(2));
 
     const actualizados = herederos.map((h, idx) => {
-      // Ajuste de redondeo en el último
+      let nuevoPct = basePct;
+      let nuevoMonto = baseMonto;
+
+      // Ajuste de redondeo de centavos en el último heredero
       if (idx === n - 1) {
         const sumaPrevPct = basePct * (n - 1);
         const sumaPrevMonto = baseMonto * (n - 1);
+        nuevoPct = Number((100 - sumaPrevPct).toFixed(2));
+        nuevoMonto = Number((montoTotal - sumaPrevMonto).toFixed(2));
+      }
+
+      const updated = {
+        ...h,
+        porcentaje: nuevoPct,
+        monto: nuevoMonto,
+      };
+
+      // Si tiene datos suficientes y colegiado, regenerar documentos con nuevos montos
+      if (colegiado && h.nombres.trim() && h.numeroDocumento.trim()) {
+        try {
+          const dj = generarDeclaracionJuradaPdf({
+            heredero: updated,
+            colegiado,
+            montoTotal,
+            partidaRegistral: numeroPartidaRegistral || undefined,
+            notariaJuzgado: notariaJuzgado || undefined,
+          });
+          updated.declaracionJuradaPdf = dj.base64;
+          updated.declaracionSize = dj.size;
+
+          const voucher = generarVoucherOrdenPagoPdf({
+            heredero: updated,
+            colegiado,
+            expedienteNumero: expedienteNumero || undefined,
+          });
+          updated.ordenPagoPdf = voucher.base64;
+          updated.ordenPagoSize = voucher.size;
+        } catch {}
+      }
+
+      return updated;
+    });
+
+    onChangeHerederos(actualizados);
+    showConfirmMessage(
+      'success',
+      'Monto repartido equitativamente',
+      `${n} herederos al ${(100 / n).toFixed(2)}% cada uno. Documentos regenerados.`,
+    );
+  };
+
+  const handleSubirPdfHeredero = (
+    key: string,
+    campo: 'declaracionJurada' | 'ordenPago',
+    file: File,
+  ) => {
+    const label = campo === 'declaracionJurada' ? 'Declaración Jurada' : 'Voucher / Orden de Pago';
+    if (file.type !== 'application/pdf') {
+      showConfirmMessage('error', `${label}: formato inválido`, 'Solo se permiten archivos PDF (.pdf)');
+      return;
+    }
+    if (file.size > MAX_PDF_MB * 1024 * 1024) {
+      showConfirmMessage(
+        'error',
+        `${label}: archivo demasiado grande`,
+        `Máximo permitido: ${MAX_PDF_MB}MB`,
+      );
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const base64 = ((e.target?.result as string) || '').split(',')[1] || '';
+      actualizarHeredero(key, {
+        ...(campo === 'declaracionJurada'
+          ? { declaracionJuradaPdf: base64, declaracionSize: file.size }
+          : { ordenPagoPdf: base64, ordenPagoSize: file.size }),
+      });
+      showConfirmMessage('success', `${label} cargado correctamente`, `${(file.size / 1024 / 1024).toFixed(2)} MB`);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const generarDjHeredero = (h: HerederoForm) => {
+    if (!h.numeroDocumento.trim() || !h.nombres.trim() || !h.apellidos.trim()) {
+      showConfirmMessage(
+        'error',
+        'Datos incompletos',
+        'Ingrese documento, nombres y apellidos del heredero antes de generar la Declaración Jurada.',
+      );
+      return;
+    }
+    if (!colegiado) {
+      showConfirmMessage('error', 'Colegiado no seleccionado', 'Debe seleccionar un colegiado válido.');
+      return;
+    }
+
+    try {
+      const dj = generarDeclaracionJuradaPdf({
+        heredero: h,
+        colegiado,
+        montoTotal,
+        partidaRegistral: numeroPartidaRegistral || undefined,
+        notariaJuzgado: notariaJuzgado || undefined,
+      });
+      actualizarHeredero(h.key, {
+        declaracionJuradaPdf: dj.base64,
+        declaracionSize: dj.size,
+      });
+      showConfirmMessage(
+        'success',
+        'Declaración Jurada generada',
+        `Para ${h.nombres} ${h.apellidos} por S/ ${h.monto.toFixed(2)} (${h.porcentaje.toFixed(2)}%)`,
+      );
+    } catch (err: any) {
+      showConfirmMessage('error', 'Error al generar PDF', err?.message || 'Error desconocido');
+    }
+  };
+
+  const generarVoucherHeredero = (h: HerederoForm) => {
+    if (!h.numeroDocumento.trim() || !h.nombres.trim() || !h.apellidos.trim()) {
+      showConfirmMessage(
+        'error',
+        'Datos incompletos',
+        'Ingrese documento, nombres y apellidos del heredero antes de generar el Voucher.',
+      );
+      return;
+    }
+    if (!colegiado) {
+      showConfirmMessage('error', 'Colegiado no seleccionado', 'Debe seleccionar un colegiado válido.');
+      return;
+    }
+
+    try {
+      const voucher = generarVoucherOrdenPagoPdf({
+        heredero: h,
+        colegiado,
+        expedienteNumero: expedienteNumero || undefined,
+      });
+      actualizarHeredero(h.key, {
+        ordenPagoPdf: voucher.base64,
+        ordenPagoSize: voucher.size,
+      });
+      showConfirmMessage(
+        'success',
+        'Voucher / Orden de Pago generado',
+        `Para ${h.nombres} ${h.apellidos} por S/ ${h.monto.toFixed(2)} (${h.porcentaje.toFixed(2)}%)`,
+      );
+    } catch (err: any) {
+      showConfirmMessage('error', 'Error al generar Voucher', err?.message || 'Error desconocido');
+    }
+  };
+
+  const generarTodosLosDocumentos = () => {
+    if (!colegiado) {
+      showConfirmMessage('error', 'Colegiado requerido', 'Seleccione un colegiado antes de generar los documentos.');
+      return;
+    }
+
+    let generados = 0;
+    const actualizados = herederos.map((h) => {
+      if (!h.numeroDocumento.trim() || !h.nombres.trim() || !h.apellidos.trim()) return h;
+
+      try {
+        const dj = generarDeclaracionJuradaPdf({
+          heredero: h,
+          colegiado,
+          montoTotal,
+          partidaRegistral: numeroPartidaRegistral || undefined,
+          notariaJuzgado: notariaJuzgado || undefined,
+        });
+
+        const voucher = generarVoucherOrdenPagoPdf({
+          heredero: h,
+          colegiado,
+          expedienteNumero: expedienteNumero || undefined,
+        });
+
+        generados++;
         return {
           ...h,
-          porcentaje: Number((100 - sumaPrevPct).toFixed(2)),
-          monto: Number((montoTotal - sumaPrevMonto).toFixed(2)),
+          declaracionJuradaPdf: dj.base64,
+          declaracionSize: dj.size,
+          ordenPagoPdf: voucher.base64,
+          ordenPagoSize: voucher.size,
         };
+      } catch {
+        return h;
       }
-      return {
-        ...h,
-        porcentaje: basePct,
-        monto: baseMonto,
-      };
     });
+
     onChangeHerederos(actualizados);
-    showConfirmMessage('success', 'Monto repartido equitativamente', `${n} herederos al ${(100 / n).toFixed(2)}% cada uno`);
+    if (generados > 0) {
+      showConfirmMessage(
+        'success',
+        'Documentos generados exitosamente',
+        `Se generaron Declaración Jurada y Voucher para ${generados} heredero(s).`,
+      );
+    } else {
+      showConfirmMessage(
+        'error',
+        'No se generaron documentos',
+        'Asegúrese de que los herederos tengan documento, nombres y apellidos completos.',
+      );
+    }
   };
 
   return (
@@ -198,23 +409,31 @@ export default function SucesionIntestadaMultiplesBeneficiarios({
         <div>
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-blue-100 text-[#3258CA]">
-              Sucesión Intestada
+              Sucesión Intestada (Múltiples Beneficiarios)
             </span>
             <span className="text-xs text-text-sec">
               (El colegiado no tiene beneficiarios registrados en el padrón)
             </span>
           </div>
           <h4 className="text-sm font-bold text-text-main mt-1">
-            Registro y Distribución de Múltiples Herederos Legales
+            Registro, Declaraciones Juradas y Vouchers de Herederos Legales
           </h4>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={generarTodosLosDocumentos}
+            className="px-2.5 py-1 text-xs font-semibold text-white bg-[#16A34A] hover:bg-[#15803d] rounded-lg transition-colors shadow-sm flex items-center gap-1"
+            title="Generar automáticamente Declaración Jurada y Voucher para todos los herederos completos"
+          >
+            ⚡ Generar todos los documentos
+          </button>
           <button
             type="button"
             onClick={repartirEquitativamente}
             className="px-2.5 py-1 text-xs font-medium text-[#3258CA] bg-white border border-[#3258CA]/40 rounded-lg hover:bg-blue-50 transition-colors"
-            title="Dividir en partes iguales entre los beneficiarios actuales"
+            title="Dividir en partes iguales con ajuste de centavos"
           >
             ⚖️ Repartir equitativamente
           </button>
@@ -228,61 +447,132 @@ export default function SucesionIntestadaMultiplesBeneficiarios({
         </div>
       </div>
 
-      {/* 1. Sustento Obligatorio (PDF) */}
+      {/* 1. Sustento de Sucesión Intestada (o Justificación de no presentación) */}
       <div className="bg-white border border-border rounded-lg p-3.5 space-y-3">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        {/* Selector: ¿Cuenta con sucesión intestada? */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-gray-100">
           <div>
             <label className="text-xs font-bold text-text-main uppercase tracking-wider block">
-              1. Documento de Sustento (Sucesión Intestada) *
+              1. Documento de Sustento de Sucesión Intestada
             </label>
             <span className="text-[11px] text-text-sec">
-              Adjunte la resolución notarial o judicial que declara a los herederos legales (PDF máx. {MAX_PDF_MB}MB).
+              Indique si cuenta con la resolución notarial/judicial o declare las observaciones correspondientes.
             </span>
           </div>
 
-          <div>
-            {sucesionPdf ? (
-              <div className="inline-flex items-center gap-2 bg-green-50 border border-green-200 px-3 py-1.5 rounded-lg">
-                <span className="text-xs font-medium text-green-800">
-                  ✓ Sustento cargado ({(sucesionPdf.size / 1024 / 1024).toFixed(2)} MB)
-                </span>
-                <button
-                  type="button"
-                  onClick={() => onAbrirPdf(sucesionPdf.base64, 'Sucesión Intestada')}
-                  className="text-xs font-semibold text-[#3258CA] hover:underline"
-                >
-                  Ver PDF
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onChangeSucesionPdf(null)}
-                  className="text-xs text-red-600 hover:text-red-800 ml-1 font-bold"
-                  title="Eliminar archivo"
-                >
-                  ✕
-                </button>
-              </div>
-            ) : (
-              <label
-                htmlFor={fileInputId}
-                className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-[#3258CA] hover:bg-[#25439b] rounded-lg transition-colors shadow-sm"
-              >
-                📄 Subir Sustento (PDF)
-                <input
-                  id={fileInputId}
-                  type="file"
-                  accept="application/pdf,.pdf"
-                  className="hidden"
-                  onChange={(e) => {
-                    if (e.target.files?.[0]) handleSucesionFile(e.target.files[0]);
-                  }}
-                />
-              </label>
-            )}
+          <div className="inline-flex rounded-lg border border-border p-0.5 bg-slate-100 text-xs font-medium">
+            <button
+              type="button"
+              onClick={() => {
+                if (onChangeCuentaConSucesion) onChangeCuentaConSucesion(true);
+              }}
+              className={`px-3 py-1.5 rounded-md transition-all ${
+                cuentaConSucesion !== false
+                  ? 'bg-white text-[#3258CA] font-semibold shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              ✓ Sí cuenta con Sucesión
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (onChangeCuentaConSucesion) onChangeCuentaConSucesion(false);
+              }}
+              className={`px-3 py-1.5 rounded-md transition-all ${
+                cuentaConSucesion === false
+                  ? 'bg-amber-600 text-white font-semibold shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              ⚠️ No cuenta con Sucesión
+            </button>
           </div>
         </div>
 
-        {/* Datos notariales opcionales */}
+        {cuentaConSucesion !== false ? (
+          /* CASO A: Cuenta con Sucesión Intestada (Sube el PDF) */
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+            <div>
+              <span className="text-xs font-semibold text-text-primary block">
+                Carga del documento PDF de Sucesión Intestada <span className="text-red-500">*</span>
+              </span>
+              <span className="text-[11px] text-text-sec">
+                Adjunte el documento emitido por la Notaría o Juzgado (máx. {MAX_PDF_MB}MB).
+              </span>
+            </div>
+
+            <div>
+              {sucesionPdf ? (
+                <div className="inline-flex items-center gap-2 bg-green-50 border border-green-200 px-3 py-1.5 rounded-lg">
+                  <span className="text-xs font-medium text-green-800">
+                    ✓ Sustento cargado ({(sucesionPdf.size / 1024 / 1024).toFixed(2)} MB)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => onAbrirPdf(sucesionPdf.base64, 'Sustento de Sucesión Intestada')}
+                    className="text-xs font-semibold text-[#3258CA] hover:underline"
+                  >
+                    Ver PDF
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onChangeSucesionPdf(null)}
+                    className="text-xs text-red-600 hover:text-red-800 ml-1 font-bold"
+                    title="Eliminar archivo"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ) : (
+                <label
+                  htmlFor={sustentoInputId}
+                  className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-[#3258CA] hover:bg-[#25439b] rounded-lg transition-colors shadow-sm"
+                >
+                  📄 Subir Sustento Legal (PDF)
+                  <input
+                    id={sustentoInputId}
+                    type="file"
+                    accept="application/pdf,.pdf"
+                    className="hidden"
+                    onChange={(e) => {
+                      if (e.target.files?.[0]) handleSucesionFile(e.target.files[0]);
+                    }}
+                  />
+                </label>
+              )}
+            </div>
+          </div>
+        ) : (
+          /* CASO B: NO cuenta con Sucesión Intestada (Observaciones obligatorias para justificar y permitir guardar) */
+          <div className="bg-amber-50/80 border border-amber-300 rounded-lg p-3.5 space-y-2 animate-in fade-in duration-150">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+              <label className="text-xs font-bold text-amber-900 uppercase tracking-wide flex items-center gap-1.5">
+                <svg className="w-4 h-4 text-amber-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+                Observaciones: ¿Por qué no se está cargando la Sucesión Intestada? <span className="text-red-600">*</span>
+              </label>
+              <span className="text-[11px] font-semibold text-amber-800 bg-amber-100 px-2 py-0.5 rounded border border-amber-200 inline-block w-fit">
+                Permite guardar sin PDF
+              </span>
+            </div>
+            <p className="text-[11px] text-amber-800">
+              El colegiado no cuenta con sucesión intestada o se encuentra en trámite. Escriba las observaciones y justificación para que quede registrado en el expediente y el sistema le permita guardar:
+            </p>
+            <textarea
+              rows={3}
+              value={observacionSinSucesion || ''}
+              onChange={(e) => {
+                if (onChangeObservacionSinSucesion) onChangeObservacionSinSucesion(e.target.value);
+              }}
+              placeholder="Escriba aquí el porqué no se está cargando la sucesión intestada (ej: trámite notarial en curso, herederos en proceso de declaratoria judicial, beneficio asistencial urgente)..."
+              className="w-full px-3 py-2 text-xs border border-amber-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400 text-slate-800 placeholder-slate-400 shadow-inner"
+            />
+          </div>
+        )}
+
+        {/* Datos notariales del trámite */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-gray-100">
           <div>
             <label className="block text-[11px] font-medium text-text-sec uppercase mb-1">
@@ -363,7 +653,7 @@ export default function SucesionIntestadaMultiplesBeneficiarios({
             </span>
             <span>
               {esCuadreExacto
-                ? 'Distribución completa: 100.00% asignado (S/ ' + montoTotal.toFixed(2) + ')'
+                ? `Distribución completa: 100.00% asignado (S/ ${montoTotal.toFixed(2)})`
                 : sumaPorcentajes > 100
                 ? `Exceso en la asignación: +${(sumaPorcentajes - 100).toFixed(2)}% (+S/ ${(sumaMontos - montoTotal).toFixed(2)})`
                 : `Pendiente por asignar: ${porcentajeRestante.toFixed(2)}% (S/ ${montoRestante.toFixed(2)})`}
@@ -380,16 +670,18 @@ export default function SucesionIntestadaMultiplesBeneficiarios({
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <label className="text-xs font-bold text-text-main uppercase tracking-wider">
-            2. Lista de Herederos ({herederos.length} de 20) *
+            2. Lista de Herederos y Documentos Individuales ({herederos.length} de 20) *
           </label>
           <span className="text-[11px] text-text-sec">
-            Cada beneficiario debe tener documento único y asignación mayor a 0
+            Cada beneficiario requiere Declaración Jurada y Voucher individual
           </span>
         </div>
 
         {herederos.map((h, idx) => {
           const docKey = `${h.tipoDocumento}-${h.numeroDocumento.trim()}`;
           const esDuplicado = h.numeroDocumento.trim() !== '' && duplicadosSet.has(docKey);
+          const tieneDj = Boolean(h.declaracionJuradaPdf);
+          const tieneVoucher = Boolean(h.ordenPagoPdf);
 
           return (
             <div
@@ -405,10 +697,13 @@ export default function SucesionIntestadaMultiplesBeneficiarios({
                   <span className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center text-[11px]">
                     {idx + 1}
                   </span>
-                  Heredero Legal #{idx + 1}
+                  Heredero Legal #{idx + 1}: {h.nombres && h.apellidos ? `${h.nombres} ${h.apellidos}` : 'Nuevo'}
                 </span>
 
                 <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-mono font-bold text-green-700 bg-green-50 px-2 py-0.5 rounded border border-green-200">
+                    S/ {h.monto.toFixed(2)} ({h.porcentaje.toFixed(2)}%)
+                  </span>
                   <button
                     type="button"
                     onClick={() => eliminarHeredero(h.key)}
@@ -580,6 +875,125 @@ export default function SucesionIntestadaMultiplesBeneficiarios({
                   />
                 </div>
               </div>
+
+              {/* Fila 3: Acciones de Declaración Jurada y Voucher Individuales */}
+              <div className="pt-2 border-t border-gray-100 grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50/70 p-2.5 rounded-lg">
+                {/* Bloque Declaración Jurada */}
+                <div className="flex flex-col justify-between gap-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-text-main uppercase flex items-center gap-1">
+                      <span>📜</span> Declaración Jurada
+                    </span>
+                    {tieneDj ? (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-green-100 text-green-800">
+                        ✓ Generada / Cargada
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800">
+                        ⚠️ Requerida
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => generarDjHeredero(h)}
+                      className="px-2 py-1 text-[11px] font-medium text-[#3258CA] bg-white border border-[#3258CA]/40 rounded hover:bg-blue-50 transition-colors"
+                      title="Generar la declaración jurada oficial en PDF con los datos actuales"
+                    >
+                      {tieneDj ? '🔄 Regenerar DJ' : '⚡ Generar DJ Oficial'}
+                    </button>
+
+                    {tieneDj && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onAbrirPdf(
+                            h.declaracionJuradaPdf!,
+                            `Declaración Jurada - ${h.nombres} ${h.apellidos}`,
+                          )
+                        }
+                        className="px-2 py-1 text-[11px] font-semibold text-green-700 bg-green-50 border border-green-300 rounded hover:bg-green-100 transition-colors"
+                      >
+                        📄 Ver DJ
+                      </button>
+                    )}
+
+                    <label className="cursor-pointer px-2 py-1 text-[11px] font-medium text-text-sec bg-white border border-border rounded hover:text-text-main hover:bg-gray-50 transition-colors">
+                      📁 {tieneDj ? 'Reemplazar' : 'Subir Firmada'}
+                      <input
+                        type="file"
+                        accept="application/pdf,.pdf"
+                        className="hidden"
+                        onChange={(e) => {
+                          if (e.target.files?.[0]) {
+                            handleSubirPdfHeredero(h.key, 'declaracionJurada', e.target.files[0]);
+                          }
+                        }}
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                {/* Bloque Voucher / Orden de Pago */}
+                <div className="flex flex-col justify-between gap-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-text-main uppercase flex items-center gap-1">
+                      <span>🧾</span> Voucher / Orden de Pago
+                    </span>
+                    {tieneVoucher ? (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-green-100 text-green-800">
+                        ✓ Voucher listo
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-100 text-[#3258CA]">
+                        Asignado: S/ {h.monto.toFixed(2)}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => generarVoucherHeredero(h)}
+                      className="px-2 py-1 text-[11px] font-medium text-[#3258CA] bg-white border border-[#3258CA]/40 rounded hover:bg-blue-50 transition-colors"
+                      title="Generar la orden de pago/voucher oficial en PDF"
+                    >
+                      {tieneVoucher ? '🔄 Regenerar Voucher' : '⚡ Generar Voucher'}
+                    </button>
+
+                    {tieneVoucher && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onAbrirPdf(
+                            h.ordenPagoPdf!,
+                            `Voucher / Orden de Pago - ${h.nombres} ${h.apellidos}`,
+                          )
+                        }
+                        className="px-2 py-1 text-[11px] font-semibold text-green-700 bg-green-50 border border-green-300 rounded hover:bg-green-100 transition-colors"
+                      >
+                        📄 Ver Voucher
+                      </button>
+                    )}
+
+                    <label className="cursor-pointer px-2 py-1 text-[11px] font-medium text-text-sec bg-white border border-border rounded hover:text-text-main hover:bg-gray-50 transition-colors">
+                      📁 {tieneVoucher ? 'Reemplazar' : 'Subir Voucher'}
+                      <input
+                        type="file"
+                        accept="application/pdf,.pdf"
+                        className="hidden"
+                        onChange={(e) => {
+                          if (e.target.files?.[0]) {
+                            handleSubirPdfHeredero(h.key, 'ordenPago', e.target.files[0]);
+                          }
+                        }}
+                      />
+                    </label>
+                  </div>
+                </div>
+              </div>
             </div>
           );
         })}
@@ -606,7 +1020,7 @@ export default function SucesionIntestadaMultiplesBeneficiarios({
                   Resumen de Distribución de Sucesión Intestada
                 </h3>
                 <p className="text-xs text-text-sec">
-                  Verifique que la lista de herederos y montos concuerde con el documento legal adjunto.
+                  Verifique que la lista de herederos, declaraciones juradas y vouchers concuerden con el documento legal adjunto.
                 </p>
               </div>
               <button
@@ -625,15 +1039,25 @@ export default function SucesionIntestadaMultiplesBeneficiarios({
                   <span className="font-bold text-text-main">S/ {montoTotal.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-text-sec">Sustento Adjunto:</span>
+                  <span className="text-text-sec">Sustento Legal Adjunto:</span>
                   <span className="font-medium text-green-700">
-                    {sucesionPdf ? `✓ PDF cargado (${(sucesionPdf.size / 1024 / 1024).toFixed(2)} MB)` : '❌ No adjuntado'}
+                    {sucesionPdf
+                      ? `✓ PDF cargado (${(sucesionPdf.size / 1024 / 1024).toFixed(2)} MB)`
+                      : observacionSinSucesion?.trim()
+                      ? '⚠️ Sin Sucesión (Justificado en observaciones)'
+                      : '❌ No adjuntado (Requiere justificación)'}
                   </span>
                 </div>
                 {numeroPartidaRegistral && (
                   <div className="flex justify-between">
                     <span className="text-text-sec">Partida Registral:</span>
                     <span className="font-medium">{numeroPartidaRegistral}</span>
+                  </div>
+                )}
+                {notariaJuzgado && (
+                  <div className="flex justify-between">
+                    <span className="text-text-sec">Notaría / Juzgado:</span>
+                    <span className="font-medium">{notariaJuzgado}</span>
                   </div>
                 )}
               </div>
@@ -647,29 +1071,62 @@ export default function SucesionIntestadaMultiplesBeneficiarios({
                     <th className="p-2">Parentesco</th>
                     <th className="p-2 text-right">%</th>
                     <th className="p-2 text-right">Monto (S/.)</th>
+                    <th className="p-2 text-center">DJ</th>
+                    <th className="p-2 text-center">Voucher</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
                   {herederos.map((h, i) => (
                     <tr key={h.key} className="hover:bg-gray-50">
                       <td className="p-2 font-mono">{i + 1}</td>
-                      <td className="p-2">{h.tipoDocumento}: {h.numeroDocumento}</td>
-                      <td className="p-2 font-medium">{h.nombres} {h.apellidos}</td>
+                      <td className="p-2">
+                        {h.tipoDocumento}: {h.numeroDocumento}
+                      </td>
+                      <td className="p-2 font-medium">
+                        {h.nombres} {h.apellidos}
+                      </td>
                       <td className="p-2">{h.parentesco}</td>
                       <td className="p-2 text-right font-mono">{h.porcentaje.toFixed(2)}%</td>
-                      <td className="p-2 text-right font-mono font-semibold">S/ {h.monto.toFixed(2)}</td>
+                      <td className="p-2 text-right font-mono font-semibold">
+                        S/ {h.monto.toFixed(2)}
+                      </td>
+                      <td className="p-2 text-center">
+                        {h.declaracionJuradaPdf ? (
+                          <span className="text-green-600 font-bold">✓</span>
+                        ) : (
+                          <span className="text-red-500 font-bold">✗</span>
+                        )}
+                      </td>
+                      <td className="p-2 text-center">
+                        {h.ordenPagoPdf ? (
+                          <span className="text-green-600 font-bold">✓</span>
+                        ) : (
+                          <span className="text-amber-500 font-medium">Pendiente</span>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot className="bg-blue-50/50 font-bold border-t border-border">
                   <tr>
-                    <td colSpan={4} className="p-2 text-right">Totales:</td>
-                    <td className={`p-2 text-right font-mono ${Math.abs(sumaPorcentajes - 100) <= 0.05 ? 'text-green-700' : 'text-red-600'}`}>
+                    <td colSpan={4} className="p-2 text-right">
+                      Totales:
+                    </td>
+                    <td
+                      className={`p-2 text-right font-mono ${
+                        Math.abs(sumaPorcentajes - 100) <= 0.05 ? 'text-green-700' : 'text-red-600'
+                      }`}
+                    >
                       {sumaPorcentajes.toFixed(2)}%
                     </td>
-                    <td className={`p-2 text-right font-mono ${Math.abs(sumaMontos - montoTotal) <= 0.05 ? 'text-green-700' : 'text-red-600'}`}>
+                    <td
+                      className={`p-2 text-right font-mono ${
+                        Math.abs(sumaMontos - montoTotal) <= 0.05 ? 'text-green-700' : 'text-red-600'
+                      }`}
+                    >
                       S/ {sumaMontos.toFixed(2)}
                     </td>
+                    <td colSpan={2}></td>
                   </tr>
                 </tfoot>
               </table>

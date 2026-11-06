@@ -8,6 +8,8 @@ import PdfViewerModal from '@/components/common/PdfViewerModal';
 import SucesionIntestadaMultiplesBeneficiarios, {
   HerederoForm,
 } from '@/components/fam/SucesionIntestadaMultiplesBeneficiarios';
+import ModalNuevaCarta from '@/components/fam/ModalNuevaCarta';
+import ModalNuevoMemorando from '@/components/fam/ModalNuevoMemorando';
 
 interface ColegiadoSel {
   COLEGIADO_ID: string;
@@ -29,6 +31,7 @@ interface BeneficiarioRegistrado {
   declaracionSize?: number;
   ordenPago?: string;
   ordenPagoSize?: number;
+  esManual?: boolean;
 }
 
 interface TipoBeneficioOpt { id: number; nombre: string; descripcion?: string; }
@@ -73,6 +76,9 @@ export default function NuevoExpedientePage() {
   const [solicitanteKeys, setSolicitanteKeys] = useState<string[]>([]);
   const [solicitanteManual, setSolicitanteManual] = useState({ nombre: '', dni: '' });
   const [sucesionPdf, setSucesionPdf] = useState<{ base64: string; size: number } | null>(null);
+  const [cuentaConSucesion, setCuentaConSucesion] = useState(true);
+  const [observacionSinSucesion, setObservacionSinSucesion] = useState('');
+  const [tramitarPorSucesion, setTramitarPorSucesion] = useState(false);
   const [herederosSucesion, setHerederosSucesion] = useState<HerederoForm[]>([]);
   const [numeroPartida, setNumeroPartida] = useState('');
   const [notariaJuzgado, setNotariaJuzgado] = useState('');
@@ -105,6 +111,26 @@ export default function NuevoExpedientePage() {
   const [covidDescuento, setCovidDescuento] = useState<{ monto: number; asignacionId: string } | null>(null);
   const [catalogoCartas, setCatalogoCartas] = useState<any[]>([]);
   const [catalogoMemorandos, setCatalogoMemorandos] = useState<any[]>([]);
+  const [modalCartaOpen, setModalCartaOpen] = useState(false);
+  const [modalMemorandoOpen, setModalMemorandoOpen] = useState(false);
+
+  const onCartaCreada = (nuevaCarta: any) => {
+    setCatalogoCartas((prev) => [nuevaCarta, ...prev.filter((c) => c.numero !== nuevaCarta.numero)]);
+    setForm((f) => ({
+      ...f,
+      cartaNumero: nuevaCarta.numero,
+      cartaFecha: nuevaCarta.fecha ? new Date(nuevaCarta.fecha).toISOString().slice(0, 10) : f.cartaFecha,
+    }));
+  };
+
+  const onMemorandoCreado = (nuevoMemo: any) => {
+    setCatalogoMemorandos((prev) => [nuevoMemo, ...prev.filter((m) => m.numero !== nuevoMemo.numero)]);
+    setForm((f) => ({
+      ...f,
+      memorandoNumero: nuevoMemo.numero,
+      memorandoFecha: nuevoMemo.fecha ? new Date(nuevoMemo.fecha).toISOString().slice(0, 10) : f.memorandoFecha,
+    }));
+  };
   const [expedienteActivo, setExpedienteActivo] = useState<any | null>(null);
 
   useEffect(() => {
@@ -178,6 +204,9 @@ export default function NuevoExpedientePage() {
     setSolicitanteKeys([]);
     setSolicitanteManual({ nombre: '', dni: '' });
     setSucesionPdf(null);
+    setCuentaConSucesion(true);
+    setObservacionSinSucesion('');
+    setTramitarPorSucesion(false);
     setHerederosSucesion([]);
     setNumeroPartida('');
     setNotariaJuzgado('');
@@ -228,12 +257,39 @@ export default function NuevoExpedientePage() {
   const seleccionarTipo = (tipoId: string) => {
     const tipo = tipos.find((t) => String(t.id) === tipoId);
     const config = montos.find((m) => tipo && (m.nombre || '').toUpperCase().includes(tipo.nombre.toUpperCase().replace(/\s+/g, '_')));
+    const nuevoEsFallecimiento = (tipo?.nombre || '').toUpperCase().includes('FALLECIMIENTO');
+
     setForm((prev) => ({
       ...prev,
       tipoBeneficioConfigId: tipo ? tipo.id : null,
       montoSeleccion: config ? String(config.monto) : prev.montoSeleccion,
       ...(config && { monto: String(config.monto) }),
     }));
+
+    if (nuevoEsFallecimiento) {
+      // Para Fallecimiento: si el único beneficiario era el titular auto-asignado de un trámite en vida, removerlo
+      if (beneficiarioEsTitular && beneficiariosReg.every((b) => b.parentesco === 'Titular')) {
+        setBeneficiariosReg([]);
+        setSolicitanteKeys([]);
+        setBeneficiarioEsTitular(false);
+      }
+    } else {
+      // Para NO Fallecimiento (Accidente, Enfermedad, Bono, Seguro, etc.):
+      // Sucesión Intestada NO aplica. Si no tiene beneficiarios registrados en padrón, asignar al titular colegiado
+      if (colegiado && (beneficiariosReg.length === 0 || beneficiariosReg.every((b) => b.parentesco === 'Titular'))) {
+        const titularBene: BeneficiarioRegistrado = {
+          key: 'titular-' + colegiado.COLEGIADO_ID,
+          nombre: colegiado.NOMBRE_COLEGIADO,
+          dni: colegiado.DNI,
+          declaracionJuradaDni: colegiado.DNI,
+          parentesco: 'Titular',
+          porcentaje: '100',
+        };
+        setBeneficiariosReg([titularBene]);
+        setSolicitanteKeys([titularBene.key]);
+        setBeneficiarioEsTitular(true);
+      }
+    }
   };
 
   const getTipoNombreSeleccionado = () => {
@@ -317,12 +373,53 @@ export default function NuevoExpedientePage() {
 
   const sumaPorcentajes = beneficiariosReg.reduce((acc, f) => acc + (parseFloat(f.porcentaje) || 0), 0);
   const sinBeneficiarios = !!colegiado && !cargandoBenes && beneficiariosReg.length === 0;
+  const esSucesionIntestada = esFallecimiento && (sinBeneficiarios || tramitarPorSucesion);
   const montoBase = parseFloat(form.monto) || 0;
   const descuentoMonto = covidDescuento?.monto || 0;
   const montoFinal = Math.max(0, montoBase - descuentoMonto);
   const calcularCorresponde = (porcentaje: number) => {
     if (modalidad === 'monto_compartido') return (porcentaje / 100) * montoFinal;
     return montoFinal;
+  };
+
+  const repartirPorcentajesEnPartesIguales = (lista?: BeneficiarioRegistrado[]) => {
+    const baseList = lista || beneficiariosReg;
+    if (baseList.length === 0) return baseList;
+    const base = Math.floor((100 / baseList.length) * 100) / 100;
+    let acumulado = 0;
+    const resultado = baseList.map((b, idx) => {
+      const pct = idx === baseList.length - 1 ? Number((100 - acumulado).toFixed(2)) : base;
+      acumulado = Number((acumulado + pct).toFixed(2));
+      return { ...b, porcentaje: String(pct) };
+    });
+    if (!lista) setBeneficiariosReg(resultado);
+    return resultado;
+  };
+
+  const agregarBeneficiarioManual = () => {
+    const nuevaKey = `manual-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const nuevo: BeneficiarioRegistrado = {
+      key: nuevaKey,
+      nombre: '',
+      dni: '',
+      declaracionJuradaDni: '',
+      parentesco: 'Hijo(a)',
+      porcentaje: '0',
+      esManual: true,
+    };
+    setBeneficiariosReg((prev) => {
+      const list = [...prev, nuevo];
+      return repartirPorcentajesEnPartesIguales(list);
+    });
+    setSolicitanteKeys((prev) => [...prev, nuevaKey]);
+  };
+
+  const eliminarBeneficiarioManual = (key: string) => {
+    setBeneficiariosReg((prev) => {
+      const filtrados = prev.filter((b) => b.key !== key);
+      return repartirPorcentajesEnPartesIguales(filtrados);
+    });
+    setSolicitanteKeys((prev) => prev.filter((k) => k !== key));
   };
 
   const validar = (): string => {
@@ -336,8 +433,14 @@ export default function NuevoExpedientePage() {
     if (form.documentacionCompleta === false && !form.documentacionObservacion.trim()) return 'Si la documentación está incompleta, la justificación es obligatoria';
     const dniDJ = form.declaracionJuradaDni.trim();
     if (dniDJ && !/^\d{8}$/.test(dniDJ)) return 'El DNI de la Declaración Jurada debe tener exactamente 8 dígitos';
-    if (!sinBeneficiarios) {
+
+    if (!esSucesionIntestada) {
+      if (beneficiariosReg.length === 0) {
+        return 'Debe asignar al menos a un beneficiario (puede activar "¿El titular del colegiado es el beneficiario?" o usar "+ Agregar Beneficiario")';
+      }
       for (const b of beneficiariosReg) {
+        if (!b.nombre.trim()) return 'Todos los beneficiarios deben tener nombre completo';
+        if (b.dni.trim() && !/^\d{8}$/.test(b.dni.trim())) return `El DNI de ${b.nombre} debe tener 8 dígitos`;
         const dniDecl = (b.declaracionJuradaDni || '').trim() || (b.dni || '').trim();
         if (dniDecl && !/^\d{8}$/.test(dniDecl)) return `El DNI del declarante de ${b.nombre} debe tener 8 dígitos`;
         if (b.declaracionJurada && !dniDecl) return `Indique el DNI del declarante de ${b.nombre}`;
@@ -347,9 +450,21 @@ export default function NuevoExpedientePage() {
         const faltantes = beneficiariosReg.filter((b) => !b.declaracionJurada).map((b) => b.nombre);
         if (faltantes.length > 0) return `Falta la declaración jurada de: ${faltantes.join(', ')}`;
       }
+      if (modalidad === 'monto_unico' && beneficiariosReg.length !== 1) return 'Monto Único requiere exactamente 1 beneficiario registrado (tiene ' + beneficiariosReg.length + ')';
+      if (modalidad === 'monto_compartido' && Math.abs(sumaPorcentajes - 100) > 0.05) {
+        return `Monto Compartido: los porcentajes suman ${sumaPorcentajes.toFixed(2)}%. Deben sumar exactamente 100% (use "Repartir en partes iguales")`;
+      }
+      if (!solicitanteKeys.length) return 'Seleccione al menos a un solicitante entre los beneficiarios registrados';
+      return '';
     }
-    if (sinBeneficiarios) {
-      if (!sucesionPdf?.base64) return 'Sin beneficiarios registrados es obligatorio adjuntar el sustento de Sucesión Intestada (PDF)';
+
+    if (esSucesionIntestada) {
+      if (cuentaConSucesion && !sucesionPdf?.base64) {
+        return 'Adjunte el sustento de Sucesión Intestada (PDF) o seleccione "No cuenta con Sucesión" para registrar las observaciones y poder guardar.';
+      }
+      if (!cuentaConSucesion && !observacionSinSucesion.trim()) {
+        return 'Cuando el colegiado no tiene Sucesión Intestada, debe ingresar las observaciones detallando el porqué no se está cargando para permitir el guardado.';
+      }
       if (herederosSucesion.length === 0) return 'Debe registrar al menos un beneficiario heredero en la sucesión intestada';
       for (const h of herederosSucesion) {
         if (!h.numeroDocumento.trim()) return 'Todos los herederos deben tener número de documento';
@@ -376,11 +491,13 @@ export default function NuevoExpedientePage() {
       if (Math.abs(sumMto - montoFinal) > 0.05) {
         return `La suma de montos (S/ ${sumMto.toFixed(2)}) debe coincidir con el monto total (S/ ${montoFinal.toFixed(2)})`;
       }
+      for (const h of herederosSucesion) {
+        if (!h.declaracionJuradaPdf) {
+          return `Falta generar o cargar la Declaración Jurada para el heredero: ${h.nombres} ${h.apellidos}`;
+        }
+      }
       return '';
     }
-    if (modalidad === 'monto_unico' && beneficiariosReg.length !== 1) return 'Monto Único requiere que el colegiado tenga exactamente 1 beneficiario registrado (tiene ' + beneficiariosReg.length + ')';
-    if (modalidad === 'monto_compartido' && sumaPorcentajes !== 100) return `Monto Compartido: los porcentajes de ficha de los beneficiarios suman ${sumaPorcentajes}%. Deben sumar 100% — corrija las fichas en el módulo FAM > Beneficiarios`;
-    if (!solicitanteKeys.length) return 'Seleccione al menos a un solicitante entre los beneficiarios registrados';
     return '';
   };
 
@@ -429,16 +546,26 @@ export default function NuevoExpedientePage() {
         ...(esEnfermedadTerminal && { fechaDiagnostico: form.fechaDiagnostico || undefined, diagnosticoMedico: form.diagnosticoMedico || undefined }),
         ...(esAccidenteGrave && { fechaAccidente: form.fechaAccidente || undefined, descripcionAccidente: form.descripcionAccidente || undefined }),
       };
-      if (sinBeneficiarios) {
+      if (esSucesionIntestada) {
+        const obsFinal = [
+          !cuentaConSucesion || !sucesionPdf?.base64
+            ? `[SIN SUCESIÓN INTESTADA]: ${observacionSinSucesion.trim()}`
+            : '',
+          form.observaciones.trim(),
+        ]
+          .filter(Boolean)
+          .join('\n');
+
         const payloadSucesion = {
           colegiadoId: colegiado!.COLEGIADO_ID,
           tipoBeneficioConfigId: form.tipoBeneficioConfigId,
           montoTotal: montoFinal,
-          sustentoPdf: sucesionPdf!.base64,
+          sustentoPdf: sucesionPdf?.base64 || undefined,
+          observacionSinSucesion: observacionSinSucesion.trim() || undefined,
           numeroPartidaRegistral: numeroPartida || undefined,
           notariaJuzgado: notariaJuzgado || undefined,
-          estado: todosPresentados ? 'PAGADA' : 'ENVIADO',
-          observaciones: form.observaciones.trim() || undefined,
+          estado: todosPresentados && sucesionPdf ? 'PAGADA' : 'ENVIADO',
+          observaciones: obsFinal || undefined,
           herederos: herederosSucesion.map((h) => ({
             tipoDocumento: h.tipoDocumento,
             numeroDocumento: h.numeroDocumento.trim(),
@@ -449,6 +576,8 @@ export default function NuevoExpedientePage() {
             monto: Number(h.monto),
             telefono: h.telefono?.trim() || undefined,
             email: h.email?.trim() || undefined,
+            declaracionJuradaPdf: h.declaracionJuradaPdf || undefined,
+            ordenPagoPdf: h.ordenPagoPdf || undefined,
           })),
           ...(docs.actaDefuncion?.base64 && { actaDefuncion: docs.actaDefuncion.base64 }),
           ...(docs.solicitudAsignacion?.base64 && { solicitudAsignacion: docs.solicitudAsignacion.base64 }),
@@ -651,7 +780,7 @@ export default function NuevoExpedientePage() {
                   className="w-full mt-2 px-3 py-2 border border-border rounded-lg text-sm font-semibold" />
               </div>
             </div>
-            {form.tipoBeneficioConfigId && (
+            {form.tipoBeneficioConfigId && !esFallecimiento && (
               <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
                 <button type="button" onClick={() => {
                   const nuevoEstado = !beneficiarioEsTitular;
@@ -659,10 +788,13 @@ export default function NuevoExpedientePage() {
                   if (nuevoEstado && colegiado) {
                     const yaExiste = beneficiariosReg.some((b) => b.dni === colegiado.DNI);
                     if (!yaExiste) {
-                      const nuevoBene: BeneficiarioRegistrado = { key: Math.random().toString(36).slice(2), nombre: colegiado.NOMBRE_COLEGIADO, dni: colegiado.DNI, declaracionJuradaDni: colegiado.DNI, parentesco: 'Titular', porcentaje: modalidad === 'monto_compartido' ? '100' : '100' };
+                      const nuevoBene: BeneficiarioRegistrado = { key: 'titular-' + colegiado.COLEGIADO_ID, nombre: colegiado.NOMBRE_COLEGIADO, dni: colegiado.DNI, declaracionJuradaDni: colegiado.DNI, parentesco: 'Titular', porcentaje: modalidad === 'monto_compartido' ? '100' : '100' };
                       setBeneficiariosReg((prev) => [...prev, nuevoBene]);
                       setSolicitanteKeys((prev) => [...prev, nuevoBene.key]);
                     }
+                  } else if (!nuevoEstado && colegiado) {
+                    setBeneficiariosReg((prev) => prev.filter((b) => b.dni !== colegiado.DNI));
+                    setSolicitanteKeys((prev) => prev.filter((k) => !k.startsWith('titular-')));
                   }
                 }}
                   className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${beneficiarioEsTitular ? 'bg-primary' : 'bg-gray-300'}`}>
@@ -671,11 +803,29 @@ export default function NuevoExpedientePage() {
                 <span className="text-sm text-text-main font-medium">¿El titular del colegiado es el beneficiario?</span>
               </div>
             )}
+            {esFallecimiento && !sinBeneficiarios && (
+              <div className="flex items-center justify-between p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={tramitarPorSucesion}
+                    onChange={(e) => setTramitarPorSucesion(e.target.checked)}
+                    className="w-4 h-4 rounded text-primary focus:ring-primary accent-[#3258CA] cursor-pointer"
+                  />
+                  <span className="text-xs font-semibold text-amber-900">
+                    ¿Tramitar mediante Sucesión Intestada (Múltiples Herederos / Beneficiarios)?
+                  </span>
+                </label>
+                <span className="text-[11px] text-amber-700 hidden sm:inline">Habilita sustento notarial y desglose de herederos</span>
+              </div>
+            )}
             {cargandoBenes ? (
               <p className="text-sm text-text-sec py-2">Cargando beneficiarios del colegiado...</p>
-            ) : sinBeneficiarios ? (
+            ) : esSucesionIntestada ? (
               <SucesionIntestadaMultiplesBeneficiarios
                 montoTotal={montoFinal}
+                colegiado={colegiado}
+                expedienteNumero={form.expedienteNumero}
                 herederos={herederosSucesion}
                 onChangeHerederos={setHerederosSucesion}
                 sucesionPdf={sucesionPdf}
@@ -685,49 +835,190 @@ export default function NuevoExpedientePage() {
                 notariaJuzgado={notariaJuzgado}
                 onChangeNotaria={setNotariaJuzgado}
                 onAbrirPdf={abrirPdfBase64}
+                cuentaConSucesion={cuentaConSucesion}
+                onChangeCuentaConSucesion={setCuentaConSucesion}
+                observacionSinSucesion={observacionSinSucesion}
+                onChangeObservacionSinSucesion={setObservacionSinSucesion}
               />
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 pb-1">
+                  <button
+                    type="button"
+                    onClick={agregarBeneficiarioManual}
+                    className="px-3 py-1.5 text-xs font-semibold text-white bg-[#3258CA] hover:bg-[#2846a2] rounded-lg transition-colors inline-flex items-center gap-1.5 shadow-sm"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    <span>+ Agregar Beneficiario</span>
+                  </button>
+                  {beneficiariosReg.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => repartirPorcentajesEnPartesIguales()}
+                      className="px-2.5 py-1 text-xs font-medium text-primary border border-primary/30 rounded-lg hover:bg-primary/5 transition-colors"
+                    >
+                      Repartir en partes iguales (100%)
+                    </button>
+                  )}
+                </div>
+
+                {beneficiariosReg.length === 0 ? (
+                  <div className="p-4 bg-slate-50 border border-border rounded-lg text-center space-y-2">
+                    <p className="text-sm text-text-sec">Este colegiado no tiene beneficiarios registrados en el padrón para este trámite.</p>
+                    <div className="flex flex-wrap justify-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (colegiado) {
+                            const titularBene: BeneficiarioRegistrado = {
+                              key: 'titular-' + colegiado.COLEGIADO_ID,
+                              nombre: colegiado.NOMBRE_COLEGIADO,
+                              dni: colegiado.DNI,
+                              declaracionJuradaDni: colegiado.DNI,
+                              parentesco: 'Titular',
+                              porcentaje: '100',
+                            };
+                            setBeneficiariosReg([titularBene]);
+                            setSolicitanteKeys([titularBene.key]);
+                            setBeneficiarioEsTitular(true);
+                          }
+                        }}
+                        className="px-3.5 py-1.5 text-xs font-semibold text-white bg-[#3258CA] hover:bg-[#2846a2] rounded-lg transition-colors inline-flex items-center gap-1.5"
+                      >
+                        <span>+ Asignar Colegiado Titular como Beneficiario</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={agregarBeneficiarioManual}
+                        className="px-3.5 py-1.5 text-xs font-semibold text-primary border border-primary/30 hover:bg-primary/5 rounded-lg transition-colors inline-flex items-center gap-1.5"
+                      >
+                        <span>+ Registrar Beneficiario Manual</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
                 {beneficiariosReg.map((f, idx) => {
                   const esSolicitante = solicitanteKeys.includes(f.key);
                   const corresponde = calcularCorresponde(parseFloat(f.porcentaje) || 0);
                   return (
                     <div key={f.key}
-                      className={`grid grid-cols-12 gap-2 items-center border rounded-lg p-3 transition-colors ${esSolicitante ? 'border-primary bg-blue-50/60' : 'border-border bg-white'}`}>
-                      <label className="col-span-12 sm:col-span-4 flex items-center gap-2.5 cursor-pointer min-w-0" title="Marcar como solicitante">
-                        <input
-                          type="checkbox"
-                          checked={esSolicitante}
-                          onChange={() => {
-                            setSolicitanteKeys((prev) =>
-                              prev.includes(f.key)
-                                ? prev.filter((k) => k !== f.key)
-                                : [...prev, f.key]
-                            );
-                          }}
-                          className="w-4 h-4 rounded text-primary focus:ring-primary accent-[#3258CA] flex-shrink-0 cursor-pointer"
-                        />
-                        <span className="text-sm font-medium text-text-main truncate">{f.nombre}</span>
-                      </label>
-                      <span className="col-span-6 sm:col-span-2 text-xs text-text-sec">DNI: {f.dni || '-'}</span>
-                      <span className="col-span-3 sm:col-span-1">
-                        <span className="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-700">{f.parentesco}</span>
-                      </span>
-                      <span className="col-span-3 sm:col-span-1 text-center">
-                        <span className={`inline-flex px-2 py-0.5 text-xs font-bold rounded-lg ${modalidad !== 'monto_compartido' ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-text-main'}`}>
-                          {modalidad !== 'monto_compartido' ? '100%' : `${f.porcentaje || 0}%`}
+                      className={`border rounded-lg p-3 transition-colors ${esSolicitante ? 'border-primary bg-blue-50/60' : 'border-border bg-white'}`}>
+                      {f.esManual ? (
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 pb-2.5 mb-2 border-b border-border/60">
+                          <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-2 w-full">
+                            <div>
+                              <label className="block text-[10px] font-semibold text-text-sec uppercase mb-0.5">Nombre Completo *</label>
+                              <input
+                                type="text"
+                                placeholder="Nombres y Apellidos"
+                                value={f.nombre}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setBeneficiariosReg((prev) => prev.map((b) => (b.key === f.key ? { ...b, nombre: val } : b)));
+                                }}
+                                className="w-full px-2 py-1.5 border border-border rounded text-xs font-medium text-text-main"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-semibold text-text-sec uppercase mb-0.5">DNI</label>
+                              <input
+                                type="text"
+                                placeholder="8 dígitos"
+                                maxLength={8}
+                                value={f.dni}
+                                onChange={(e) => {
+                                  const val = e.target.value.replace(/\D/g, '');
+                                  setBeneficiariosReg((prev) => prev.map((b) => (b.key === f.key ? { ...b, dni: val, declaracionJuradaDni: val } : b)));
+                                }}
+                                className="w-full px-2 py-1.5 border border-border rounded text-xs font-medium text-text-main"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-semibold text-text-sec uppercase mb-0.5">Parentesco</label>
+                              <select
+                                value={f.parentesco}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setBeneficiariosReg((prev) => prev.map((b) => (b.key === f.key ? { ...b, parentesco: val } : b)));
+                                }}
+                                className="w-full px-2 py-1.5 border border-border rounded text-xs bg-white"
+                              >
+                                {PARENTESCO_OPTIONS.map((opc) => (
+                                  <option key={opc} value={opc}>{opc}</option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => eliminarBeneficiarioManual(f.key)}
+                            className="text-xs text-red-600 hover:text-red-800 p-1 rounded hover:bg-red-50 inline-flex items-center gap-1 self-start sm:self-center ml-auto"
+                            title="Quitar este beneficiario"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                            <span className="text-[11px]">Quitar</span>
+                          </button>
+                        </div>
+                      ) : null}
+
+                      <div className="grid grid-cols-12 gap-2 items-center">
+                        <label className="col-span-12 sm:col-span-4 flex items-center gap-2.5 cursor-pointer min-w-0" title="Marcar como solicitante">
+                          <input
+                            type="checkbox"
+                            checked={esSolicitante}
+                            onChange={() => {
+                              setSolicitanteKeys((prev) =>
+                                prev.includes(f.key)
+                                  ? prev.filter((k) => k !== f.key)
+                                  : [...prev, f.key]
+                              );
+                            }}
+                            className="w-4 h-4 rounded text-primary focus:ring-primary accent-[#3258CA] flex-shrink-0 cursor-pointer"
+                          />
+                          <span className="text-sm font-medium text-text-main truncate">{f.nombre || (f.esManual ? 'Nuevo Beneficiario' : '-')}</span>
+                        </label>
+                        <span className="col-span-6 sm:col-span-2 text-xs text-text-sec">DNI: {f.dni || '-'}</span>
+                        <span className="col-span-3 sm:col-span-1">
+                          <span className="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-700">{f.parentesco}</span>
                         </span>
-                        {modalidad === 'opcion_sucesiva' && (
-                          <span className="ml-1 inline-flex px-1.5 py-0.5 text-[10px] font-bold rounded bg-indigo-50 text-indigo-700" title="Orden de prioridad">#{idx + 1}</span>
-                        )}
-                      </span>
-                      <span className="col-span-6 sm:col-span-3 text-right">
-                        <span className="text-sm font-semibold text-green-700">S/ {corresponde.toFixed(2)}</span>
-                        {covidDescuento && <span className="block text-[10px] text-amber-600">(monto final)</span>}
-                      </span>
-                      <span className="col-span-6 sm:col-span-1 text-right">
-                        {esSolicitante && <span className="inline-flex px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide rounded-full bg-primary text-white">Solicita</span>}
-                      </span>
+                        <span className="col-span-3 sm:col-span-2 text-center flex items-center justify-center gap-1">
+                          {modalidad === 'monto_compartido' ? (
+                            <div className="inline-flex items-center gap-0.5">
+                              <input
+                                type="number"
+                                min={0}
+                                max={100}
+                                step="0.01"
+                                value={f.porcentaje}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setBeneficiariosReg((prev) => prev.map((b) => (b.key === f.key ? { ...b, porcentaje: val } : b)));
+                                }}
+                                className="w-16 px-1.5 py-0.5 text-xs font-bold text-center border border-border rounded bg-white"
+                              />
+                              <span className="text-xs font-bold text-text-sec">%</span>
+                            </div>
+                          ) : (
+                            <span className="inline-flex px-2 py-0.5 text-xs font-bold rounded-lg bg-green-50 text-green-700">
+                              100%
+                            </span>
+                          )}
+                          {modalidad === 'opcion_sucesiva' && (
+                            <span className="ml-1 inline-flex px-1.5 py-0.5 text-[10px] font-bold rounded bg-indigo-50 text-indigo-700" title="Orden de prioridad">#{idx + 1}</span>
+                          )}
+                        </span>
+                        <span className="col-span-6 sm:col-span-2 text-right">
+                          <span className="text-sm font-semibold text-green-700">S/ {corresponde.toFixed(2)}</span>
+                          {covidDescuento && <span className="block text-[10px] text-amber-600">(monto final)</span>}
+                        </span>
+                        <span className="col-span-6 sm:col-span-1 text-right">
+                          {esSolicitante && <span className="inline-flex px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide rounded-full bg-primary text-white">Solicita</span>}
+                        </span>
+                      </div>
                       <div className="col-span-12 flex flex-col sm:flex-row sm:items-center gap-2 border-t border-border/60 pt-2 mt-1">
                         <span className="text-[10px] font-semibold text-text-sec uppercase tracking-wider">Declaración jurada</span>
                         {f.declaracionJurada ? (
@@ -949,13 +1240,36 @@ export default function NuevoExpedientePage() {
                 </div>
               )}
               <div>
-                <label className="block text-xs font-medium text-text-sec uppercase mb-1">N.° de Carta *</label>
-                <select value={form.cartaNumero} onChange={(e) => {
-                  const carta = catalogoCartas.find((c: any) => c.numero === e.target.value);
-                  setForm({ ...form, cartaNumero: e.target.value, cartaFecha: carta?.fecha ? new Date(carta.fecha).toISOString().slice(0, 10) : '' });
-                }}
-                  className="w-full px-3 py-2 border border-border rounded-lg text-sm">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-medium text-text-sec uppercase">N.° de Carta *</label>
+                  <button
+                    type="button"
+                    onClick={() => setModalCartaOpen(true)}
+                    className="text-xs font-semibold text-[#3258CA] hover:text-[#2846a2] hover:underline inline-flex items-center gap-1"
+                    title="Registrar nueva carta en un popup"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" />
+                    </svg>
+                    <span>+ Nueva Carta</span>
+                  </button>
+                </div>
+                <select
+                  value={form.cartaNumero}
+                  onChange={(e) => {
+                    if (e.target.value === '__NUEVA__') {
+                      setModalCartaOpen(true);
+                      return;
+                    }
+                    const carta = catalogoCartas.find((c: any) => c.numero === e.target.value);
+                    setForm({ ...form, cartaNumero: e.target.value, cartaFecha: carta?.fecha ? new Date(carta.fecha).toISOString().slice(0, 10) : '' });
+                  }}
+                  className="w-full px-3 py-2 border border-border rounded-lg text-sm"
+                >
                   <option value="">-- Seleccionar carta --</option>
+                  <option value="__NUEVA__" className="font-semibold text-[#3258CA] bg-blue-50">
+                    + Registrar nueva carta...
+                  </option>
                   {catalogoCartas.map((c: any) => (
                     <option key={c.id} value={c.numero}>{c.numero}{c.referencia ? ` — ${c.referencia}` : ''}</option>
                   ))}
@@ -967,13 +1281,36 @@ export default function NuevoExpedientePage() {
                   className="w-full px-3 py-2 border border-border rounded-lg text-sm" />
               </div>
               <div>
-                <label className="block text-xs font-medium text-text-sec uppercase mb-1">N.° de Memorándum *</label>
-                <select value={form.memorandoNumero} onChange={(e) => {
-                  const mem = catalogoMemorandos.find((m: any) => m.numero === e.target.value);
-                  setForm({ ...form, memorandoNumero: e.target.value, memorandoFecha: mem?.fecha ? new Date(mem.fecha).toISOString().slice(0, 10) : '' });
-                }}
-                  className="w-full px-3 py-2 border border-border rounded-lg text-sm">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-medium text-text-sec uppercase">N.° de Memorándum *</label>
+                  <button
+                    type="button"
+                    onClick={() => setModalMemorandoOpen(true)}
+                    className="text-xs font-semibold text-[#3258CA] hover:text-[#2846a2] hover:underline inline-flex items-center gap-1"
+                    title="Registrar nuevo memorándum en un popup"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" />
+                    </svg>
+                    <span>+ Nuevo Memorándum</span>
+                  </button>
+                </div>
+                <select
+                  value={form.memorandoNumero}
+                  onChange={(e) => {
+                    if (e.target.value === '__NUEVO__') {
+                      setModalMemorandoOpen(true);
+                      return;
+                    }
+                    const mem = catalogoMemorandos.find((m: any) => m.numero === e.target.value);
+                    setForm({ ...form, memorandoNumero: e.target.value, memorandoFecha: mem?.fecha ? new Date(mem.fecha).toISOString().slice(0, 10) : '' });
+                  }}
+                  className="w-full px-3 py-2 border border-border rounded-lg text-sm"
+                >
                   <option value="">-- Seleccionar memorándum --</option>
+                  <option value="__NUEVO__" className="font-semibold text-[#3258CA] bg-blue-50">
+                    + Registrar nuevo memorándum...
+                  </option>
                   {catalogoMemorandos.map((m: any) => (
                     <option key={m.id} value={m.numero}>{m.numero}{m.asunto ? ` — ${m.asunto}` : ''}</option>
                   ))}
@@ -1021,11 +1358,11 @@ export default function NuevoExpedientePage() {
                   <div className="flex justify-between border-t border-border pt-2"><span className="text-text-sec font-semibold">Monto Final</span><span className="font-bold text-green-700">S/ {montoFinal.toFixed(2)}</span></div>
                 </>
               )}
-              <div className="flex justify-between"><span className="text-text-sec">Beneficiarios</span><span className="font-medium">{beneficiariosReg.length || (sinBeneficiarios ? 'Sin registros' : '—')}</span></div>
+              <div className="flex justify-between"><span className="text-text-sec">Beneficiarios</span><span className="font-medium">{beneficiariosReg.length || (esSucesionIntestada ? `${herederosSucesion.length} heredero(s)` : 'Sin registros')}</span></div>
               <div className="flex justify-between">
                 <span className="text-text-sec">Solicitante(s)</span>
-                <span className="font-medium text-right truncate max-w-[150px]" title={sinBeneficiarios ? (solicitanteManual.nombre || '—') : (beneficiariosReg.filter((b) => solicitanteKeys.includes(b.key)).map((b) => b.nombre).join(', ') || '—')}>
-                  {sinBeneficiarios ? (solicitanteManual.nombre || '—') : (beneficiariosReg.filter((b) => solicitanteKeys.includes(b.key)).map((b) => b.nombre).join(', ') || '—')}
+                <span className="font-medium text-right truncate max-w-[150px]" title={esSucesionIntestada ? (herederosSucesion.map(h => `${h.nombres} ${h.apellidos}`).join(', ') || '—') : (beneficiariosReg.filter((b) => solicitanteKeys.includes(b.key)).map((b) => b.nombre).join(', ') || '—')}>
+                  {esSucesionIntestada ? (herederosSucesion.map(h => `${h.nombres} ${h.apellidos}`).join(', ') || '—') : (beneficiariosReg.filter((b) => solicitanteKeys.includes(b.key)).map((b) => b.nombre).join(', ') || '—')}
                 </span>
               </div>
               <div className="flex justify-between">
@@ -1077,6 +1414,18 @@ export default function NuevoExpedientePage() {
       {pdfViewer && (
         <PdfViewerModal base64={pdfViewer.base64} nombre={pdfViewer.nombre} onClose={() => setPdfViewer(null)} />
       )}
+
+      <ModalNuevaCarta
+        open={modalCartaOpen}
+        onClose={() => setModalCartaOpen(false)}
+        onSuccess={onCartaCreada}
+      />
+
+      <ModalNuevoMemorando
+        open={modalMemorandoOpen}
+        onClose={() => setModalMemorandoOpen(false)}
+        onSuccess={onMemorandoCreado}
+      />
     </div>
   );
 }

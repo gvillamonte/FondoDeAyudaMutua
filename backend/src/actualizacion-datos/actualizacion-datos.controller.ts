@@ -77,6 +77,26 @@ export class ActualizacionDatosController {
     return this.service.exportarTodos(filtros);
   }
 
+  @Post('reenviar-pendientes')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMINISTRADOR', 'OPERADOR_PAGOS')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Reenviar constancias por correo a todos los colegiados pendientes' })
+  async reenviarPendientes(@Req() req: any) {
+    const ip = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || req.ip;
+    return this.service.reenviarCorreosPendientes(req.user?.sub, String(ip));
+  }
+
+  @Post(':id/reenviar-correo')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMINISTRADOR', 'OPERADOR_PAGOS')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Reenviar constancia de actualización por correo a un colegiado' })
+  async reenviarCorreo(@Param('id') id: string, @Req() req: any) {
+    const ip = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || req.ip;
+    return this.service.reenviarCorreo(id, req.user?.sub, String(ip));
+  }
+
   @Get(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMINISTRADOR', 'OPERADOR_PAGOS', 'AUDITOR')

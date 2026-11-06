@@ -80,6 +80,70 @@ export default function QuiénesActualizaronPage() {
   const [selectedItem, setSelectedItem] = useState<ColegiadoActualizacionItem | null>(null);
   const [exportando, setExportando] = useState(false);
 
+  // Estados para reenvío de correos
+  const [reenviandoId, setReenviandoId] = useState<string | null>(null);
+  const [reenviandoPendientes, setReenviandoPendientes] = useState(false);
+  const [mensajeExito, setMensajeExito] = useState('');
+  const [mensajeError, setMensajeError] = useState('');
+
+  // Reenviar correo individual a un colegiado
+  const handleReenviarCorreo = async (id: string, cip: string, email: string) => {
+    if (!email) {
+      alert(`El colegiado con CIP ${cip} no tiene un correo registrado.`);
+      return;
+    }
+    setReenviandoId(id);
+    setMensajeExito('');
+    setMensajeError('');
+    try {
+      const res = await api.post(`/actualizacion-datos/${id}/reenviar-correo`);
+      const msg = res.data?.message || `Constancia enviada exitosamente a ${email}`;
+      setMensajeExito(msg);
+
+      // Actualizar estado en la tabla en memoria
+      setItems((prev) =>
+        prev.map((item) =>
+          item.id === id ? { ...item, estado: 'EMAIL_ENVIADO', emailEnviado: true } : item
+        )
+      );
+
+      // Si el modal está abierto para este colegiado, actualizar su estado en tiempo real
+      if (selectedItem && selectedItem.id === id) {
+        setSelectedItem((prev) =>
+          prev ? { ...prev, estado: 'EMAIL_ENVIADO', emailEnviado: true } : null
+        );
+      }
+    } catch (err: any) {
+      const msg = err.response?.data?.message || err.message || 'Error al reenviar el correo.';
+      setMensajeError(msg);
+    } finally {
+      setReenviandoId(null);
+    }
+  };
+
+  // Reenviar correos a todos los colegiados pendientes
+  const handleReenviarPendientes = async () => {
+    const confirmar = window.confirm(
+      '¿Desea reenviar la constancia por correo a todos los colegiados cuyos correos no fueron enviados previamente?'
+    );
+    if (!confirmar) return;
+
+    setReenviandoPendientes(true);
+    setMensajeExito('');
+    setMensajeError('');
+    try {
+      const res = await api.post('/actualizacion-datos/reenviar-pendientes');
+      const data = res.data;
+      setMensajeExito(data?.message || 'Proceso de reenvío completado.');
+      cargarDatos();
+    } catch (err: any) {
+      const msg = err.response?.data?.message || err.message || 'Error al reenviar correos pendientes.';
+      setMensajeError(msg);
+    } finally {
+      setReenviandoPendientes(false);
+    }
+  };
+
   // Carga de datos (cada fila es la última modificación de un colegiado)
   const cargarDatos = useCallback(async () => {
     setLoading(true);
@@ -196,8 +260,33 @@ export default function QuiénesActualizaronPage() {
           </p>
         </div>
 
-        {/* Botón de Exportación */}
-        <div className="flex items-center gap-2">
+        {/* Botones de Acción Global */}
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={handleReenviarPendientes}
+            disabled={reenviandoPendientes || loading}
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold text-blue-800 bg-blue-50 border border-blue-200 hover:bg-blue-100 disabled:opacity-50 transition-colors shadow-sm"
+            title="Reenviar constancias por correo a todos los colegiados que aún no lo recibieron"
+          >
+            {reenviandoPendientes ? (
+              <>
+                <svg className="animate-spin h-3.5 w-3.5 text-blue-700" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                <span>Reenviando correos...</span>
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4 text-blue-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+                <span>Reenviar Correos Pendientes</span>
+              </>
+            )}
+          </button>
+
           <button
             type="button"
             onClick={handleExportarExcel}
@@ -223,6 +312,35 @@ export default function QuiénesActualizaronPage() {
           </button>
         </div>
       </div>
+
+      {/* Alertas de Notificación de Envío */}
+      {mensajeExito && (
+        <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs sm:text-sm flex items-center justify-between shadow-sm animate-in fade-in">
+          <div className="flex items-center gap-2">
+            <svg className="w-4 h-4 text-emerald-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+            <span>{mensajeExito}</span>
+          </div>
+          <button onClick={() => setMensajeExito('')} className="text-emerald-700 hover:text-emerald-900 font-bold ml-2">
+            ✕
+          </button>
+        </div>
+      )}
+
+      {mensajeError && (
+        <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-800 text-xs sm:text-sm flex items-center justify-between shadow-sm animate-in fade-in">
+          <div className="flex items-center gap-2">
+            <svg className="w-4 h-4 text-red-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>{mensajeError}</span>
+          </div>
+          <button onClick={() => setMensajeError('')} className="text-red-700 hover:text-red-900 font-bold ml-2">
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* KPI Cards Informativas */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -492,20 +610,55 @@ export default function QuiénesActualizaronPage() {
                         )}
                       </td>
 
-                      {/* Acción */}
+                      {/* Acciones */}
                       <td className="py-3 px-4 text-center whitespace-nowrap">
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); setSelectedItem(row); }}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white shadow-sm hover:opacity-95 transition-opacity"
-                          style={{ backgroundColor: '#3258CA' }}
-                        >
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                          </svg>
-                          Ver Detalle
-                        </button>
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setSelectedItem(row); }}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-white shadow-sm hover:opacity-95 transition-opacity"
+                            style={{ backgroundColor: '#3258CA' }}
+                            title="Ver Detalle de Modificación"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                            <span>Detalle</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            disabled={reenviandoId === row.id}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleReenviarCorreo(row.id, row.cip, row.emailNuevo);
+                            }}
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                              esCorreoEnviado
+                                ? 'text-slate-700 bg-white border-slate-200 hover:bg-slate-50'
+                                : 'text-blue-700 bg-blue-50 border-blue-200 hover:bg-blue-100 font-bold'
+                            } disabled:opacity-50`}
+                            title={`Reenviar correo de constancia a ${row.emailNuevo}`}
+                          >
+                            {reenviandoId === row.id ? (
+                              <>
+                                <svg className="animate-spin h-3.5 w-3.5 text-blue-600" viewBox="0 0 24 24" fill="none">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                </svg>
+                                <span>Enviando...</span>
+                              </>
+                            ) : (
+                              <>
+                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                </svg>
+                                <span>Reenviar</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -680,6 +833,42 @@ export default function QuiénesActualizaronPage() {
                   </span>
                 </div>
               )}
+
+              {/* Acción de reenvío de constancia en el Modal */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl border bg-slate-50/70" style={{ borderColor: '#E2E8F0' }}>
+                <div>
+                  <span className="font-bold text-xs text-slate-800 block">
+                    {selectedItem.estado === 'EMAIL_ENVIADO' || selectedItem.emailEnviado ? '¿Reenviar constancia oficial?' : 'Enviar constancia por correo'}
+                  </span>
+                  <span className="text-[11px] text-slate-500">
+                    Despacha la constancia formal al correo: <strong className="text-slate-700">{selectedItem.emailNuevo}</strong>
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  disabled={reenviandoId === selectedItem.id}
+                  onClick={() => handleReenviarCorreo(selectedItem.id, selectedItem.cip, selectedItem.emailNuevo)}
+                  className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold text-white shadow-sm hover:opacity-95 transition-opacity disabled:opacity-50 shrink-0"
+                  style={{ backgroundColor: '#3258CA' }}
+                >
+                  {reenviandoId === selectedItem.id ? (
+                    <>
+                      <svg className="animate-spin h-3.5 w-3.5 text-white" viewBox="0 0 24 24" fill="none">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      <span>Enviando constancia...</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                      </svg>
+                      <span>Reenviar Constancia</span>
+                    </>
+                  )}
+                </button>
+              </div>
 
               {/* COMPARATIVA DE DATOS MODIFICADOS (ANTES VS DESPUÉS) */}
               <div>

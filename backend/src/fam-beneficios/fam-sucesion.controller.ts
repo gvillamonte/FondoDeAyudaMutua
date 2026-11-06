@@ -96,4 +96,40 @@ export class FamSucesionController {
       timestamp: new Date().toISOString(),
     };
   }
+
+  @Get(':sucesionId/heredero/:herederoId/declaracion')
+  @Roles('ADMINISTRADOR', 'OPERADOR_PAGOS', 'AUDITOR')
+  @ApiOperation({
+    summary: 'Obtener la declaración jurada en PDF de un heredero específico',
+  })
+  async obtenerDeclaracionHeredero(
+    @Param('sucesionId') sucesionId: string,
+    @Param('herederoId') herederoId: string,
+  ) {
+    const data = await this.sucesionService.obtenerDeclaracionHeredero(sucesionId, herederoId);
+    return {
+      success: true,
+      data,
+      error: null,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  @Get(':sucesionId/heredero/:herederoId/voucher')
+  @Roles('ADMINISTRADOR', 'OPERADOR_PAGOS', 'AUDITOR')
+  @ApiOperation({
+    summary: 'Obtener el voucher / orden de pago en PDF de un heredero específico',
+  })
+  async obtenerVoucherHeredero(
+    @Param('sucesionId') sucesionId: string,
+    @Param('herederoId') herederoId: string,
+  ) {
+    const data = await this.sucesionService.obtenerVoucherHeredero(sucesionId, herederoId);
+    return {
+      success: true,
+      data,
+      error: null,
+      timestamp: new Date().toISOString(),
+    };
+  }
 }

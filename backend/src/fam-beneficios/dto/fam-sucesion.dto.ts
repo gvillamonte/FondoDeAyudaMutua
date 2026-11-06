@@ -83,8 +83,13 @@ export class RegistrarSucesionIntestadaDto {
   montoTotal: number;
 
   @Validate(EsPdfBase64)
+  @IsOptional()
   @IsString()
-  sustentoPdf: string; // Documento obligatorio
+  sustentoPdf?: string;
+
+  @IsOptional()
+  @IsString()
+  observacionSinSucesion?: string;
 
   @IsOptional()
   @IsString()

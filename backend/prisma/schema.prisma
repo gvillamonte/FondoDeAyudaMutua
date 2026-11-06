@@ -601,11 +601,12 @@ model FamSucesionIntestada {
   numeroPartidaRegistral  String?   @map("numero_partida_registral") @db.VarChar(50)
   notariaJuzgado          String?   @map("notaria_juzgado") @db.NVarChar(200)
   fechaEmisionDocumento   DateTime? @map("fecha_emision_documento") @db.DateTime2
-  sustentoPdf             String    @map("sustento_pdf") @db.NVarChar(MAX)
+  sustentoPdf             String?   @map("sustento_pdf") @db.NVarChar(MAX)
   montoTotal              Decimal   @map("monto_total") @db.Decimal(12, 2)
   estadoTramite           String    @default("BORRADOR") @map("estado_tramite") @db.VarChar(30)
   versionActual           Int       @default(1) @map("version_actual")
   observaciones           String?   @db.NVarChar(1000)
+  observacionSinSucesion  String?   @map("observacion_sin_sucesion") @db.NVarChar(1000)
   registradoPor           String?   @map("registrado_por") @db.NVarChar(36)
   createdAt               DateTime  @default(now()) @map("created_at")
   updatedAt               DateTime  @updatedAt @map("updated_at")

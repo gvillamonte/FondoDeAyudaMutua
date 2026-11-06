@@ -33,7 +33,21 @@ interface FilaBeneficiario {
   ordenPago?: string;
   nuevoOrdenPdf?: { base64: string; size: number } | null;
   yaVinculado: boolean;
+  esNuevoManual?: boolean;
 }
+
+const PARENTESCO_OPCIONES = [
+  'Hijo(a)',
+  'Cónyuge',
+  'Conviviente',
+  'Madre',
+  'Padre',
+  'Hermano(a)',
+  'Sobrino(a)',
+  'Tío(a)',
+  'Nieto(a)',
+  'Otros',
+];
 
 interface Props {
   isOpen: boolean;
@@ -171,6 +185,35 @@ export default function CompletarBeneficiariosModal({
   const repartirManual = () => {
     if (pagada) return;
     setFilas((prev) => repartirEntreIncluidos(prev));
+  };
+
+  const agregarFilaManual = () => {
+    if (pagada) return;
+    const nuevaKey = `nuevo-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    setFilas((prev) => {
+      const nuevaLista: FilaBeneficiario[] = [
+        ...prev,
+        {
+          key: nuevaKey,
+          nombre: '',
+          dni: '',
+          parentesco: 'Hijo(a)',
+          porcentaje: '0',
+          incluido: true,
+          tieneDeclaracionJurada: false,
+          declaracionJuradaDni: '',
+          tieneOrdenPago: false,
+          yaVinculado: false,
+          esNuevoManual: true,
+        },
+      ];
+      return repartirEntreIncluidos(nuevaLista);
+    });
+  };
+
+  const eliminarFilaManual = (key: string) => {
+    if (pagada) return;
+    setFilas((prev) => repartirEntreIncluidos(prev.filter((f) => f.key !== key)));
   };
 
   const subirDeclaracion = (fila: FilaBeneficiario, file: File) => {
@@ -326,14 +369,28 @@ export default function CompletarBeneficiariosModal({
                   <span className="text-[11px] text-text-sec">
                     {filas.filter((f) => f.incluido).length} de {filas.length} seleccionados
                   </span>
-                  {modalidad === 'monto_compartido' && !pagada && (
-                    <button
-                      type="button"
-                      onClick={repartirManual}
-                      className="px-2.5 py-1 text-[11px] font-medium text-primary border border-primary/30 rounded-lg hover:bg-primary/5"
-                    >
-                      Repartir 100% en partes iguales
-                    </button>
+                  {!pagada && (
+                    <>
+                      {filas.filter((f) => f.incluido).length > 1 && (
+                        <button
+                          type="button"
+                          onClick={repartirManual}
+                          className="px-2.5 py-1 text-[11px] font-medium text-primary border border-primary/30 rounded-lg hover:bg-primary/5 transition-colors"
+                        >
+                          Repartir 100% en partes iguales
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={agregarFilaManual}
+                        className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-white bg-[#3258CA] hover:bg-[#2846a2] rounded-lg transition-colors shadow-sm"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                        <span>+ Agregar Beneficiario</span>
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
@@ -352,18 +409,69 @@ export default function CompletarBeneficiariosModal({
                         onChange={(e) => actualizar(f.key, { incluido: e.target.checked })}
                         className="mt-1 w-4 h-4 accent-[#3258CA]" />
                       <div className="flex-1 min-w-0 space-y-2">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-sm font-medium text-text-main">{f.nombre}</span>
-                          <span className="text-xs text-text-sec">DNI: {f.dni || '—'}</span>
-                          {f.yaVinculado && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-primary/10 text-primary">YA INCLUIDO</span>}
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          {f.esNuevoManual ? (
+                            <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              <div>
+                                <label className="block text-[10px] font-semibold text-text-sec uppercase mb-0.5">Nombre Completo *</label>
+                                <input
+                                  type="text"
+                                  placeholder="Nombres y Apellidos"
+                                  value={f.nombre}
+                                  onChange={(e) => actualizar(f.key, { nombre: e.target.value })}
+                                  className="w-full px-2 py-1.5 border border-border rounded text-xs font-medium text-text-main"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-semibold text-text-sec uppercase mb-0.5">DNI *</label>
+                                <input
+                                  type="text"
+                                  placeholder="8 dígitos"
+                                  maxLength={8}
+                                  value={f.dni}
+                                  onChange={(e) => {
+                                    const val = e.target.value.replace(/\D/g, '');
+                                    actualizar(f.key, { dni: val, declaracionJuradaDni: val });
+                                  }}
+                                  className="w-full px-2 py-1.5 border border-border rounded text-xs font-medium text-text-main"
+                                />
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm font-medium text-text-main">{f.nombre}</span>
+                              <span className="text-xs text-text-sec">DNI: {f.dni || '—'}</span>
+                              {f.yaVinculado && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-primary/10 text-primary">YA INCLUIDO</span>}
+                            </div>
+                          )}
+                          {f.esNuevoManual && !pagada && (
+                            <button
+                              type="button"
+                              onClick={() => eliminarFilaManual(f.key)}
+                              className="text-xs text-red-600 hover:text-red-800 p-1 rounded hover:bg-red-50 inline-flex items-center gap-1 self-start"
+                              title="Quitar este beneficiario"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                              <span>Quitar</span>
+                            </button>
+                          )}
                         </div>
                         {f.incluido ? (
                           <>
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                               <div>
                                 <label className="block text-[10px] font-semibold text-text-sec uppercase mb-0.5">Parentesco</label>
-                                <input value={f.parentesco} onChange={(e) => actualizar(f.key, { parentesco: e.target.value })}
-                                  className="w-full px-2 py-1.5 border border-border rounded text-xs" />
+                                <select
+                                  value={f.parentesco}
+                                  onChange={(e) => actualizar(f.key, { parentesco: e.target.value })}
+                                  className="w-full px-2 py-1.5 border border-border rounded text-xs bg-white"
+                                >
+                                  {PARENTESCO_OPCIONES.map((opc) => (
+                                    <option key={opc} value={opc}>{opc}</option>
+                                  ))}
+                                </select>
                               </div>
                               <div>
                                 <label className="block text-[10px] font-semibold text-text-sec uppercase mb-0.5">%</label>

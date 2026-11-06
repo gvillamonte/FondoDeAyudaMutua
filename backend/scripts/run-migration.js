@@ -91,6 +91,16 @@ async function run() {
        );
        CREATE INDEX IX_sucesion_versiones_sucesion ON fam_sucesion_versiones(sucesion_id);
        PRINT 'Tabla fam_sucesion_versiones creada.';
+     END`,
+    `IF EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'fam_sucesiones_intestadas' AND COLUMN_NAME = 'sustento_pdf' AND IS_NULLABLE = 'NO')
+     BEGIN
+       ALTER TABLE fam_sucesiones_intestadas ALTER COLUMN sustento_pdf NVARCHAR(MAX) NULL;
+       PRINT 'Columna sustento_pdf modificada a NULL.';
+     END`,
+    `IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'fam_sucesiones_intestadas' AND COLUMN_NAME = 'observacion_sin_sucesion')
+     BEGIN
+       ALTER TABLE fam_sucesiones_intestadas ADD observacion_sin_sucesion NVARCHAR(1000) NULL;
+       PRINT 'Columna observacion_sin_sucesion agregada.';
      END`
   ];
 

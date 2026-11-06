@@ -14,6 +14,10 @@ interface ColegiadoData {
   colegiadoId: string;
   cip: string;
   dni: string;
+  tipoDocumento?: string;
+  tipoDocumentoNombre?: string;
+  esVitalicio?: boolean;
+  tipoAsociado?: string;
   nombres: string;
   apellidoPaterno: string;
   apellidoMaterno: string;
@@ -46,6 +50,10 @@ interface CipInfo {
   especialidad: string;
   estadoColegiatura: string;
   habilitado: boolean;
+  esVitalicio?: boolean;
+  tipoAsociado?: string;
+  tipoDocumento?: string;
+  tipoDocumentoNombre?: string;
 }
 
 type PasoVerificacion = 'CIP' | 'DNI' | 'FORM';
@@ -94,6 +102,7 @@ export default function ActualizarDatosPage() {
   const [estadoCivil, setEstadoCivil] = useState('');
 
   // Modales y estados de guardado
+  const [showDocModal, setShowDocModal] = useState(false);
   const [showTerminosModal, setShowTerminosModal] = useState(false);
   const [aceptoTerminos, setAceptoTerminos] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -182,6 +191,7 @@ export default function ActualizarDatosPage() {
 
       setCipInfo(res.data);
       setPaso('DNI');
+      setShowDocModal(true);
       setErrorConsulta('');
     } catch (err: any) {
       const msg =
@@ -194,14 +204,19 @@ export default function ActualizarDatosPage() {
     }
   };
 
-  // PASO 2: Confirmar identidad con el DNI del titular
+  // PASO 2: Confirmar identidad con el DNI o Cédula de Extranjería del titular
   const handleVerificarDni = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorConsulta('');
     const dniLimpio = dni.trim();
+    const esCE = cipInfo?.tipoDocumento === 'CE';
 
-    if (!dniLimpio || dniLimpio.length < 8) {
-      setErrorConsulta('Por favor ingrese un DNI válido de 8 dígitos.');
+    if (!dniLimpio || (esCE ? dniLimpio.length < 4 : dniLimpio.length !== 8)) {
+      setErrorConsulta(
+        esCE
+          ? 'Por favor ingrese un número válido de Cédula de Extranjería.'
+          : 'Por favor ingrese un DNI válido de 8 dígitos numéricos.'
+      );
       return;
     }
 
@@ -236,7 +251,7 @@ export default function ActualizarDatosPage() {
       } else if (sexoInicial) {
         mensajeSexo = 'Según registro de colegiatura. Puede modificarlo si es necesario.';
       } else {
-        mensajeSexo = 'Por favor seleccione su sexo según DNI.';
+        mensajeSexo = `Por favor seleccione su sexo según su ${data.tipoDocumentoNombre || 'documento'}.`;
       }
 
       setSexo(sexoInicial);
@@ -251,6 +266,7 @@ export default function ActualizarDatosPage() {
       setDistrito(distIni);
       const ecNormalizado = normalizarEstadoCivil(data.estadoCivil, data.estadoCivilCodigo);
       setEstadoCivil(ecNormalizado || 'Soltero(a)');
+      setShowDocModal(false);
       setPaso('FORM');
       setErrorConsulta('');
       setErroresValidacionCentral([]);
@@ -264,7 +280,7 @@ export default function ActualizarDatosPage() {
       const msg =
         err.response?.data?.message ||
         err.response?.data?.error ||
-        `El DNI ingresado no coincide con el titular del N° CIP ${cip.trim()}.`;
+        `El ${cipInfo?.tipoDocumentoNombre || 'documento'} ingresado no coincide con el titular del N° CIP ${cip.trim()}.`;
       setErrorConsulta(msg);
     } finally {
       setVerificandoDni(false);
@@ -440,6 +456,7 @@ export default function ActualizarDatosPage() {
     setErrorCelular('');
     setErrorFechas('');
     setInfoSexo('');
+    setShowDocModal(false);
     setShowTerminosModal(false);
     setAceptoTerminos(false);
     setShowConfirmModal(false);
@@ -451,8 +468,9 @@ export default function ActualizarDatosPage() {
     handleReiniciar();
   };
 
-  // Regresar de Paso 2 (DNI) a Paso 1 (CIP)
+  // Regresar de Paso 2 a Paso 1 (CIP)
   const handleRegresarACip = () => {
+    setShowDocModal(false);
     setPaso('CIP');
     setErrorConsulta('');
   };
@@ -695,19 +713,31 @@ export default function ActualizarDatosPage() {
                   <span>Colegiado Encontrado</span>
                 </div>
                 <p className="font-bold text-slate-900 text-sm">{cipInfo.nombreEnmascarado}</p>
-                <div className="flex items-center justify-center gap-2 text-xs text-slate-600 mt-1">
+                <div className="flex flex-wrap items-center justify-center gap-2 text-xs text-slate-600 mt-1">
                   <span>CIP: <strong className="font-mono text-slate-800">{cipInfo.cip}</strong></span>
                   <span>•</span>
                   <span className="font-medium text-slate-700">{cipInfo.especialidad || 'Ingeniería'}</span>
+                  {cipInfo.esVitalicio && (
+                    <span className="bg-blue-100 text-blue-800 border border-blue-300 font-semibold px-2 py-0.5 rounded">
+                      ★ Vitalicio
+                    </span>
+                  )}
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${
+                    cipInfo.habilitado ? 'bg-green-100 text-green-800 border border-green-200' : 'bg-red-100 text-red-800 border border-red-200'
+                  }`}>
+                    ● {cipInfo.esVitalicio ? 'HABILITADO' : (cipInfo.estadoColegiatura || (cipInfo.habilitado ? 'HABILITADO' : 'NO HABILITADO'))}
+                  </span>
                 </div>
               </div>
 
               <div className="text-center mb-5">
                 <h3 className="text-base font-bold" style={{ color: '#1E293B' }}>
-                  Paso 2: Confirme su Identidad con su DNI
+                  Paso 2: Confirme su Identidad con su {cipInfo.tipoDocumentoNombre || 'DNI'}
                 </h3>
                 <p className="text-xs text-slate-500 mt-1">
-                  Para acceder a su ficha y autorizar la actualización, ingrese los 8 dígitos de su Documento Nacional de Identidad.
+                  {cipInfo.tipoDocumento === 'CE'
+                    ? 'El sistema detectó que su documento registrado es Cédula de Extranjería. Ingrésela para autorizar el acceso.'
+                    : 'Para acceder a su ficha y autorizar la actualización, ingrese los 8 dígitos de su Documento Nacional de Identidad.'}
                 </p>
               </div>
 
@@ -726,15 +756,20 @@ export default function ActualizarDatosPage() {
 
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: '#1E293B' }}>
-                    Documento Nacional de Identidad (DNI) <span className="text-red-500">*</span>
+                    {cipInfo.tipoDocumentoNombre || 'Documento Nacional de Identidad (DNI)'} <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
-                    inputMode="numeric"
-                    maxLength={8}
+                    inputMode={cipInfo.tipoDocumento === 'CE' ? 'text' : 'numeric'}
+                    maxLength={cipInfo.tipoDocumento === 'CE' ? 15 : 8}
                     value={dni}
-                    onChange={(e) => setDni(e.target.value.replace(/\D/g, ''))}
-                    placeholder="8 dígitos numéricos"
+                    onChange={(e) => {
+                      const val = cipInfo.tipoDocumento === 'CE'
+                        ? e.target.value.replace(/[^a-zA-Z0-9-]/g, '')
+                        : e.target.value.replace(/\D/g, '');
+                      setDni(val);
+                    }}
+                    placeholder={cipInfo.tipoDocumento === 'CE' ? 'N° Cédula de Extranjería' : '8 dígitos numéricos'}
                     required
                     autoFocus
                     className="w-full px-4 py-3 text-base rounded-lg border focus:outline-none focus:ring-2 focus:border-transparent font-mono tracking-wider text-center"
@@ -757,7 +792,7 @@ export default function ActualizarDatosPage() {
 
                   <button
                     type="submit"
-                    disabled={verificandoDni || dni.length !== 8}
+                    disabled={verificandoDni || (cipInfo.tipoDocumento === 'CE' ? dni.length < 4 : dni.length !== 8)}
                     className="flex-1 py-3 rounded-lg text-white font-medium text-sm transition-colors duration-200 shadow-sm flex items-center justify-center gap-2 disabled:opacity-50"
                     style={{ backgroundColor: '#3258CA' }}
                     onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#2848A8'; }}
@@ -769,7 +804,7 @@ export default function ActualizarDatosPage() {
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                         </svg>
-                        Validando DNI...
+                        Validando...
                       </>
                     ) : (
                       <>
@@ -818,6 +853,11 @@ export default function ActualizarDatosPage() {
                 </div>
 
                 <div className="flex items-center gap-2">
+                  {colegiado.esVitalicio && (
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-200">
+                      ★ Vitalicio
+                    </span>
+                  )}
                   <span
                     className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
                       colegiado.habilitado
@@ -825,7 +865,7 @@ export default function ActualizarDatosPage() {
                         : 'bg-amber-100 text-amber-800 border border-amber-200'
                     }`}
                   >
-                    ● {colegiado.estadoColegiatura || (colegiado.habilitado ? 'HABILITADO' : 'NO HABILITADO')}
+                    ● {colegiado.esVitalicio ? 'HABILITADO' : (colegiado.estadoColegiatura || (colegiado.habilitado ? 'HABILITADO' : 'NO HABILITADO'))}
                   </span>
                   <button
                     type="button"
@@ -839,29 +879,39 @@ export default function ActualizarDatosPage() {
               </div>
 
               {/* Grid de Datos del Colegiado */}
-              <div className="p-6 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 text-xs sm:text-sm">
+              <div
+                className={`p-6 grid grid-cols-2 sm:grid-cols-3 ${
+                  colegiado.esVitalicio ? 'lg:grid-cols-3' : 'lg:grid-cols-5'
+                } gap-4 text-xs sm:text-sm`}
+              >
                 <div>
                   <span className="text-xs text-slate-500 uppercase tracking-wider block">N° Colegiatura (CIP)</span>
                   <span className="font-mono font-bold text-slate-800 text-sm sm:text-base">{colegiado.cip}</span>
                 </div>
                 <div>
-                  <span className="text-xs text-slate-500 uppercase tracking-wider block">DNI</span>
+                  <span className="text-xs text-slate-500 uppercase tracking-wider block">
+                    {colegiado.tipoDocumentoNombre || 'DNI'}
+                  </span>
                   <span className="font-mono font-bold text-slate-800 text-sm sm:text-base">{colegiado.dni}</span>
                 </div>
                 <div>
                   <span className="text-xs text-slate-500 uppercase tracking-wider block">Fecha de Colegiatura</span>
                   <span className="font-semibold text-slate-800">{formatearFechaDisplay(colegiado.fechaIngreso)}</span>
                 </div>
-                <div>
-                  <span className="text-xs text-slate-500 uppercase tracking-wider block">Fecha Último Pago</span>
-                  <span className="font-semibold text-slate-800">{formatearFechaDisplay(colegiado.fechaUltimoPago)}</span>
-                </div>
-                <div>
-                  <span className="text-xs text-slate-500 uppercase tracking-wider block">Habilitado Hasta</span>
-                  <span className="font-semibold text-emerald-700">
-                    {colegiado.fechaHabilitado ? formatearFechaDisplay(colegiado.fechaHabilitado) : 'Al día'}
-                  </span>
-                </div>
+                {!colegiado.esVitalicio && (
+                  <>
+                    <div>
+                      <span className="text-xs text-slate-500 uppercase tracking-wider block">Fecha Último Pago</span>
+                      <span className="font-semibold text-slate-800">{formatearFechaDisplay(colegiado.fechaUltimoPago)}</span>
+                    </div>
+                    <div>
+                      <span className="text-xs text-slate-500 uppercase tracking-wider block">Habilitado Hasta</span>
+                      <span className="font-semibold text-emerald-700">
+                        {colegiado.fechaHabilitado ? formatearFechaDisplay(colegiado.fechaHabilitado) : 'Al día'}
+                      </span>
+                    </div>
+                  </>
+                )}
               </div>
 
               {colegiado.tieneActualizacionPrevia && colegiado.ultimaActualizacionFecha && (
@@ -1316,6 +1366,176 @@ export default function ActualizarDatosPage() {
       </main>
 
       {/* ============================================================== */}
+      {/* POPUP DE VERIFICACIÓN DE IDENTIDAD TRAS CONSULTAR CIP          */}
+      {/* Detecta si tiene DNI o Cédula de Extranjería y si es Vitalicio */}
+      {/* ============================================================== */}
+      {showDocModal && cipInfo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto animate-in fade-in duration-150">
+          <div
+            className="rounded-2xl max-w-lg w-full shadow-2xl overflow-hidden border bg-white my-8 animate-in zoom-in-95 duration-200"
+            style={{ borderColor: '#E2E8F0' }}
+          >
+            {/* Header del Modal */}
+            <div
+              className="px-6 py-5 border-b flex items-center justify-between"
+              style={{ backgroundColor: '#3258CA' }}
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-white font-bold text-sm border border-white/20 shadow-inner">
+                  <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="font-bold text-base sm:text-lg text-white tracking-wide">
+                    Verificación de Identidad
+                  </h3>
+                  <p className="text-xs text-blue-100">
+                    Colegio de Ingenieros del Perú • Consejo Departamental
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleRegresarACip}
+                className="text-white/80 hover:text-white rounded-lg p-1.5 transition-colors"
+                title="Cerrar y cambiar CIP"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Contenido */}
+            <div className="p-6 space-y-4">
+              {/* Tarjeta de colegiado titular detectado */}
+              <div className="p-4 rounded-xl border bg-slate-50 border-slate-200">
+                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+                  Colegiado Titular Detectado
+                </span>
+                <p className="text-base font-bold mt-1 text-slate-900">
+                  {cipInfo.nombreEnmascarado}
+                </p>
+                <div className="flex flex-wrap items-center gap-2 mt-2 text-xs">
+                  <span className="font-mono font-semibold bg-white px-2 py-0.5 rounded border border-slate-200 text-slate-700">
+                    CIP: {cipInfo.cip}
+                  </span>
+                  <span className="bg-white px-2 py-0.5 rounded border border-slate-200 text-slate-700">
+                    {cipInfo.especialidad || 'Ingeniería'}
+                  </span>
+                  {cipInfo.esVitalicio && (
+                    <span className="bg-blue-100 text-blue-800 border border-blue-300 font-semibold px-2 py-0.5 rounded">
+                      ★ Vitalicio
+                    </span>
+                  )}
+                  <span
+                    className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${
+                      cipInfo.habilitado
+                        ? 'bg-green-100 text-green-800 border border-green-200'
+                        : 'bg-red-100 text-red-800 border border-red-200'
+                    }`}
+                  >
+                    ● {cipInfo.esVitalicio ? 'HABILITADO' : (cipInfo.estadoColegiatura || (cipInfo.habilitado ? 'HABILITADO' : 'NO HABILITADO'))}
+                  </span>
+                </div>
+              </div>
+
+              {/* Detección de Documento: DNI o Cédula de Extranjería */}
+              <div className="p-3.5 rounded-xl border border-blue-200 bg-blue-50/70 text-xs text-blue-900 flex items-start gap-2.5">
+                <svg className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div className="leading-relaxed">
+                  <p className="font-semibold text-blue-950">
+                    Documento registrado: <strong>{cipInfo.tipoDocumentoNombre || 'DNI'}</strong>
+                  </p>
+                  <p className="text-blue-800 mt-0.5">
+                    {cipInfo.tipoDocumento === 'CE'
+                      ? 'El padrón oficial registra su acreditación mediante Cédula de Extranjería. Ingrésela para acceder a su ficha.'
+                      : 'El padrón oficial registra su acreditación mediante DNI (8 dígitos). Ingrese su documento para acceder a su ficha.'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Formulario */}
+              <form onSubmit={handleVerificarDni} className="space-y-4 pt-1">
+                {errorConsulta && (
+                  <div
+                    className="p-3.5 rounded-lg text-xs border flex items-start gap-2.5 bg-red-50 border-red-200 text-red-600"
+                  >
+                    <svg className="w-5 h-5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                    </svg>
+                    <span>{errorConsulta}</span>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5 text-slate-800">
+                    {cipInfo.tipoDocumentoNombre || 'Documento Nacional de Identidad (DNI)'} <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    inputMode={cipInfo.tipoDocumento === 'CE' ? 'text' : 'numeric'}
+                    maxLength={cipInfo.tipoDocumento === 'CE' ? 15 : 8}
+                    value={dni}
+                    onChange={(e) => {
+                      const val = cipInfo.tipoDocumento === 'CE'
+                        ? e.target.value.replace(/[^a-zA-Z0-9-]/g, '')
+                        : e.target.value.replace(/\D/g, '');
+                      setDni(val);
+                    }}
+                    placeholder={cipInfo.tipoDocumento === 'CE' ? 'N° Cédula de Extranjería' : '8 dígitos numéricos'}
+                    required
+                    autoFocus
+                    className="w-full px-4 py-3 text-base rounded-lg border focus:outline-none focus:ring-2 focus:border-transparent font-mono tracking-wider text-center border-slate-300 text-slate-900"
+                  />
+                  <p className="text-xs text-slate-500 mt-1 text-center">
+                    Debe coincidir con el titular del N° CIP {cipInfo.cip}.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={handleRegresarACip}
+                    className="px-4 py-3 rounded-lg border text-sm font-medium hover:bg-slate-50 text-slate-700 border-slate-200"
+                  >
+                    ← Cambiar CIP
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={verificandoDni || (cipInfo.tipoDocumento === 'CE' ? dni.length < 4 : dni.length !== 8)}
+                    className="flex-1 py-3 rounded-lg text-white font-medium text-sm transition-colors duration-200 shadow-sm flex items-center justify-center gap-2 disabled:opacity-50"
+                    style={{ backgroundColor: '#3258CA' }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#2848A8'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#3258CA'; }}
+                  >
+                    {verificandoDni ? (
+                      <>
+                        <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        </svg>
+                        Validando...
+                      </>
+                    ) : (
+                      <>
+                        Validar y Abrir Ficha
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
       {/* POPUP DE TÉRMINOS Y CONDICIONES / DECLARACIÓN JURADA           */}
       {/* Se muestra tras verificar CIP y DNI antes de editar los datos  */}
       {/* ============================================================== */}
@@ -1363,7 +1583,7 @@ export default function ActualizarDatosPage() {
                   </span>
                   {colegiado?.dni && (
                     <span className="font-mono bg-white px-2 py-0.5 rounded border border-blue-200 text-slate-700">
-                      DNI: {colegiado.dni}
+                      {colegiado.tipoDocumentoNombre || 'DNI'}: {colegiado.dni}
                     </span>
                   )}
                   {colegiado?.fechaIngreso && (
@@ -1371,16 +1591,24 @@ export default function ActualizarDatosPage() {
                       Fecha Colegiatura: <strong>{formatearFechaDisplay(colegiado.fechaIngreso)}</strong>
                     </span>
                   )}
-                  {colegiado?.fechaUltimoPago && (
+                  {!colegiado?.esVitalicio && colegiado?.fechaUltimoPago && (
                     <span className="bg-white px-2 py-0.5 rounded border border-blue-200 text-slate-700">
                       Fecha Último Pago: <strong>{formatearFechaDisplay(colegiado.fechaUltimoPago)}</strong>
                     </span>
                   )}
-                  {colegiado?.estadoColegiatura && (
-                    <span className="bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 text-emerald-800 font-semibold">
-                      {colegiado.estadoColegiatura}
+                  {!colegiado?.esVitalicio && colegiado?.fechaHabilitado && (
+                    <span className="bg-white px-2 py-0.5 rounded border border-blue-200 text-slate-700">
+                      Habilitado Hasta: <strong>{formatearFechaDisplay(colegiado.fechaHabilitado)}</strong>
                     </span>
                   )}
+                  {colegiado?.esVitalicio && (
+                    <span className="bg-blue-100 px-2 py-0.5 rounded border border-blue-300 text-blue-900 font-semibold">
+                      ★ Vitalicio
+                    </span>
+                  )}
+                  <span className="bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 text-emerald-800 font-semibold">
+                    ● HABILITADO
+                  </span>
                 </div>
                 <p className="text-xs text-blue-800 mt-2.5 leading-relaxed">
                   Para proceder con la edición y actualización de sus datos personales en el padrón colegial, es <strong>obligatorio</strong> leer y aceptar los siguientes términos y declaración jurada de veracidad:
@@ -1546,18 +1774,26 @@ export default function ActualizarDatosPage() {
                     CIP: {colegiado?.cip}
                   </span>
                   <span className="px-2 py-0.5 rounded font-mono font-bold bg-slate-100 text-slate-700 border border-slate-200">
-                    DNI: {colegiado?.dni}
+                    {colegiado?.tipoDocumentoNombre || 'DNI'}: {colegiado?.dni}
                   </span>
                   {colegiado?.fechaIngreso && (
                     <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
                       Fecha Colegiatura: <strong className="text-slate-900">{formatearFechaDisplay(colegiado.fechaIngreso)}</strong>
                     </span>
                   )}
-                  {colegiado?.fechaUltimoPago && (
+                  {!colegiado?.esVitalicio && colegiado?.fechaUltimoPago && (
                     <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
                       Fecha Último Pago: <strong className="text-slate-900">{formatearFechaDisplay(colegiado.fechaUltimoPago)}</strong>
                     </span>
                   )}
+                  {colegiado?.esVitalicio && (
+                    <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-800 border border-blue-200 font-semibold">
+                      ★ Vitalicio
+                    </span>
+                  )}
+                  <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 font-semibold">
+                    ● HABILITADO
+                  </span>
                   {colegiado?.especialidad && (
                     <span className="text-slate-600 text-[11px]">
                       • {colegiado.especialidad}
@@ -1602,10 +1838,12 @@ export default function ActualizarDatosPage() {
                     <span className="font-medium text-slate-800">{formatearFechaDisplay(colegiado?.fechaIngreso)}</span>
                   </div>
 
-                  <div className="p-2.5 flex justify-between items-center bg-slate-50/70">
-                    <span className="text-slate-600 font-semibold">Fecha Último Pago:</span>
-                    <span className="font-medium text-slate-800">{formatearFechaDisplay(colegiado?.fechaUltimoPago)}</span>
-                  </div>
+                  {!colegiado?.esVitalicio && colegiado?.fechaUltimoPago && (
+                    <div className="p-2.5 flex justify-between items-center bg-slate-50/70">
+                      <span className="text-slate-600 font-semibold">Fecha Último Pago:</span>
+                      <span className="font-medium text-slate-800">{formatearFechaDisplay(colegiado?.fechaUltimoPago)}</span>
+                    </div>
+                  )}
 
                   <div className="p-2.5 flex justify-between items-center">
                     <span className="text-slate-600 font-semibold">Sexo:</span>
@@ -1756,9 +1994,9 @@ export default function ActualizarDatosPage() {
                   <span className="font-bold text-slate-900">{resumenExito?.nombres || colegiado?.nombreCompleto}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-500">N° CIP / DNI:</span>
+                  <span className="text-slate-500">N° CIP / {colegiado?.tipoDocumentoNombre || 'DNI'}:</span>
                   <span className="font-mono font-bold text-slate-800">
-                    {resumenExito?.cip || colegiado?.cip} • {resumenExito?.dni || colegiado?.dni}
+                    CIP {resumenExito?.cip || colegiado?.cip} • {resumenExito?.dni || colegiado?.dni}
                   </span>
                 </div>
                 <div className="flex justify-between">

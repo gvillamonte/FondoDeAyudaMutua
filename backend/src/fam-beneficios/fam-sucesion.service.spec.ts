@@ -181,4 +181,64 @@ describe('FamSucesionService', () => {
     expect(res.sucesion.id).toBe('suc-1');
     expect(auditService.log).toHaveBeenCalled();
   });
+
+  it('debe obtener la declaración jurada y voucher de un heredero', async () => {
+    prisma.famSucesionBeneficiario.findFirst = jest.fn().mockResolvedValue({
+      id: 'h-1',
+      sucesionId: 'suc-1',
+      numeroDocumento: '12345678',
+      nombres: 'Ana',
+      apellidos: 'Perez',
+      porcentaje: 50,
+      monto: 1500,
+      declaracionJuradaPdf: 'JVBERi0xLjQK...',
+      ordenPagoPdf: 'JVBERi0xLjQK...',
+    });
+
+    const dj = await service.obtenerDeclaracionHeredero('suc-1', 'h-1');
+    expect(dj.contenido).toBe('JVBERi0xLjQK...');
+    expect(dj.numeroDocumento).toBe('12345678');
+
+    const voucher = await service.obtenerVoucherHeredero('suc-1', 'h-1');
+    expect(voucher.contenido).toBe('JVBERi0xLjQK...');
+    expect(voucher.monto).toBe(1500);
+  });
+
+  it('debe permitir guardar cuando no tiene sustento PDF pero cuenta con observaciones de justificación', async () => {
+    prisma.tipoBeneficio.findFirst.mockResolvedValueOnce({
+      id: 'tb-1',
+      codigo: 'FALLECIMIENTO',
+      nombre: 'Fallecimiento',
+    });
+    prisma.famSolicitudBeneficio.create.mockResolvedValueOnce({ id: 'sol-2' });
+    prisma.famSucesionIntestada.create.mockResolvedValueOnce({ id: 'suc-2', estadoTramite: 'BORRADOR' });
+    prisma.famBeneficiario.create.mockResolvedValue({ id: 'ben-2' });
+    prisma.famSucesionBeneficiario.create.mockResolvedValue({ id: 'sb-2' });
+    prisma.famSolicitudBeneficiario.create.mockResolvedValue({ id: 2 });
+    prisma.famSucesionVersion.create.mockResolvedValue({ id: 'v-2' });
+
+    const res = await service.registrarSucesion(
+      {
+        colegiadoId: 'col-1',
+        montoTotal: 5000,
+        observacionSinSucesion: 'Trámite notarial de sucesión intestada en proceso en Notaría Albarracín',
+        herederos: [
+          {
+            tipoDocumento: 'DNI',
+            numeroDocumento: '12345678',
+            nombres: 'Ana',
+            apellidos: 'Perez',
+            parentesco: 'Hijo(a)',
+            porcentaje: 100,
+            monto: 5000,
+          },
+        ],
+      } as any,
+      'u-1',
+      '127.0.0.1',
+    );
+
+    expect(res).toBeDefined();
+    expect(res.solicitud.id).toBe('sol-2');
+  });
 });

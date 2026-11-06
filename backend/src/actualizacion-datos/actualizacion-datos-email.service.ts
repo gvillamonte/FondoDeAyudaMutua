@@ -1,6 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
+import * as fs from 'fs';
+import * as path from 'path';
+import { PrismaService } from '../prisma/prisma.service';
 
 export interface DatosActualizadosEmailParams {
   cip: string;
@@ -27,7 +30,10 @@ export class ActualizacionDatosEmailService {
   private readonly logger = new Logger(ActualizacionDatosEmailService.name);
   private transporter: nodemailer.Transporter | null = null;
 
-  constructor(private configService: ConfigService) {
+  constructor(
+    private configService: ConfigService,
+    @Optional() private prisma?: PrismaService,
+  ) {
     this.initTransporter();
   }
 
@@ -54,6 +60,51 @@ export class ActualizacionDatosEmailService {
         'Variables SMTP_HOST, SMTP_USER o SMTP_PASS no configuradas. Los correos se registrarán en modo simulación.',
       );
     }
+  }
+
+  /**
+   * Obtiene el logo institucional del CIP (mismo origen que Estados de Habilidad)
+   */
+  async obtenerLogoCip(): Promise<{ buffer: Buffer; filename: string; mime: string } | null> {
+    if (this.prisma) {
+      try {
+        const cfg = await this.prisma.famConfiguracion.findUnique({
+          where: { clave: 'LOGO_CIP' },
+        });
+        if (cfg?.valor) {
+          const parsed = JSON.parse(cfg.valor);
+          if (parsed?.data) {
+            return {
+              buffer: Buffer.from(parsed.data, 'base64'),
+              filename: parsed.filename || 'Logo.jpeg',
+              mime: parsed.mime || 'image/jpeg',
+            };
+          }
+        }
+      } catch (err: any) {
+        this.logger.warn(`No se pudo leer LOGO_CIP de la base de datos: ${err.message}`);
+      }
+    }
+
+    const posiblesRutas = [
+      path.join(process.cwd(), 'assets', 'logo-cip.jpeg'),
+      path.join(process.cwd(), '..', 'frontend', 'public', 'logo-cip.jpeg'),
+      path.join(__dirname, '..', '..', 'assets', 'logo-cip.jpeg'),
+    ];
+
+    for (const ruta of posiblesRutas) {
+      try {
+        if (fs.existsSync(ruta)) {
+          return {
+            buffer: fs.readFileSync(ruta),
+            filename: 'Logo.jpeg',
+            mime: 'image/jpeg',
+          };
+        }
+      } catch {}
+    }
+
+    return null;
   }
 
   /**
@@ -100,7 +151,30 @@ export class ActualizacionDatosEmailService {
     });
 
     const sexoTexto = sexo === 'M' ? 'Masculino' : sexo === 'F' ? 'Femenino' : (sexo || 'No especificado');
-    const ubicacionTexto = [departamento, provincia, distrito].filter(Boolean).join(' - ') || 'No especificada';
+
+    // Logo institucional
+    const logo = await this.obtenerLogoCip();
+    const attachments: any[] = [];
+    let logoHtml = '';
+
+    if (logo) {
+      attachments.push({
+        filename: logo.filename,
+        content: logo.buffer,
+        cid: 'logo_cip',
+      });
+      logoHtml = `
+        <div style="margin-bottom: 12px;">
+          <img src="cid:logo_cip" alt="Logo CIP" style="max-height: 75px; max-width: 180px; height: auto; display: inline-block;" />
+        </div>
+      `;
+    } else {
+      logoHtml = `
+        <div style="display: inline-block; background-color: #FFFFFF; color: #781622; font-weight: bold; font-size: 14px; padding: 6px 14px; border-radius: 6px; letter-spacing: 1px; margin-bottom: 12px;">
+          CIP
+        </div>
+      `;
+    }
 
     const htmlContent = `
 <!DOCTYPE html>
@@ -117,20 +191,18 @@ export class ActualizacionDatosEmailService {
         <!-- Contenedor Principal -->
         <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 620px; background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
           
-          <!-- Encabezado Institucional -->
+          <!-- Encabezado Institucional: Rojo Granate #781622 con Logo -->
           <tr>
-            <td style="background-color: #3258CA; padding: 28px 30px; text-align: center;">
+            <td style="background-color: #781622; padding: 28px 30px; text-align: center;">
               <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
                 <tr>
                   <td align="center">
-                    <div style="display: inline-block; background-color: #FFFFFF; color: #3258CA; font-weight: bold; font-size: 14px; padding: 6px 14px; border-radius: 6px; letter-spacing: 1px; margin-bottom: 12px;">
-                      CIP
-                    </div>
+                    ${logoHtml}
                     <h1 style="color: #FFFFFF; margin: 0; font-size: 20px; font-weight: 700; line-height: 1.3;">
                       COLEGIO DE INGENIEROS DEL PERÚ
                     </h1>
-                    <p style="color: #DBEAFE; margin: 4px 0 0 0; font-size: 13px;">
-                      Actualización Oficial de Datos — Constancia
+                    <p style="color: #FEE2E2; margin: 4px 0 0 0; font-size: 13px;">
+                      Consejo Departamental Cusco — Fondo de Ayuda Mutua
                     </p>
                   </td>
                 </tr>
@@ -183,7 +255,7 @@ export class ActualizacionDatosEmailService {
                 </tr>` : ''}
                 <tr style="border-bottom: 1px solid #F1F5F9;">
                   <td style="padding: 10px 12px; color: #64748B; font-weight: 600; background-color: #F8FAFC;">Correo Electrónico</td>
-                  <td style="padding: 10px 12px; color: #3258CA; font-weight: 600;">${email}</td>
+                  <td style="padding: 10px 12px; color: #781622; font-weight: 600;">${email}</td>
                 </tr>
                 <tr style="border-bottom: 1px solid #F1F5F9;">
                   <td style="padding: 10px 12px; color: #64748B; font-weight: 600; background-color: #F8FAFC;">Número Celular</td>
@@ -211,7 +283,7 @@ export class ActualizacionDatosEmailService {
                 </tr>
                 <tr style="border-bottom: 1px solid #F1F5F9;">
                   <td style="padding: 10px 12px; color: #64748B; font-weight: 600; background-color: #F8FAFC;">Distrito</td>
-                  <td style="padding: 10px 12px; color: #1E293B; font-weight: 600;">${distrito || 'No especificado'}</td>
+                  <td style="padding: 10px 12px; color: #1E293B;">${distrito || 'No especificado'}</td>
                 </tr>
                 <tr style="border-bottom: 1px solid #F1F5F9;">
                   <td style="padding: 10px 12px; color: #64748B; font-weight: 600; background-color: #F8FAFC;">Dirección Domiciliaria</td>
@@ -227,8 +299,8 @@ export class ActualizacionDatosEmailService {
                 </tr>
               </table>
 
-              <!-- Nota de Seguridad -->
-              <div style="background-color: #EFF6FF; border-left: 4px solid #3258CA; padding: 12px 16px; border-radius: 4px; font-size: 12px; color: #1E40AF; line-height: 1.5;">
+              <!-- Nota de Seguridad: Rojo Granate -->
+              <div style="background-color: #FEF2F2; border-left: 4px solid #781622; padding: 12px 16px; border-radius: 4px; font-size: 12px; color: #991B1B; line-height: 1.5;">
                 <strong>Aviso de Seguridad:</strong> Si usted no reconoció esta operación o detecta alguna inconsistencia, por favor comuníquese de inmediato con las oficinas del Colegio de Ingenieros del Perú.
               </div>
 
@@ -242,7 +314,7 @@ export class ActualizacionDatosEmailService {
           <!-- Footer Institucional -->
           <tr>
             <td style="background-color: #F8FAFC; border-top: 1px solid #E2E8F0; padding: 20px 30px; text-align: center; font-size: 11px; color: #94A3B8; line-height: 1.5;">
-              Colegio de Ingenieros del Perú — Consejo Departamental<br>
+              Colegio de Ingenieros del Perú — Consejo Departamental Cusco<br>
               Sistema de Gestión y Actualización de Datos de Colegiados<br>
               Este mensaje ha sido generado automáticamente, por favor no responda a esta dirección de correo.
             </td>
@@ -260,7 +332,7 @@ export class ActualizacionDatosEmailService {
       this.configService.get<string>('SMTP_FROM') ||
       '"Colegio de Ingenieros del Perú" <notificaciones@cipcusco.org.pe>';
 
-    const mailOptions = {
+    const mailOptions: any = {
       from: fromAddress,
       to: email,
       subject: `Constancia de Actualización de Datos - CIP ${cip} (${nombres})`,
@@ -283,8 +355,12 @@ export class ActualizacionDatosEmailService {
         `• Referencia: ${referencia || 'No especificada'}\n` +
         `• Fecha y Hora: ${fechaFormateada}\n` +
         `• Código de Operación: ${idOperacion}\n\n` +
-        `Colegio de Ingenieros del Perú — Fondo de Ayuda Mutua (FAM)`,
+        `Colegio de Ingenieros del Perú — Consejo Departamental Cusco`,
     };
+
+    if (attachments.length > 0) {
+      mailOptions.attachments = attachments;
+    }
 
     if (this.transporter) {
       try {

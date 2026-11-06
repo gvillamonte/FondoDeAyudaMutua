@@ -274,6 +274,8 @@ export class LegacyService implements OnModuleInit, OnModuleDestroy {
         c.nIdColegiado AS COLEGIADO_ID,
         c.cCodigoCIP AS NUM_COLEGIATURA,
         COALESCE(doc.cDocumentoIdentidad, '') AS DNI,
+        doc.cConsValorTipoDocIdentidad AS TIPO_DOC_COD,
+        c.cConsValorTipoAsociado AS TIPO_ASOCIADO_COD,
         p.cNombres AS NOMBRES,
         p.cApPaterno AS APELLIDO_PATERNO,
         COALESCE(p.cApMaterno, '') AS APELLIDO_MATERNO,
@@ -292,7 +294,22 @@ export class LegacyService implements OnModuleInit, OnModuleDestroy {
         COALESCE(ec.cConsdescripcion, '') AS ESTADO_CIVIL
       FROM TColegiado c
       INNER JOIN TPersona p ON c.nIdPersona = p.nIdPersona
-      LEFT JOIN TDocumentoPersona doc ON p.nIdPersona = doc.nIdPersona
+      LEFT JOIN (
+        SELECT nIdPersona, cDocumentoIdentidad, cConsValorTipoDocIdentidad,
+          ROW_NUMBER() OVER (
+            PARTITION BY nIdPersona
+            ORDER BY 
+              CASE 
+                WHEN cConsValorTipoDocIdentidad = '1' THEN 1
+                WHEN cConsValorTipoDocIdentidad = '4' THEN 2
+                WHEN cConsValorTipoDocIdentidad = '7' THEN 3
+                ELSE 9
+              END,
+              nIdDocumentoPersona DESC
+          ) AS rn
+        FROM TDocumentoPersona
+        WHERE cConsValorTipoDocIdentidad IN ('1', '4', '7')
+      ) doc ON p.nIdPersona = doc.nIdPersona AND doc.rn = 1
       LEFT JOIN (
         SELECT nIdColegiado, MAX(nIdCapitulo) AS nIdCapitulo, MAX(dFechaIncorporacionACIP) AS dFechaIncorporacionACIP
         FROM TColegiadoCapitulo
@@ -334,6 +351,8 @@ export class LegacyService implements OnModuleInit, OnModuleDestroy {
         c.nIdColegiado AS COLEGIADO_ID,
         c.cCodigoCIP AS NUM_COLEGIATURA,
         COALESCE(doc.cDocumentoIdentidad, '') AS DNI,
+        doc.cConsValorTipoDocIdentidad AS TIPO_DOC_COD,
+        c.cConsValorTipoAsociado AS TIPO_ASOCIADO_COD,
         p.cNombres AS NOMBRES,
         p.cApPaterno AS APELLIDO_PATERNO,
         COALESCE(p.cApMaterno, '') AS APELLIDO_MATERNO,
@@ -359,7 +378,22 @@ export class LegacyService implements OnModuleInit, OnModuleDestroy {
         pn.cConsValorSexo AS SEXO
       FROM TColegiado c
       INNER JOIN TPersona p ON c.nIdPersona = p.nIdPersona
-      LEFT JOIN TDocumentoPersona doc ON p.nIdPersona = doc.nIdPersona
+      LEFT JOIN (
+        SELECT nIdPersona, cDocumentoIdentidad, cConsValorTipoDocIdentidad,
+          ROW_NUMBER() OVER (
+            PARTITION BY nIdPersona
+            ORDER BY 
+              CASE 
+                WHEN cConsValorTipoDocIdentidad = '1' THEN 1
+                WHEN cConsValorTipoDocIdentidad = '4' THEN 2
+                WHEN cConsValorTipoDocIdentidad = '7' THEN 3
+                ELSE 9
+              END,
+              nIdDocumentoPersona DESC
+          ) AS rn
+        FROM TDocumentoPersona
+        WHERE cConsValorTipoDocIdentidad IN ('1', '4', '7')
+      ) doc ON p.nIdPersona = doc.nIdPersona AND doc.rn = 1
       LEFT JOIN (
         SELECT nIdColegiado, MAX(nIdCapitulo) AS nIdCapitulo, MAX(dFechaIncorporacionACIP) AS dFechaIncorporacionACIP
         FROM TColegiadoCapitulo
@@ -410,6 +444,8 @@ export class LegacyService implements OnModuleInit, OnModuleDestroy {
         c.nIdColegiado AS COLEGIADO_ID,
         c.cCodigoCIP AS NUM_COLEGIATURA,
         COALESCE(doc.cDocumentoIdentidad, '') AS DNI,
+        doc.cConsValorTipoDocIdentidad AS TIPO_DOC_COD,
+        c.cConsValorTipoAsociado AS TIPO_ASOCIADO_COD,
         p.cNombres AS NOMBRES,
         p.cApPaterno AS APELLIDO_PATERNO,
         COALESCE(p.cApMaterno, '') AS APELLIDO_MATERNO,
@@ -436,10 +472,21 @@ export class LegacyService implements OnModuleInit, OnModuleDestroy {
       FROM TColegiado c
       INNER JOIN TPersona p ON c.nIdPersona = p.nIdPersona
       LEFT JOIN (
-        SELECT nIdPersona, MAX(cDocumentoIdentidad) AS cDocumentoIdentidad
+        SELECT nIdPersona, cDocumentoIdentidad, cConsValorTipoDocIdentidad,
+          ROW_NUMBER() OVER (
+            PARTITION BY nIdPersona
+            ORDER BY 
+              CASE 
+                WHEN cConsValorTipoDocIdentidad = '1' THEN 1
+                WHEN cConsValorTipoDocIdentidad = '4' THEN 2
+                WHEN cConsValorTipoDocIdentidad = '7' THEN 3
+                ELSE 9
+              END,
+              nIdDocumentoPersona DESC
+          ) AS rn
         FROM TDocumentoPersona
-        GROUP BY nIdPersona
-      ) doc ON p.nIdPersona = doc.nIdPersona
+        WHERE cConsValorTipoDocIdentidad IN ('1', '4', '7')
+      ) doc ON p.nIdPersona = doc.nIdPersona AND doc.rn = 1
       LEFT JOIN (
         SELECT nIdColegiado, MAX(nIdCapitulo) AS nIdCapitulo, MAX(dFechaIncorporacionACIP) AS dFechaIncorporacionACIP
         FROM TColegiadoCapitulo

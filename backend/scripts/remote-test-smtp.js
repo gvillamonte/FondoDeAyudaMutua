@@ -1,12 +1,12 @@
 const nodemailer = require('nodemailer');
 
 const config = {
-  host: 'mail.cipcusco.org.pe',
-  port: 587,
-  secure: false,
+  host: process.env.SMTP_HOST || 'smtp.gmail.com',
+  port: Number(process.env.SMTP_PORT) || 465,
+  secure: process.env.SMTP_SECURE === 'false' ? false : true,
   auth: {
-    user: 'notificaciones@cipcusco.org.pe',
-    pass: 'r3a_5eS:X1L$',
+    user: process.env.SMTP_USER || 'notificaciones@cipcusco.org.pe',
+    pass: process.env.SMTP_PASS || '',
   },
   tls: {
     rejectUnauthorized: false,

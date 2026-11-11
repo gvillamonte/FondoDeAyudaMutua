@@ -7,6 +7,7 @@ import {
   generarVoucherOrdenPagoPdf,
   DatosColegiadoPdf,
 } from '@/lib/pdf-generator';
+import { procesarArchivoDocumento } from '@/lib/pdf-utils';
 
 export interface HerederoForm {
   key: string;
@@ -107,30 +108,18 @@ export default function SucesionIntestadaMultiplesBeneficiarios({
     }
   });
 
-  const handleSucesionFile = (file: File) => {
-    if (file.type !== 'application/pdf') {
-      showConfirmMessage('error', 'Sucesión Intestada: formato inválido', 'Solo se permiten archivos PDF (.pdf)');
-      return;
-    }
-    if (file.size > MAX_PDF_MB * 1024 * 1024) {
-      showConfirmMessage(
-        'error',
-        'Sucesión Intestada: archivo demasiado grande',
-        `Máximo permitido: ${MAX_PDF_MB}MB — Archivo: ${(file.size / 1024 / 1024).toFixed(2)}MB`,
-      );
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const base64 = ((e.target?.result as string) || '').split(',')[1] || '';
-      onChangeSucesionPdf({ base64, size: file.size });
+  const handleSucesionFile = async (file: File) => {
+    try {
+      const { base64, size, esImagenConvertida } = await procesarArchivoDocumento(file, MAX_PDF_MB);
+      onChangeSucesionPdf({ base64, size });
       showConfirmMessage(
         'success',
         'Sustento de Sucesión Intestada cargado correctamente',
-        `${(file.size / 1024 / 1024).toFixed(2)} MB`,
+        esImagenConvertida ? `Imagen convertida a PDF (${(size / 1024 / 1024).toFixed(2)} MB)` : `${(size / 1024 / 1024).toFixed(2)} MB`,
       );
-    };
-    reader.readAsDataURL(file);
+    } catch (err: any) {
+      showConfirmMessage('error', 'Sucesión Intestada: formato inválido', err?.message || 'Solo se permiten archivos PDF o imágenes');
+    }
   };
 
   const agregarHeredero = () => {
@@ -172,15 +161,17 @@ export default function SucesionIntestadaMultiplesBeneficiarios({
 
       const merged = { ...h, ...cambios };
 
-      // Conversión automática bidireccional
-      if (cambios.porcentaje !== undefined && modoEdicion === 'porcentaje') {
-        const pct = Math.max(0, Math.min(100, Number(cambios.porcentaje) || 0));
-        merged.porcentaje = pct;
-        merged.monto = Number(((pct / 100) * montoTotal).toFixed(2));
-      } else if (cambios.monto !== undefined && modoEdicion === 'monto') {
+      // Conversión automática bidireccional:
+      // Si se ingresa o modifica el monto, se calcula automáticamente el porcentaje correspondiente.
+      // Si se ingresa o modifica el porcentaje, se calcula automáticamente el monto correspondiente.
+      if (cambios.monto !== undefined) {
         const m = Math.max(0, Number(cambios.monto) || 0);
         merged.monto = m;
         merged.porcentaje = montoTotal > 0 ? Number(((m / montoTotal) * 100).toFixed(2)) : 0;
+      } else if (cambios.porcentaje !== undefined) {
+        const pct = Math.max(0, Math.min(100, Number(cambios.porcentaje) || 0));
+        merged.porcentaje = pct;
+        merged.monto = Number(((pct / 100) * montoTotal).toFixed(2));
       }
 
       return merged;
@@ -246,36 +237,27 @@ export default function SucesionIntestadaMultiplesBeneficiarios({
     );
   };
 
-  const handleSubirPdfHeredero = (
+  const handleSubirPdfHeredero = async (
     key: string,
     campo: 'declaracionJurada' | 'ordenPago',
     file: File,
   ) => {
     const label = campo === 'declaracionJurada' ? 'Declaración Jurada' : 'Voucher / Orden de Pago';
-    if (file.type !== 'application/pdf') {
-      showConfirmMessage('error', `${label}: formato inválido`, 'Solo se permiten archivos PDF (.pdf)');
-      return;
-    }
-    if (file.size > MAX_PDF_MB * 1024 * 1024) {
-      showConfirmMessage(
-        'error',
-        `${label}: archivo demasiado grande`,
-        `Máximo permitido: ${MAX_PDF_MB}MB`,
-      );
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const base64 = ((e.target?.result as string) || '').split(',')[1] || '';
+    try {
+      const { base64, size, esImagenConvertida } = await procesarArchivoDocumento(file, MAX_PDF_MB);
       actualizarHeredero(key, {
         ...(campo === 'declaracionJurada'
-          ? { declaracionJuradaPdf: base64, declaracionSize: file.size }
-          : { ordenPagoPdf: base64, ordenPagoSize: file.size }),
+          ? { declaracionJuradaPdf: base64, declaracionSize: size }
+          : { ordenPagoPdf: base64, ordenPagoSize: size }),
       });
-      showConfirmMessage('success', `${label} cargado correctamente`, `${(file.size / 1024 / 1024).toFixed(2)} MB`);
-    };
-    reader.readAsDataURL(file);
+      showConfirmMessage(
+        'success',
+        `${label} cargado correctamente`,
+        esImagenConvertida ? `Imagen convertida a PDF (${(size / 1024 / 1024).toFixed(2)} MB)` : `${(size / 1024 / 1024).toFixed(2)} MB`,
+      );
+    } catch (err: any) {
+      showConfirmMessage('error', `${label}: formato inválido`, err?.message || 'Solo se permiten archivos PDF o imágenes');
+    }
   };
 
   const generarDjHeredero = (h: HerederoForm) => {
@@ -529,11 +511,11 @@ export default function SucesionIntestadaMultiplesBeneficiarios({
                   htmlFor={sustentoInputId}
                   className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-[#3258CA] hover:bg-[#25439b] rounded-lg transition-colors shadow-sm"
                 >
-                  📄 Subir Sustento Legal (PDF)
+                  📄 Subir Sustento Legal (PDF o Imagen)
                   <input
                     id={sustentoInputId}
                     type="file"
-                    accept="application/pdf,.pdf"
+                    accept="application/pdf,image/png,image/jpeg,image/jpg,image/webp"
                     className="hidden"
                     onChange={(e) => {
                       if (e.target.files?.[0]) handleSucesionFile(e.target.files[0]);
@@ -639,7 +621,7 @@ export default function SucesionIntestadaMultiplesBeneficiarios({
 
         {/* Indicador Semántico de Balance */}
         <div
-          className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium border ${
+          className={`flex flex-col sm:flex-row sm:items-center justify-between px-3.5 py-2.5 rounded-lg text-xs font-medium border gap-2 ${
             esCuadreExacto
               ? 'bg-green-50 border-green-300 text-green-800'
               : sumaPorcentajes > 100 || sumaMontos > montoTotal
@@ -648,20 +630,27 @@ export default function SucesionIntestadaMultiplesBeneficiarios({
           }`}
         >
           <div className="flex items-center gap-2">
-            <span>
-              {esCuadreExacto ? '✓' : sumaPorcentajes > 100 ? '⛔' : '⚠️'}
+            <span className="text-base">
+              {esCuadreExacto ? '✓' : sumaPorcentajes > 100 || sumaMontos > montoTotal ? '⛔' : 'ℹ️'}
             </span>
-            <span>
-              {esCuadreExacto
-                ? `Distribución completa: 100.00% asignado (S/ ${montoTotal.toFixed(2)})`
-                : sumaPorcentajes > 100
-                ? `Exceso en la asignación: +${(sumaPorcentajes - 100).toFixed(2)}% (+S/ ${(sumaMontos - montoTotal).toFixed(2)})`
-                : `Pendiente por asignar: ${porcentajeRestante.toFixed(2)}% (S/ ${montoRestante.toFixed(2)})`}
-            </span>
+            <div>
+              <div className="font-semibold">
+                {esCuadreExacto
+                  ? `Distribución completa: 100.00% asignado (S/ ${montoTotal.toFixed(2)})`
+                  : sumaPorcentajes > 100 || sumaMontos > montoTotal
+                  ? `Exceso en la asignación: +${Math.max(0, sumaPorcentajes - 100).toFixed(2)}% (+S/ ${Math.max(0, sumaMontos - montoTotal).toFixed(2)})`
+                  : `Saldo pendiente por regularizar después: S/ ${montoRestante.toFixed(2)} (${porcentajeRestante.toFixed(2)}% restante)`}
+              </div>
+              {!esCuadreExacto && sumaPorcentajes <= 100 && sumaMontos <= montoTotal && (
+                <div className="text-[11px] text-amber-700 font-normal mt-0.5">
+                  El monto normativo por fallecimiento es S/ {montoTotal.toFixed(2)}. Si los montos ingresados no alcanzan dicho monto, podrá guardar y el sistema registrará una alerta informativa con el saldo pendiente para regularizarlo después.
+                </div>
+              )}
+            </div>
           </div>
 
-          <div className="text-[11px] font-mono">
-            Asignado: {sumaPorcentajes.toFixed(2)}% / S/ {sumaMontos.toFixed(2)}
+          <div className="text-[11px] font-mono whitespace-nowrap">
+            <span className="font-semibold">Asignado:</span> {sumaPorcentajes.toFixed(2)}% / S/ {sumaMontos.toFixed(2)}
           </div>
         </div>
       </div>
@@ -924,7 +913,7 @@ export default function SucesionIntestadaMultiplesBeneficiarios({
                       📁 {tieneDj ? 'Reemplazar' : 'Subir Firmada'}
                       <input
                         type="file"
-                        accept="application/pdf,.pdf"
+                        accept="application/pdf,image/png,image/jpeg,image/jpg,image/webp"
                         className="hidden"
                         onChange={(e) => {
                           if (e.target.files?.[0]) {
@@ -982,7 +971,7 @@ export default function SucesionIntestadaMultiplesBeneficiarios({
                       📁 {tieneVoucher ? 'Reemplazar' : 'Subir Voucher'}
                       <input
                         type="file"
-                        accept="application/pdf,.pdf"
+                        accept="application/pdf,image/png,image/jpeg,image/jpg,image/webp"
                         className="hidden"
                         onChange={(e) => {
                           if (e.target.files?.[0]) {
@@ -1114,14 +1103,22 @@ export default function SucesionIntestadaMultiplesBeneficiarios({
                     </td>
                     <td
                       className={`p-2 text-right font-mono ${
-                        Math.abs(sumaPorcentajes - 100) <= 0.05 ? 'text-green-700' : 'text-red-600'
+                        Math.abs(sumaPorcentajes - 100) <= 0.05
+                          ? 'text-green-700'
+                          : sumaPorcentajes > 100
+                          ? 'text-red-600'
+                          : 'text-amber-700'
                       }`}
                     >
                       {sumaPorcentajes.toFixed(2)}%
                     </td>
                     <td
                       className={`p-2 text-right font-mono ${
-                        Math.abs(sumaMontos - montoTotal) <= 0.05 ? 'text-green-700' : 'text-red-600'
+                        Math.abs(sumaMontos - montoTotal) <= 0.05
+                          ? 'text-green-700'
+                          : sumaMontos > montoTotal
+                          ? 'text-red-600'
+                          : 'text-amber-700'
                       }`}
                     >
                       S/ {sumaMontos.toFixed(2)}

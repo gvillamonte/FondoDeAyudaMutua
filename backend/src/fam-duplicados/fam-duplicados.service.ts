@@ -156,12 +156,14 @@ export class FamDuplicadosService {
       );
       if (filtrados.length === 0) {
         try {
-          const autocompletePromise = this.famService.autocomplete(termino).catch(() => [] as any[]);
-          const sugerencias = await Promise.race([
-            autocompletePromise,
-            new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 5000)),
+          const busquedaPromise = this.famService
+            .buscarColegiadosIdsParaBusqueda(termino)
+            .catch(() => [] as string[]);
+          const idsList = await Promise.race([
+            busquedaPromise,
+            new Promise<string[]>((resolve) => setTimeout(() => resolve([]), 5000)),
           ]);
-          const idsLegacy = new Set((sugerencias || []).map((s: any) => String(s.COLEGIADO_ID)));
+          const idsLegacy = new Set((idsList || []).map((id) => String(id)));
           filtrados = items.filter((i) => idsLegacy.has(i.colegiadoId));
         } catch {
           filtrados = [];

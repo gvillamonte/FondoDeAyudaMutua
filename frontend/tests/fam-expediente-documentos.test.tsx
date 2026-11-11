@@ -151,7 +151,7 @@ const iniciarSubida = (container: HTMLElement, etiquetaDocumento: string | RegEx
   const fila = screen
     .getByText(etiquetaDocumento)
     .closest('div.flex.items-center.justify-between') as HTMLElement;
-  const boton = within(fila).getByRole('button', { name: /^(Subir PDF|Reemplazar)$/ });
+  const boton = within(fila).getByRole('button', { name: /^(Subir PDF|Subir PDF o Imagen|Reemplazar)$/ });
   fireEvent.click(boton);
   return container.querySelector('input[type="file"]') as HTMLInputElement;
 };
@@ -166,7 +166,7 @@ describe('Documentos - control de subida por rol', () => {
     await renderDocumentos();
 
     expect(screen.getAllByText('Reemplazar')).toHaveLength(1);
-    expect(screen.getAllByText('Subir PDF')).toHaveLength(DOCS.length - 1);
+    expect(screen.getAllByText(/Subir PDF/)).toHaveLength(DOCS.length - 1);
     expect(screen.getAllByText('Ver PDF')).toHaveLength(1);
     expect(screen.getByText(/Como ADMINISTRADOR puede subir/)).not.toBeNull();
     expect(screen.queryByText('No cargado')).toBeNull();
@@ -178,7 +178,7 @@ describe('Documentos - control de subida por rol', () => {
     preparar();
     await renderDocumentos();
 
-    expect(screen.queryByText('Subir PDF')).toBeNull();
+    expect(screen.queryByText(/Subir PDF/)).toBeNull();
     expect(screen.queryByText('Reemplazar')).toBeNull();
     expect(screen.getAllByText('No cargado')).toHaveLength(DOCS.length - 1);
     expect(screen.getByText('Ver PDF')).not.toBeNull();
@@ -191,7 +191,7 @@ describe('Documentos - control de subida por rol', () => {
     preparar();
     await renderDocumentos();
 
-    expect(screen.queryByText('Subir PDF')).toBeNull();
+    expect(screen.queryByText(/Subir PDF/)).toBeNull();
     expect(screen.queryByText('Reemplazar')).toBeNull();
     expect(screen.getByText('Solo el ADMINISTRADOR puede subir documentos.')).not.toBeNull();
     expect(apiPut).not.toHaveBeenCalled();
@@ -202,7 +202,7 @@ describe('Documentos - control de subida por rol', () => {
     preparar();
     await renderDocumentos();
 
-    expect(screen.queryByRole('button', { name: 'Subir PDF' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Subir PDF/ })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Reemplazar' })).toBeNull();
     expect(apiPut).not.toHaveBeenCalled();
     expect(api.post).not.toHaveBeenCalled();

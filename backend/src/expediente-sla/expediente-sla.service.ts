@@ -58,11 +58,16 @@ export class ExpedienteSlaService {
   async getResumenDashboard(userId: string, userRol: string) {
     const ahora = new Date();
 
-    const [total, porEstado, porTipo, sinAsignar] = await Promise.all([
+    const [total, porEstado, porTipo, sinAsignar, conSaldoPendienteCount, saldoPendienteAgg] = await Promise.all([
       this.prisma.famSolicitudBeneficio.count({ where: { estado: { notIn: ['PAGADA', 'RECHAZADA'] } } }),
       this.prisma.famSolicitudBeneficio.groupBy({ by: ['estado'], _count: true, where: { estado: { notIn: ['PAGADA', 'RECHAZADA'] } } }),
       this.prisma.famSolicitudBeneficio.groupBy({ by: ['tipoBeneficioId'], _count: true }),
       this.prisma.famSolicitudBeneficio.count({ where: { estado: 'PENDIENTE' } }),
+      this.prisma.famSolicitudBeneficio.count({ where: { tieneSaldoPendiente: true } }),
+      this.prisma.famSolicitudBeneficio.aggregate({
+        _sum: { saldoPendiente: true },
+        where: { tieneSaldoPendiente: true },
+      }),
     ]);
 
     const configSla = await this.prisma.expedienteSlaConfig.findMany({ where: { activo: true } });
@@ -99,6 +104,8 @@ export class ExpedienteSlaService {
       proximosAVencer: vencidos + porVencer,
       vencidos,
       porTipo: Array.from(mapaTipos.values()),
+      conSaldoPendienteCount,
+      saldoPendienteTotal: Number(saldoPendienteAgg._sum.saldoPendiente || 0),
     };
   }
 

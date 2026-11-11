@@ -1,7 +1,8 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, forwardRef, Inject } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { FamService } from '../fam/fam.service';
+import { FamBeneficiosService } from './fam-beneficios.service';
 import {
   RegistrarSucesionIntestadaDto,
   ModificarDistribucionSucesionDto,
@@ -14,6 +15,8 @@ export class FamSucesionService {
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
     private readonly famService: FamService,
+    @Inject(forwardRef(() => FamBeneficiosService))
+    private readonly famBeneficiosService: FamBeneficiosService,
   ) {}
 
   private validarHerederos(herederos: HerederoSucesionItemDto[], montoTotal: number) {
@@ -48,23 +51,23 @@ export class FamSucesionService {
       }
     }
 
-    // 2. Validar suma de porcentajes
+    // 2. Validar suma de porcentajes (no debe exceder 100%)
     const sumaPorcentajes = Number(
       herederos.reduce((acc, h) => acc + Number(h.porcentaje || 0), 0).toFixed(2),
     );
-    if (Math.abs(sumaPorcentajes - 100) > 0.05) {
+    if (sumaPorcentajes > 100.05) {
       throw new BadRequestException(
-        `La suma de porcentajes debe ser exactamente 100% (suma actual: ${sumaPorcentajes}%)`,
+        `La suma de porcentajes no puede exceder el 100% (suma actual: ${sumaPorcentajes}%)`,
       );
     }
 
-    // 3. Validar suma de montos
+    // 3. Validar suma de montos (no debe exceder el monto total)
     const sumaMontos = Number(
       herederos.reduce((acc, h) => acc + Number(h.monto || 0), 0).toFixed(2),
     );
-    if (Math.abs(sumaMontos - montoTotal) > 0.05) {
+    if (sumaMontos > montoTotal + 0.05) {
       throw new BadRequestException(
-        `La suma de montos asignados (S/ ${sumaMontos.toFixed(2)}) debe coincidir con el monto total (S/ ${montoTotal.toFixed(2)})`,
+        `La suma de montos asignados (S/ ${sumaMontos.toFixed(2)}) no puede exceder el monto total (S/ ${montoTotal.toFixed(2)})`,
       );
     }
   }
@@ -136,6 +139,13 @@ export class FamSucesionService {
 
     const estadoFinal = dto.estado === 'PAGADA' ? 'PAGADA' : 'PENDIENTE';
 
+    // T8: Calcular saldo pendiente para la sucesión intestada
+    const sumaMontos = Number(
+      dto.herederos.reduce((acc, h) => acc + Number(h.monto || 0), 0).toFixed(2),
+    );
+    const montoMinimo = await this.famBeneficiosService.obtenerMontoMinimoFallecimiento();
+    const calculo = this.famBeneficiosService.calcularSaldoPendiente(sumaMontos, montoMinimo);
+
     const resultado = await this.prisma.$transaction(async (tx) => {
       // 1. Crear expediente principal
       const solicitud = await tx.famSolicitudBeneficio.create({
@@ -143,6 +153,9 @@ export class FamSucesionService {
           colegiadoId: dto.colegiadoId.trim(),
           tipoBeneficioId: tipoBeneficio.id,
           monto: dto.montoTotal,
+          montoTotalAsignado: calculo.montoTotalAsignado,
+          saldoPendiente: calculo.saldoPendiente,
+          tieneSaldoPendiente: calculo.tieneSaldoPendiente,
           moneda: 'PEN',
           estado: estadoFinal,
           sucesionIntestada: dto.sustentoPdf || null,
@@ -175,6 +188,27 @@ export class FamSucesionService {
           registradoPor: userId,
         },
       });
+
+      if (calculo.tieneSaldoPendiente) {
+        await this.famBeneficiosService.registrarAuditoriaBeneficiarios({
+          expedienteId: solicitud.id,
+          accion: 'GUARDADO_CON_SALDO',
+          usuarioId: userId,
+          montoFaltante: calculo.saldoPendiente,
+          montoTotal: calculo.montoTotalAsignado,
+          detalleJson: {
+            motivo: 'Registro inicial de sucesión intestada con saldo pendiente',
+            herederos: dto.herederos.map((h) => ({
+              nombres: `${h.nombres} ${h.apellidos}`.trim(),
+              dni: h.numeroDocumento,
+              porcentaje: h.porcentaje,
+              monto: h.monto,
+            })),
+          },
+          ipAddress: ip,
+          tx,
+        });
+      }
 
       // 2. Crear cabecera de sucesión intestada
       const sucesion = await tx.famSucesionIntestada.create({
@@ -431,17 +465,47 @@ export class FamSucesionService {
         },
       });
 
-      // 5. Actualizar resumen en famSolicitudBeneficio
+      // 5. Actualizar resumen en famSolicitudBeneficio y recalcular saldo pendiente
       const nombresConcat = dto.herederos
         .map((h) => `${h.nombres.trim()} ${h.apellidos.trim()}`)
         .join(' / ');
       const dnisConcat = dto.herederos.map((h) => h.numeroDocumento.trim()).join(' / ');
+
+      const sumaMontos = Number(
+        dto.herederos.reduce((acc, h) => acc + Number(h.monto || 0), 0).toFixed(2),
+      );
+      const montoMinimo = await this.famBeneficiosService.obtenerMontoMinimoFallecimiento();
+      const calculo = this.famBeneficiosService.calcularSaldoPendiente(sumaMontos, montoMinimo);
+
       await tx.famSolicitudBeneficio.update({
         where: { id: sucesion.solicitudId },
         data: {
           solicitanteNombre: nombresConcat.slice(0, 200),
           solicitanteDni: dnisConcat.slice(0, 20) || dto.herederos[0]?.numeroDocumento,
+          montoTotalAsignado: calculo.montoTotalAsignado,
+          saldoPendiente: calculo.saldoPendiente,
+          tieneSaldoPendiente: calculo.tieneSaldoPendiente,
         },
+      });
+
+      await this.famBeneficiosService.registrarAuditoriaBeneficiarios({
+        expedienteId: sucesion.solicitudId,
+        accion: 'AJUSTE',
+        usuarioId: userId,
+        montoFaltante: calculo.saldoPendiente,
+        montoTotal: calculo.montoTotalAsignado,
+        detalleJson: {
+          motivo: dto.motivoModificacion,
+          version: nuevaVersionNum,
+          herederos: dto.herederos.map((h) => ({
+            nombres: `${h.nombres} ${h.apellidos}`.trim(),
+            dni: h.numeroDocumento,
+            porcentaje: h.porcentaje,
+            monto: h.monto,
+          })),
+        },
+        ipAddress: ip,
+        tx,
       });
 
       // 6. Sincronizar depósitos si ya existían para este trámite

@@ -12,6 +12,12 @@ import PagoExpedienteModal from '@/components/fam/PagoExpedienteModal';
 import EditarDepositoModal from '@/components/fam/EditarDepositoModal';
 import HistorialExpediente from '@/components/fam/HistorialExpediente';
 import EliminarExpedienteModal from '@/components/fam/EliminarExpedienteModal';
+import ModalRegularizarSaldo from '@/components/fam/ModalRegularizarSaldo';
+import {
+  procesarArchivoDocumento,
+  unirDocumentosPdf,
+  DocumentoParaUnir,
+} from '@/lib/pdf-utils';
 
 interface BeneficiarioVinculado {
   id: string;
@@ -106,6 +112,19 @@ interface DetalleExpediente {
   beneficiariosVinculados: BeneficiarioVinculado[];
   covidMontoTotal: number;
   tieneFallecimiento?: boolean;
+  tieneSaldoPendiente?: boolean;
+  saldoPendiente?: number;
+  montoTotalAsignado?: number;
+  montoMinimoNormativo?: number;
+  auditoriasBeneficiarios?: Array<{
+    id: string;
+    accion: string;
+    usuarioId: string;
+    fecha: string;
+    montoFaltante: number;
+    montoTotal: number;
+    detalleJson?: any;
+  }>;
   estadoReparto?: EstadoReparto | null;
   montoBase?: number | null;
   depositos?: DepositoBeneficiario[];
@@ -177,6 +196,7 @@ export default function DetalleExpedientePage() {
   const [editHistorialId, setEditHistorialId] = useState<string | null>(null);
   const [slaConfig, setSlaConfig] = useState<any[]>([]);
   const [completarOpen, setCompletarOpen] = useState(false);
+  const [regularizarOpen, setRegularizarOpen] = useState(false);
   const [pagoOpen, setPagoOpen] = useState(false);
   const [depositoEdit, setDepositoEdit] = useState<DepositoBeneficiario | null>(null);
   const [formAdmin, setFormAdmin] = useState({
@@ -329,18 +349,12 @@ export default function DetalleExpedientePage() {
     docInputRef.current?.click();
   };
 
+  const [uniendoDocs, setUniendoDocs] = useState(false);
+
   const subirDocumento = async (file: File | null) => {
     if (!file || !docTarget) return;
     const { expedienteId, campo } = docTarget;
     const label = DOCS_LABELS[campo] || 'Documento';
-    if (file.type !== 'application/pdf') {
-      showConfirmMessage('error', `${label}: formato inválido`, 'Solo se permiten archivos PDF');
-      return;
-    }
-    if (file.size > 10 * 1024 * 1024) {
-      showConfirmMessage('error', `${label}: excede 10MB`, `Archivo: ${(file.size / 1024 / 1024).toFixed(2)}MB`);
-      return;
-    }
 
     let declaracionJuradaDni: string | undefined;
     if (campo === 'declaracionJurada') {
@@ -355,11 +369,16 @@ export default function DetalleExpedientePage() {
       declaracionJuradaDni = dni;
     }
 
-    const base64 = await new Promise<string>((resolve) => {
-      const reader = new FileReader();
-      reader.onload = (e) => resolve(((e.target?.result as string) || '').split(',')[1] || '');
-      reader.readAsDataURL(file);
-    });
+    let base64 = '';
+    let esImagenConvertida = false;
+    try {
+      const res = await procesarArchivoDocumento(file, 10);
+      base64 = res.base64;
+      esImagenConvertida = res.esImagenConvertida;
+    } catch (err: any) {
+      showConfirmMessage('error', `${label}: formato inválido`, err?.message || 'Solo se permiten PDF o imágenes (JPG, PNG, WEBP)');
+      return;
+    }
 
     const key = `${expedienteId}:${campo}`;
     setSubiendoDoc(key);
@@ -373,13 +392,147 @@ export default function DetalleExpedientePage() {
         ...(declaracionJuradaDni && { declaracionJuradaDni }),
         ...(completa ? { documentacionCompleta: true } : {}),
       });
-      showConfirmMessage('success', `${label} subido correctamente`, expedienteId === id ? detalle?.expedienteNumero || '' : docsOtros[expedienteId]?.expediente || '');
+      showConfirmMessage(
+        'success',
+        `${label} subido correctamente`,
+        esImagenConvertida
+          ? 'La imagen fue convertida a PDF y guardada con éxito'
+          : (expedienteId === id ? detalle?.expedienteNumero || '' : docsOtros[expedienteId]?.expediente || ''),
+      );
       await refrescarDocs(expedienteId);
     } catch (err: any) {
       showConfirmMessage('error', 'No se pudo subir el documento', err?.response?.data?.message || 'Intente nuevamente');
     } finally {
       setSubiendoDoc(null);
       setDocTarget(null);
+    }
+  };
+
+  const verExpedienteCompletoPdf = async (expedienteId = id) => {
+    setUniendoDocs(true);
+    try {
+      const docsParaUnir: DocumentoParaUnir[] = [];
+      const disponibles = expedienteId === id ? (detalle?.documentosDisponibles || {}) : (docsOtros[expedienteId]?.docs || {});
+
+      // 1. Obtener todos los documentos del expediente
+      const promesasDocs = Object.keys(disponibles)
+        .filter((campo) => disponibles[campo])
+        .map(async (campo) => {
+          try {
+            const { data } = await api.get(`/fam-beneficios/${expedienteId}/documento/${campo}`);
+            if (data?.contenido) {
+              return {
+                titulo: DOCS_LABELS[campo] || campo,
+                base64: data.contenido as string,
+                campo,
+              };
+            }
+          } catch (e) {
+            console.warn(`No se pudo obtener el documento ${campo}:`, e);
+          }
+          return null;
+        });
+
+      const docsObtenidos = (await Promise.all(promesasDocs)).filter(Boolean) as { titulo: string; base64: string; campo: string }[];
+
+      // Orden canónico según CAMPOS_DOCUMENTO
+      const orden = [
+        'fichaAdmisibilidad',
+        'solicitudAsignacion',
+        'cartaRemision',
+        'memorando',
+        'ordenPago',
+        'sucesionIntestada',
+        'declaracionJurada',
+        'actaDefuncion',
+        'otrosDocumentos',
+      ];
+      docsObtenidos.sort((a, b) => {
+        const ia = orden.indexOf(a.campo);
+        const ib = orden.indexOf(b.campo);
+        return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+      });
+
+      docsObtenidos.forEach((d) => docsParaUnir.push({ titulo: d.titulo, base64: d.base64 }));
+
+      // 2. Si es el expediente actual, incluir declaraciones u órdenes de pago de beneficiarios
+      if (expedienteId === id && detalle?.beneficiariosVinculados) {
+        const promesasBenes = detalle.beneficiariosVinculados.map(async (b) => {
+          const benDocs: DocumentoParaUnir[] = [];
+          if (b.tieneDeclaracionJurada) {
+            try {
+              const { data } = await api.get(`/fam-beneficios/${id}/beneficiario/${b.id}/declaracion`);
+              if (data?.contenido) {
+                benDocs.push({
+                  titulo: `Declaración Jurada - ${b.nombre}`,
+                  base64: data.contenido,
+                  subtitulo: b.dni ? `DNI: ${b.dni}` : undefined,
+                });
+              }
+            } catch {}
+          }
+          if (b.tieneOrdenPago) {
+            try {
+              const { data } = await api.get(`/fam-beneficios/${id}/beneficiario/${b.id}/orden-pago`);
+              if (data?.contenido) {
+                benDocs.push({
+                  titulo: `Voucher / Orden de Pago - ${b.nombre}`,
+                  base64: data.contenido,
+                  subtitulo: `Asignado: ${b.porcentajeAsignado}%`,
+                });
+              }
+            } catch {}
+          }
+          return benDocs;
+        });
+
+        const benesDocsList = await Promise.all(promesasBenes);
+        benesDocsList.flat().forEach((d) => docsParaUnir.push(d));
+      }
+
+      // 3. Comprobantes de depósito realizados
+      if (expedienteId === id && detalle?.depositos) {
+        const promesasDepositos = detalle.depositos
+          .filter((d) => d.tieneComprobante)
+          .map(async (d) => {
+            try {
+              const { data } = await api.get(`/fam-beneficios/${id}/comprobante-deposito/${d.id}`);
+              if (data?.contenido) {
+                return {
+                  titulo: `Comprobante de Depósito - ${d.nombreBeneficiario || 'Beneficiario'}`,
+                  base64: data.contenido as string,
+                  subtitulo: `Monto: S/ ${d.monto}${d.banco ? ` • Banco: ${d.banco}` : ''}`,
+                };
+              }
+            } catch {}
+            return null;
+          });
+
+        const depositosDocs = (await Promise.all(promesasDepositos)).filter(Boolean) as DocumentoParaUnir[];
+        depositosDocs.forEach((d) => docsParaUnir.push(d));
+      }
+
+      if (docsParaUnir.length === 0) {
+        showConfirmMessage('warning', 'Sin documentos', 'Este expediente no tiene documentos adjuntos para consolidar.');
+        return;
+      }
+
+      const mergedBase64 = await unirDocumentosPdf(docsParaUnir, {
+        expedienteNumero: detalle?.expedienteNumero || 'EXP-FAM',
+        colegiadoNombre: detalle?.NOMBRE_COLEGIADO,
+        colegiadoCip: detalle?.NUM_COLEGIATURA,
+        tipoBeneficio: detalle?.tipoBeneficio?.nombre,
+        incluirCaratula: true,
+      });
+
+      setPdfViewer({
+        base64: mergedBase64,
+        nombre: `Expediente Completo Consolidado - ${detalle?.expedienteNumero || detalle?.NOMBRE_COLEGIADO || 'FAM'}`,
+      });
+    } catch (err: any) {
+      showConfirmMessage('error', 'Error al consolidar documentos', err?.message || 'No se pudieron consolidar los PDFs.');
+    } finally {
+      setUniendoDocs(false);
     }
   };
 
@@ -565,6 +718,56 @@ export default function DetalleExpedientePage() {
     <div className="w-full space-y-5 pb-8 font-sans text-slate-800 antialiased">
       <ConfirmCenterMessage />
 
+      {/* Alerta de Saldo Pendiente y Regularización */}
+      {detalle.tieneSaldoPendiente && (
+        <div className="w-full p-4 bg-amber-50 border border-amber-300 rounded-xl shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="p-2 bg-amber-100 text-amber-800 rounded-lg flex-shrink-0 mt-0.5">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                />
+              </svg>
+            </div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="font-bold text-amber-900 text-sm">Expediente con Saldo Pendiente de Regularizar</h3>
+                <span className="px-2.5 py-0.5 text-xs font-bold bg-amber-200 text-amber-900 rounded-full">
+                  Falta: S/ {Number(detalle.saldoPendiente || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+              <p className="text-xs text-amber-800 mt-1 leading-relaxed">
+                Monto total asignado actualmente:{' '}
+                <strong>
+                  S/ {Number(detalle.montoTotalAsignado ?? detalle.monto).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                </strong>
+                {' · '}
+                Monto mínimo normativo:{' '}
+                <strong>
+                  S/ {Number(detalle.montoMinimoNormativo || 3000).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                </strong>
+                . Puede incorporar beneficiarios adicionales o ajustar montos para cubrir el saldo normativo.
+              </p>
+            </div>
+          </div>
+          {puedeOperar && (
+            <button
+              onClick={() => setRegularizarOpen(true)}
+              type="button"
+              className="px-4 py-2 bg-[#3258CA] text-white text-xs font-semibold rounded-lg hover:bg-[#2846a3] transition-colors shrink-0 shadow-xs inline-flex items-center gap-1.5 self-start sm:self-center"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+              Regularizar Saldo
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Cabecera limpia integrada con el layout (sin cuadro flotante en el medio) */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-xs sm:text-sm">
@@ -585,6 +788,18 @@ export default function DetalleExpedientePage() {
 
         {/* Acciones principales a ancho natural */}
         <div className="flex items-center space-x-2 shrink-0 self-end sm:self-auto print:hidden">
+          <button
+            onClick={() => verExpedienteCompletoPdf(id)}
+            type="button"
+            disabled={uniendoDocs}
+            className="inline-flex items-center px-3 py-1.5 text-xs font-semibold text-white bg-[#3258CA] hover:bg-[#2846a3] disabled:opacity-50 rounded-lg shadow-xs transition-colors"
+            title="Ver todos los documentos del expediente unificados en un solo PDF"
+          >
+            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            {uniendoDocs ? 'Consolidando...' : 'Ver Expediente Completo (PDF)'}
+          </button>
           <button
             onClick={() => window.print()}
             type="button"
@@ -1328,7 +1543,7 @@ export default function DetalleExpedientePage() {
               <input
                 ref={docInputRef}
                 type="file"
-                accept="application/pdf,.pdf"
+                accept="application/pdf,image/png,image/jpeg,image/jpg,image/webp"
                 className="hidden"
                 onChange={(e) => {
                   subirDocumento(e.target.files?.[0] || null);
@@ -1336,10 +1551,33 @@ export default function DetalleExpedientePage() {
                 }}
               />
 
-              <div className={`rounded-xl px-4 py-3 border ${detalle.documentacionCompleta ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
-                <p className="text-xs sm:text-sm font-semibold flex items-center gap-2">
-                  {detalle.documentacionCompleta ? '✓ Documentación del expediente actual completa' : '⚠️ Documentación del expediente actual pendiente'}
-                </p>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
+                <div className={`rounded-lg px-3 py-1.5 border inline-flex items-center gap-2 ${detalle.documentacionCompleta ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
+                  <p className="text-xs sm:text-sm font-semibold">
+                    {detalle.documentacionCompleta ? '✓ Documentación del expediente completa' : '⚠️ Documentación del expediente pendiente'}
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => verExpedienteCompletoPdf(id)}
+                  disabled={uniendoDocs}
+                  className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-white bg-[#3258CA] hover:bg-[#2846a3] disabled:opacity-50 rounded-lg shadow-xs transition-colors shrink-0 self-start sm:self-auto"
+                >
+                  {uniendoDocs ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      Consolidando todos los documentos...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      Ver todos los documentos en un solo PDF
+                    </>
+                  )}
+                </button>
               </div>
 
               {!docsCargados ? (
@@ -1419,7 +1657,7 @@ export default function DetalleExpedientePage() {
                                       className={`text-xs font-medium hover:underline disabled:opacity-50 ${disponible ? 'text-slate-500' : 'text-[#3258CA]'}`}
                                       type="button"
                                     >
-                                      {subiendoDoc === loadKey ? 'Subiendo...' : disponible ? 'Reemplazar' : 'Subir PDF'}
+                                      {subiendoDoc === loadKey ? 'Subiendo...' : disponible ? 'Reemplazar' : 'Subir PDF o Imagen'}
                                     </button>
                                   )}
                                 </div>
@@ -1659,6 +1897,20 @@ export default function DetalleExpedientePage() {
             setEditHistorialId(null);
             recargar();
           }}
+        />
+      )}
+
+      {regularizarOpen && detalle && (
+        <ModalRegularizarSaldo
+          isOpen={regularizarOpen}
+          onClose={() => setRegularizarOpen(false)}
+          onSuccess={recargar}
+          expedienteId={id}
+          expedienteNumero={detalle.expedienteNumero}
+          colegiadoNombre={detalle.NOMBRE_COLEGIADO}
+          montoTotalAsignado={Number(detalle.montoTotalAsignado ?? detalle.monto)}
+          saldoPendiente={Number(detalle.saldoPendiente || 0)}
+          montoMinimoNormativo={Number(detalle.montoMinimoNormativo || 3000)}
         />
       )}
 

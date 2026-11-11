@@ -98,6 +98,11 @@ export class BeneficiarioRegistroDto {
   porcentaje: number;
 
   @IsOptional()
+  @IsNumber()
+  @Min(0)
+  monto?: number;
+
+  @IsOptional()
   @IsString()
   observaciones?: string;
 
@@ -636,4 +641,72 @@ export class ActualizarFamSolicitudDto {
   @IsOptional()
   @IsDateString()
   ordenPagoFecha?: string;
+}
+
+export class BeneficiarioRegularizacionItemDto {
+  @IsOptional()
+  @IsString()
+  id?: string;
+
+  @IsString()
+  nombre: string;
+
+  @IsOptional()
+  @IsString()
+  dni?: string;
+
+  @IsString()
+  parentesco: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  porcentaje?: number;
+
+  @IsNumber()
+  @Min(0.01)
+  monto: number;
+
+  @IsOptional()
+  @IsString()
+  observaciones?: string;
+
+  @Validate(EsPdfBase64)
+  @IsOptional()
+  @IsString()
+  declaracionJurada?: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d{8}$/, { message: 'declaracionJuradaDni debe tener exactamente 8 digitos' })
+  declaracionJuradaDni?: string;
+
+  @Validate(EsPdfBase64)
+  @IsOptional()
+  @IsString()
+  ordenPago?: string;
+}
+
+export class RegularizarSaldoDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => BeneficiarioRegularizacionItemDto)
+  beneficiarios: BeneficiarioRegularizacionItemDto[];
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  montoAdicional?: number;
+
+  @IsOptional()
+  @IsString()
+  motivo?: string;
+
+  @IsOptional()
+  @IsString()
+  observaciones?: string;
+
+  @IsOptional()
+  @IsString()
+  observacion?: string;
 }

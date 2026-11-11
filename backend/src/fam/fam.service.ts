@@ -603,6 +603,57 @@ export class FamService implements OnModuleInit, OnModuleDestroy {
     }));
   }
 
+  /**
+   * Búsqueda flexible de colegiados por término (CIP, DNI, o nombres completos en cualquier orden).
+   * Devuelve hasta 200 IDs de colegiados que coinciden para filtrar expedientes de manera precisa.
+   */
+  async buscarColegiadosIdsParaBusqueda(term: string): Promise<string[]> {
+    const raw = (term || '').trim();
+    if (!raw || raw.length < 2) return [];
+    if (!(await this.ensureConnected())) return [];
+
+    try {
+      const tokens = raw.split(/\s+/).filter((t) => t.length > 0);
+      const tokenClauses: string[] = [];
+      tokens.forEach((_, i) => {
+        tokenClauses.push(`(pc.cNombres LIKE @t${i} OR pc.cApPaterno LIKE @t${i} OR pc.cApMaterno LIKE @t${i})`);
+      });
+
+      const conditions: string[] = [
+        'c.cCodigoCIP = @raw',
+        'c.cCodigoCIP LIKE @rawLike',
+        'doc.cDocumentoIdentidad = @raw',
+        'doc.cDocumentoIdentidad LIKE @rawLike',
+      ];
+      if (tokenClauses.length > 0) {
+        conditions.push(`(${tokenClauses.join(' AND ')})`);
+      }
+
+      const query = `
+        SELECT TOP 200 c.nIdColegiado AS COLEGIADO_ID
+        FROM TColegiado c
+        INNER JOIN TPersona pc ON c.nIdPersona = pc.nIdPersona
+        LEFT JOIN TDocumentoPersona doc ON pc.nIdPersona = doc.nIdPersona
+        WHERE ${conditions.join(' OR ')}
+      `;
+
+      this.enforceReadOnly(query);
+      const result = await this.runQuery((req) => {
+        req.input('raw', sql.VarChar, raw);
+        req.input('rawLike', sql.VarChar, `%${raw}%`);
+        tokens.forEach((t, i) => {
+          req.input(`t${i}`, sql.VarChar, `%${t}%`);
+        });
+        return req.query(query);
+      });
+
+      return (result.recordset || []).map((r: any) => String(r.COLEGIADO_ID));
+    } catch (err: any) {
+      this.logger.warn(`Error en buscarColegiadosIdsParaBusqueda: ${err.message}`);
+      return [];
+    }
+  }
+
   async exportar(params: {
     search?: string;
     estado?: string;

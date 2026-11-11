@@ -1,4 +1,4 @@
-﻿import { BadRequestException, ConflictException, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { FamBeneficiosService } from './fam-beneficios.service';
 
 const PDF_BASE64 = Buffer.from('%PDF-1.4\ntrailer<</Root 1 0 R>>\n%%EOF\n').toString('base64');
@@ -1269,5 +1269,99 @@ describe('FamBeneficiosService.eliminar - borrado completo del expediente', () =
   it('permite eliminar un expediente PAGADA', async () => {
     await expect(service.eliminar('exp-1', 'admin-1')).resolves.toBeDefined();
     expect(prisma.famSolicitudBeneficio.delete).toHaveBeenCalled();
+  });
+});
+
+describe('FamBeneficiosService.listar - búsqueda por CIP, DNI y Nombres Completos', () => {
+  let prisma: ReturnType<typeof crearPrismaMock>;
+  let famMock: any;
+  let service: FamBeneficiosService;
+
+  beforeEach(() => {
+    prisma = crearPrismaMock();
+    famMock = {
+      buscarColegiadosPorIds: jest.fn().mockResolvedValue(new Map()),
+      buscarColegiadosIdsParaBusqueda: jest.fn().mockResolvedValue([]),
+    };
+    prisma.famSolicitudBeneficio.findMany.mockResolvedValue([]);
+    prisma.famSolicitudBeneficio.count.mockResolvedValue(0);
+    service = new FamBeneficiosService(prisma as any, auditService, famMock);
+  });
+
+  it('busca por CIP invocando buscarColegiadosIdsParaBusqueda e incluyendo colegiadoId en where.OR', async () => {
+    famMock.buscarColegiadosIdsParaBusqueda.mockResolvedValue(['2395']);
+
+    await service.listar({ search: '40504' });
+
+    expect(famMock.buscarColegiadosIdsParaBusqueda).toHaveBeenCalledWith('40504');
+    expect(prisma.famSolicitudBeneficio.findMany).toHaveBeenCalled();
+    const callArgs = prisma.famSolicitudBeneficio.findMany.mock.calls[0][0];
+    expect(callArgs.where.OR).toEqual(
+      expect.arrayContaining([
+        { colegiadoId: { in: ['2395'] } },
+        { expedienteNumero: { contains: '40504' } },
+        { solicitanteDni: { contains: '40504' } },
+      ]),
+    );
+  });
+
+  it('busca por nombres completos descomponiendo tokens y consultando legacy y APP_DB', async () => {
+    famMock.buscarColegiadosIdsParaBusqueda.mockResolvedValue(['2395']);
+
+    await service.listar({ search: 'Mauro Serrano' });
+
+    expect(famMock.buscarColegiadosIdsParaBusqueda).toHaveBeenCalledWith('Mauro Serrano');
+    const callArgs = prisma.famSolicitudBeneficio.findMany.mock.calls[0][0];
+    expect(callArgs.where.OR).toEqual(
+      expect.arrayContaining([
+        { colegiadoId: { in: ['2395'] } },
+        {
+          AND: [
+            { solicitanteNombre: { contains: 'Mauro' } },
+            { solicitanteNombre: { contains: 'Serrano' } },
+          ],
+        },
+      ]),
+    );
+  });
+
+  it('busca por DNI tanto en APP_DB solicitante como en vinculos y colegiado', async () => {
+    famMock.buscarColegiadosIdsParaBusqueda.mockResolvedValue(['10776']);
+
+    await service.listar({ search: '23874802' });
+
+    expect(famMock.buscarColegiadosIdsParaBusqueda).toHaveBeenCalledWith('23874802');
+    const callArgs = prisma.famSolicitudBeneficio.findMany.mock.calls[0][0];
+    expect(callArgs.where.OR).toEqual(
+      expect.arrayContaining([
+        { colegiadoId: { in: ['10776'] } },
+        { solicitanteDni: { contains: '23874802' } },
+      ]),
+    );
+  });
+
+  describe('Alerta Saldo Pendiente y Regularización (Fallecimiento)', () => {
+    it('T6 / R9: calcularSaldoPendiente calcula con precisión decimales y n beneficiarios (ej: 428.50 * 5 = 2142.50)', () => {
+      const calculo = service.calcularSaldoPendiente(2142.50, 3000.00);
+      expect(calculo.tieneSaldoPendiente).toBe(true);
+      expect(calculo.saldoPendiente).toBe(857.50);
+      expect(calculo.montoTotalAsignado).toBe(2142.50);
+      expect(calculo.montoMinimo).toBe(3000.00);
+    });
+
+    it('T6 / R3: calcularSaldoPendiente retorna saldo 0 y tieneSaldoPendiente false cuando cubre el mínimo', () => {
+      const calculo = service.calcularSaldoPendiente(3000.00, 3000.00);
+      expect(calculo.tieneSaldoPendiente).toBe(false);
+      expect(calculo.saldoPendiente).toBe(0);
+
+      const calculoExceso = service.calcularSaldoPendiente(3500.00, 3000.00);
+      expect(calculoExceso.tieneSaldoPendiente).toBe(false);
+      expect(calculoExceso.saldoPendiente).toBe(0);
+    });
+
+    it('T7 / R16: obtenerMontoMinimoFallecimiento retorna 3000 por defecto si no existe configuración en BD', async () => {
+      const min = await service.obtenerMontoMinimoFallecimiento();
+      expect(min).toBe(3000.00);
+    });
   });
 });

@@ -1,8 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { FamService } from '../fam/fam.service';
-import { CrearFamSolicitudDto, ActualizarFamSolicitudDto, CrearRegistroFamDto } from './dto/fam-solicitud.dto';
+import { CrearFamSolicitudDto, ActualizarFamSolicitudDto, CrearRegistroFamDto, RegularizarSaldoDto } from './dto/fam-solicitud.dto';
 
 const CAMPOS_DOCUMENTO = [
   'fichaAdmisibilidad',
@@ -53,6 +53,10 @@ const MONTO_BASE_POR_DEFECTO: Record<string, number> = {
 
 @Injectable()
 export class FamBeneficiosService {
+  private readonly logger = new Logger(FamBeneficiosService.name);
+  private montoMinimoCache: { valor: number; timestamp: number } | null = null;
+  private readonly CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos
+
   constructor(
     private prisma: PrismaService,
     private auditService: AuditService,
@@ -309,6 +313,119 @@ export class FamBeneficiosService {
       if (monto) return Number(monto.monto);
     } catch {}
     return MONTO_BASE_POR_DEFECTO[codigo] ?? 0;
+  }
+
+  /**
+   * T6: Calcula el saldo pendiente entre el monto total asignado y el mínimo normativo.
+   * Maneja combinaciones libres de montos decimales (ej. 428.50 * 5 = 2142.50) y n beneficiarios variable (R1, R2).
+   */
+  calcularSaldoPendiente(montoTotal: number, montoMinimo: number) {
+    const total = Math.round((Number(montoTotal) || 0) * 100) / 100;
+    const minimo = Math.round((Number(montoMinimo) || 0) * 100) / 100;
+    const diff = Math.round((minimo - total) * 100) / 100;
+
+    return {
+      tieneSaldoPendiente: diff > 0.005,
+      saldoPendiente: diff > 0.005 ? diff : 0,
+      montoTotalAsignado: total,
+      montoMinimo: minimo,
+    };
+  }
+
+  /**
+   * T7: Obtiene el monto mínimo normativo de fallecimiento desde BD con cache en memoria y fallback (R16).
+   */
+  async obtenerMontoMinimoFallecimiento(): Promise<number> {
+    const now = Date.now();
+    if (this.montoMinimoCache && now - this.montoMinimoCache.timestamp < this.CACHE_TTL_MS) {
+      return this.montoMinimoCache.valor;
+    }
+
+    try {
+      if (this.prisma.famConfiguracion?.findFirst) {
+        const cfg = await this.prisma.famConfiguracion.findFirst({
+          where: {
+            clave: { in: ['montoMinimoFallecimiento', 'FAM_MONTO_MINIMO_FALLECIMIENTO'] },
+            activo: true,
+          },
+        });
+        if (cfg?.valor) {
+          const val = parseFloat(cfg.valor);
+          if (!isNaN(val) && val > 0) {
+            this.montoMinimoCache = { valor: val, timestamp: now };
+            return val;
+          }
+        }
+      }
+
+      if (this.prisma.montoFam?.findFirst) {
+        const montoFam = await this.prisma.montoFam.findFirst({
+          where: { aplicaA: 'FALLECIMIENTO', activo: true },
+          select: { monto: true },
+        });
+        if (montoFam) {
+          const val = Number(montoFam.monto);
+          if (!isNaN(val) && val > 0) {
+            this.montoMinimoCache = { valor: val, timestamp: now };
+            return val;
+          }
+        }
+      }
+    } catch (e: any) {
+      this.logger.warn(`Error al leer montoMinimoFallecimiento de BD: ${e.message}`);
+    }
+
+    return 3000.00; // Fallback normativo seguro (R16)
+  }
+
+  /**
+   * Feature flag para activar/desactivar la alerta en producción.
+   */
+  async isAlertaSaldoPendienteEnabled(): Promise<boolean> {
+    try {
+      if (this.prisma.famConfiguracion?.findUnique) {
+        const cfg = await this.prisma.famConfiguracion.findUnique({
+          where: { clave: 'ALERTA_SALDO_PENDIENTE_ENABLED' },
+        });
+        if (cfg) return cfg.valor.toLowerCase() === 'true';
+      }
+    } catch {}
+    return true;
+  }
+
+  /**
+   * T3 / T8 / T9 / T10: Registra auditoría obligatoria de saldo y beneficiarios en expediente_beneficiario_audit.
+   */
+  async registrarAuditoriaBeneficiarios(params: {
+    expedienteId: string;
+    accion: 'GUARDADO_CON_SALDO' | 'REGULARIZACION' | 'AJUSTE' | 'ELIMINACION';
+    usuarioId: string;
+    montoFaltante: number;
+    montoTotal: number;
+    detalleJson?: any;
+    ipAddress?: string;
+    tx?: any;
+  }) {
+    const client = params.tx || this.prisma;
+    try {
+      if (client?.expedienteBeneficiarioAudit?.create) {
+        return await client.expedienteBeneficiarioAudit.create({
+          data: {
+            id: `EBA-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+            expedienteId: params.expedienteId,
+            accion: params.accion,
+            usuarioId: params.usuarioId || '00000000-0000-0000-0000-000000000001',
+            fecha: new Date(),
+            montoFaltante: params.montoFaltante || 0,
+            montoTotal: params.montoTotal || 0,
+            detalleJson: params.detalleJson ? JSON.stringify(params.detalleJson) : null,
+            ipAddress: params.ipAddress || null,
+          },
+        });
+      }
+    } catch (err: any) {
+      this.logger.error(`Error al registrar auditoría de beneficiarios: ${err.message}`);
+    }
   }
 
   // Un colegiado solo puede tener un expediente vigente por tipo de beneficio.
@@ -674,11 +791,46 @@ export class FamBeneficiosService {
         dto.solicitanteNombre?.trim() || payloadSolic?.nombre?.trim() || null;
       const solDni = dto.solicitanteDni?.trim() || payloadSolic?.dni?.trim() || null;
 
+      // T8: Calcular montoTotalAsignado y saldo pendiente para fallecimiento
+      const esFallecimiento =
+        tipoBeneficio.codigo === 'FALLECIMIENTO' ||
+        (tipoBeneficio.nombre || '').toUpperCase().includes('FALLECIMIENTO') ||
+        Boolean((dto as any).fechaDefuncion) ||
+        Boolean((dto as any).actaDefuncion);
+
+      let montoTotalAsignado = 0;
+      if (dto.beneficiarios.length > 0) {
+        montoTotalAsignado = this.redondearMonto(
+          dto.beneficiarios.reduce((acc, b) => {
+            const ind =
+              b.monto !== undefined && b.monto !== null && !isNaN(Number(b.monto)) && Number(b.monto) > 0
+                ? Number(b.monto)
+                : (Number(montoFinal || dto.monto || 0) * Number(b.porcentaje || 0)) / 100;
+            return acc + ind;
+          }, 0),
+        );
+      } else {
+        montoTotalAsignado = Number(montoFinal || dto.monto || 0);
+      }
+
+      let tieneSaldoPendiente = false;
+      let saldoPendiente = 0;
+
+      if (esFallecimiento) {
+        const montoMinimo = await this.obtenerMontoMinimoFallecimiento();
+        const calculoSaldo = this.calcularSaldoPendiente(montoTotalAsignado, montoMinimo);
+        tieneSaldoPendiente = calculoSaldo.tieneSaldoPendiente;
+        saldoPendiente = calculoSaldo.saldoPendiente;
+      }
+
       const solicitud = await tx.famSolicitudBeneficio.create({
         data: {
           colegiadoId: dto.colegiadoId,
           tipoBeneficioId: tipoBeneficio.id,
           monto: dto.monto,
+          montoTotalAsignado,
+          saldoPendiente,
+          tieneSaldoPendiente,
           moneda: dto.moneda || 'PEN',
           observaciones: dto.observaciones || null,
           cartaNumero: dto.cartaNumero || null,
@@ -704,6 +856,27 @@ export class FamBeneficiosService {
           ...(dto.modalidadBeneficio && { modalidadBeneficio: dto.modalidadBeneficio }),
         },
       });
+
+      if (tieneSaldoPendiente) {
+        await this.registrarAuditoriaBeneficiarios({
+          expedienteId: solicitud.id,
+          accion: 'GUARDADO_CON_SALDO',
+          usuarioId: userId,
+          montoFaltante: saldoPendiente,
+          montoTotal: montoTotalAsignado,
+          detalleJson: {
+            motivo: 'Registro inicial con saldo pendiente',
+            beneficiarios: dto.beneficiarios.map((b) => ({
+              nombre: b.nombre,
+              dni: b.dni,
+              porcentaje: b.porcentaje,
+              monto: b.monto || ((Number(dto.monto || 0) * (Number(b.porcentaje) || 0)) / 100),
+            })),
+          },
+          ipAddress: ip,
+          tx,
+        });
+      }
 
       for (const v of idsVinculados) {
         await tx.famSolicitudBeneficiario.create({
@@ -810,11 +983,28 @@ export class FamBeneficiosService {
       }
     }
 
-    return this.prisma.famSolicitudBeneficio.create({
+    const esFallecimiento =
+      tipoBeneficio.codigo === 'FALLECIMIENTO' ||
+      (tipoBeneficio.nombre || '').toUpperCase().includes('FALLECIMIENTO');
+    let tieneSaldoPendiente = false;
+    let saldoPendiente = 0;
+    const montoTotalAsignado = Number(dto.monto || 0);
+
+    if (esFallecimiento) {
+      const montoMinimo = await this.obtenerMontoMinimoFallecimiento();
+      const calculo = this.calcularSaldoPendiente(montoTotalAsignado, montoMinimo);
+      tieneSaldoPendiente = calculo.tieneSaldoPendiente;
+      saldoPendiente = calculo.saldoPendiente;
+    }
+
+    const nuevaSolicitud = await this.prisma.famSolicitudBeneficio.create({
       data: {
         colegiadoId: dto.colegiadoId,
         tipoBeneficioId: dto.tipoBeneficioId,
         monto: dto.monto,
+        montoTotalAsignado,
+        saldoPendiente,
+        tieneSaldoPendiente,
         moneda: dto.moneda || 'PEN',
         observaciones: dto.observaciones || null,
         fichaAdmisibilidad: dto.fichaAdmisibilidad || null,
@@ -834,6 +1024,19 @@ export class FamBeneficiosService {
       },
       include: { tipoBeneficio: true },
     });
+
+    if (tieneSaldoPendiente) {
+      await this.registrarAuditoriaBeneficiarios({
+        expedienteId: nuevaSolicitud.id,
+        accion: 'GUARDADO_CON_SALDO',
+        usuarioId: userId,
+        montoFaltante: saldoPendiente,
+        montoTotal: montoTotalAsignado,
+        detalleJson: { motivo: 'Registro inicial con saldo pendiente' },
+      });
+    }
+
+    return nuevaSolicitud;
   }
 
   async listar(params: {
@@ -844,6 +1047,7 @@ export class FamBeneficiosService {
     fechaDesde?: string;
     fechaHasta?: string;
     documentacionCompleta?: string; // 'SI' | 'NO'
+    conSaldoPendiente?: string; // 'SI' | 'NO'
     ordenarPor?: string; // 'ingreso' | 'solicitud' | 'pago'
     page?: number;
     limit?: number;
@@ -856,6 +1060,7 @@ export class FamBeneficiosService {
       fechaDesde,
       fechaHasta,
       documentacionCompleta,
+      conSaldoPendiente,
       ordenarPor,
       page = 1,
       limit = 25,
@@ -870,30 +1075,64 @@ export class FamBeneficiosService {
     if (tipoBeneficioId) where.tipoBeneficioId = tipoBeneficioId;
     if (documentacionCompleta === 'SI') where.documentacionCompleta = true;
     else if (documentacionCompleta === 'NO') where.documentacionCompleta = false;
+    if (conSaldoPendiente === 'SI' || conSaldoPendiente === 'true') {
+      where.tieneSaldoPendiente = true;
+    } else if (conSaldoPendiente === 'NO' || conSaldoPendiente === 'false') {
+      where.tieneSaldoPendiente = false;
+    }
     if (fechaDesde || fechaHasta) {
       where.fechaSolicitud = {};
       if (fechaDesde) where.fechaSolicitud.gte = new Date(fechaDesde);
       if (fechaHasta) where.fechaSolicitud.lte = new Date(`${fechaHasta}T23:59:59.999Z`);
     }
 
-    // Busqueda: CIP/DNI/nombre resuelto contra LEGACY_DB (con timeout para no colgar el listado)
+    // Busqueda: CIP, DNI, nombres completos, solicitante, beneficiarios, expediente, carta, memorando
     const termino = (search || '').trim();
     if (termino.length >= 2) {
       let idsDesdeLegacy: string[] = [];
       try {
-        const autocompletePromise = this.famService.autocomplete(termino).catch(() => [] as any[]);
-        const sugerencias = await Promise.race([
-          autocompletePromise,
-          new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 5000)),
+        const busquedaPromise = this.famService
+          .buscarColegiadosIdsParaBusqueda(termino)
+          .catch(() => [] as string[]);
+        idsDesdeLegacy = await Promise.race([
+          busquedaPromise,
+          new Promise<string[]>((resolve) => setTimeout(() => resolve([]), 5000)),
         ]);
-        idsDesdeLegacy = (sugerencias || []).map((s: any) => String(s.COLEGIADO_ID));
       } catch {
         idsDesdeLegacy = [];
       }
+
+      const tokens = termino.split(/\s+/).filter((t) => t.length > 0);
+
       const condicionesOr: any[] = [
         { expedienteNumero: { contains: termino } },
         { cartaNumero: { contains: termino } },
+        { memorandoNumero: { contains: termino } },
+        { solicitanteDni: { contains: termino } },
+        {
+          vinculos: {
+            some: {
+              beneficiario: {
+                OR: [{ dni: { contains: termino } }, { nombre: { contains: termino } }],
+              },
+            },
+          },
+        },
+        {
+          depositos: {
+            some: { dniBeneficiario: { contains: termino } },
+          },
+        },
       ];
+
+      if (tokens.length > 1) {
+        condicionesOr.push({
+          AND: tokens.map((t) => ({ solicitanteNombre: { contains: t } })),
+        });
+      } else {
+        condicionesOr.push({ solicitanteNombre: { contains: termino } });
+      }
+
       if (idsDesdeLegacy.length) {
         condicionesOr.unshift({ colegiadoId: { in: idsDesdeLegacy } });
       }
@@ -1063,6 +1302,9 @@ export class FamBeneficiosService {
           covidAsignacionId: s.covidAsignacionId,
           descuentoCovid: Number(s.descuentoCovid),
           montoFinal: s.montoFinal ? Number(s.montoFinal) : null,
+          montoTotalAsignado: s.montoTotalAsignado != null ? Number(s.montoTotalAsignado) : montoExpediente,
+          saldoPendiente: s.saldoPendiente != null ? Number(s.saldoPendiente) : 0,
+          tieneSaldoPendiente: Boolean(s.tieneSaldoPendiente),
           beneficiarios: listaBeneficiarios,
           documentos: CAMPOS_DOCUMENTO.reduce((acc, campo: CampoDocumento) => {
             acc[campo] = Boolean((s as any)[campo]);
@@ -1098,8 +1340,15 @@ export class FamBeneficiosService {
       throw new NotFoundException('Solicitud de beneficio no encontrada');
     }
 
-    const [mapaColegiados] = await Promise.all([
+    const [mapaColegiados, montoMinimoNormativo, auditoriasBeneficiarios] = await Promise.all([
       this.famService.buscarColegiadosPorIds([solicitud.colegiadoId]),
+      this.obtenerMontoMinimoFallecimiento(),
+      this.prisma.expedienteBeneficiarioAudit?.findMany
+        ? this.prisma.expedienteBeneficiarioAudit.findMany({
+            where: { expedienteId: id },
+            orderBy: { fecha: 'desc' },
+          }).catch(() => [])
+        : Promise.resolve([]),
     ]);
     const colegiado = mapaColegiados.get(solicitud.colegiadoId);
 
@@ -1185,6 +1434,19 @@ export class FamBeneficiosService {
       monto: Number(resto.monto),
       descuentoCovid: Number(resto.descuentoCovid || 0),
       montoFinal: resto.montoFinal ? Number(resto.montoFinal) : null,
+      montoTotalAsignado: resto.montoTotalAsignado != null ? Number(resto.montoTotalAsignado) : Number(resto.monto),
+      saldoPendiente: resto.saldoPendiente != null ? Number(resto.saldoPendiente) : 0,
+      tieneSaldoPendiente: Boolean(resto.tieneSaldoPendiente),
+      montoMinimoNormativo,
+      auditoriasBeneficiarios: auditoriasBeneficiarios.map((a: any) => ({
+        id: a.id,
+        accion: a.accion,
+        usuarioId: a.usuarioId,
+        fecha: a.fecha,
+        montoFaltante: Number(a.montoFaltante),
+        montoTotal: Number(a.montoTotal),
+        detalleJson: a.detalleJson ? (() => { try { return JSON.parse(a.detalleJson); } catch { return a.detalleJson; } })() : null,
+      })),
       covidAsignacionId: resto.covidAsignacionId || null,
       modalidadBeneficio: resto.modalidadBeneficio || null,
       covidMontoTotal,
@@ -2169,6 +2431,56 @@ export class FamBeneficiosService {
           });
         }
       }
+
+      // T9: Recalcular saldo pendiente si es beneficio de fallecimiento
+      const esFallecimiento =
+        existing.tipoBeneficio?.codigo === 'FALLECIMIENTO' ||
+        (existing.tipoBeneficio?.nombre || '').toUpperCase().includes('FALLECIMIENTO') ||
+        Boolean(existing.fechaDefuncion) ||
+        Boolean(existing.actaDefuncion);
+
+      if (esFallecimiento) {
+        const montoMinimo = await this.obtenerMontoMinimoFallecimiento();
+        const baseMonto = Number(existing.montoFinal ?? existing.monto ?? 0);
+        const montoTotalAsignado = this.redondearMonto(
+          lista.reduce((acc, b) => {
+            const ind =
+              b.monto !== undefined && b.monto !== null && !isNaN(Number(b.monto)) && Number(b.monto) > 0
+                ? Number(b.monto)
+                : (baseMonto * Number(b.porcentaje || 0)) / 100;
+            return acc + ind;
+          }, 0),
+        );
+        const calculoSaldo = this.calcularSaldoPendiente(montoTotalAsignado, montoMinimo);
+
+        await tx.famSolicitudBeneficio.update({
+          where: { id },
+          data: {
+            montoTotalAsignado: calculoSaldo.montoTotalAsignado,
+            saldoPendiente: calculoSaldo.saldoPendiente,
+            tieneSaldoPendiente: calculoSaldo.tieneSaldoPendiente,
+          },
+        });
+
+        await this.registrarAuditoriaBeneficiarios({
+          expedienteId: id,
+          accion: 'AJUSTE',
+          usuarioId: userId,
+          montoFaltante: calculoSaldo.saldoPendiente,
+          montoTotal: calculoSaldo.montoTotalAsignado,
+          detalleJson: {
+            motivo: 'Ajuste de beneficiarios',
+            beneficiarios: lista.map((b) => ({
+              id: b.id,
+              nombre: b.nombre,
+              porcentaje: b.porcentaje,
+              monto: b.monto || ((baseMonto * (b.porcentaje || 0)) / 100),
+            })),
+          },
+          ipAddress: ip,
+          tx,
+        });
+      }
     });
 
     await this.auditService.log({
@@ -2191,6 +2503,149 @@ export class FamBeneficiosService {
         },
       },
       ipAddress: ip,
+    });
+
+    return this.obtenerPorId(id);
+  }
+
+  /**
+   * T10: Endpoint/servicio de regularización de saldo pendiente.
+   * Permite registrar beneficiarios adicionales o ajustar montos/porcentajes hasta cubrir el mínimo normativo.
+   * Recalcula, actualiza flag y saldo en BD, y registra la auditoría obligatoria.
+   */
+  async regularizarSaldo(
+    id: string,
+    dto: RegularizarSaldoDto,
+    userId: string,
+    userRole?: string,
+    ip?: string,
+  ) {
+    const existing = await this.prisma.famSolicitudBeneficio.findUnique({
+      where: { id },
+      include: {
+        tipoBeneficio: true,
+        vinculos: { include: { beneficiario: true } },
+        depositos: true,
+        sucesionIntestadaDetalle: { include: { herederos: true } },
+      },
+    });
+    if (!existing) throw new NotFoundException('Solicitud de beneficio no encontrada');
+
+    const montoMinimo = await this.obtenerMontoMinimoFallecimiento();
+    const baseMonto = Number(existing.montoFinal ?? existing.monto ?? 0);
+
+    await this.prisma.$transaction(async (tx) => {
+      // 1. Si se envían beneficiarios a registrar o actualizar:
+      if (dto.beneficiarios && dto.beneficiarios.length > 0) {
+        for (const b of dto.beneficiarios) {
+          if (b.id) {
+            await tx.famBeneficiario.update({
+              where: { id: b.id },
+              data: {
+                ...(b.nombre && { nombre: b.nombre.trim() }),
+                ...(b.dni && { dni: b.dni.trim() }),
+                ...(b.parentesco && { parentesco: b.parentesco }),
+                ...(b.porcentaje !== undefined && { porcentaje: Number(b.porcentaje) }),
+              },
+            });
+            await tx.famSolicitudBeneficiario.update({
+              where: { solicitudId_beneficiarioId: { solicitudId: id, beneficiarioId: b.id } },
+              data: {
+                ...(b.porcentaje !== undefined && { porcentajeAsignado: Number(b.porcentaje) }),
+                ...(b.declaracionJurada && { declaracionJurada: b.declaracionJurada }),
+                ...(b.declaracionJuradaDni && { declaracionJuradaDni: b.declaracionJuradaDni.trim() }),
+                ...(b.ordenPago && { ordenPago: b.ordenPago }),
+              },
+            });
+          } else {
+            const nuevo = await tx.famBeneficiario.create({
+              data: {
+                colegiadoId: existing.colegiadoId,
+                nombre: b.nombre.trim(),
+                dni: b.dni?.trim() || null,
+                parentesco: b.parentesco || 'Otros',
+                porcentaje: Number(b.porcentaje || 0),
+                registradoPor: userId,
+              },
+            });
+            await tx.famSolicitudBeneficiario.create({
+              data: {
+                solicitudId: id,
+                beneficiarioId: nuevo.id,
+                porcentajeAsignado: Number(b.porcentaje || 0),
+                declaracionJurada: b.declaracionJurada || null,
+                declaracionJuradaDni: b.declaracionJuradaDni?.trim() || null,
+                ordenPago: b.ordenPago || null,
+              },
+            });
+          }
+        }
+      }
+
+      // 2. Obtener todos los vínculos actualizados
+      const vinculosActuales = await tx.famSolicitudBeneficiario.findMany({
+        where: { solicitudId: id },
+        include: { beneficiario: true },
+      });
+
+      // Calcular nuevo monto total asignado
+      let nuevoMontoTotal = 0;
+      if (dto.beneficiarios && dto.beneficiarios.some((b) => b.monto !== undefined && b.monto > 0)) {
+        nuevoMontoTotal = this.redondearMonto(
+          dto.beneficiarios.reduce((sum, b) => {
+            const m =
+              b.monto !== undefined && b.monto > 0
+                ? Number(b.monto)
+                : (baseMonto * Number(b.porcentaje || 0)) / 100;
+            return sum + m;
+          }, 0),
+        );
+      } else {
+        nuevoMontoTotal = this.redondearMonto(
+          vinculosActuales.reduce(
+            (sum, v) => sum + (baseMonto * Number(v.porcentajeAsignado || 0)) / 100,
+            0,
+          ),
+        );
+      }
+
+      if (dto.montoAdicional && Number(dto.montoAdicional) > 0) {
+        nuevoMontoTotal = this.redondearMonto(nuevoMontoTotal + Number(dto.montoAdicional));
+      }
+
+      const calculo = this.calcularSaldoPendiente(nuevoMontoTotal, montoMinimo);
+
+      await tx.famSolicitudBeneficio.update({
+        where: { id },
+        data: {
+          montoTotalAsignado: calculo.montoTotalAsignado,
+          saldoPendiente: calculo.saldoPendiente,
+          tieneSaldoPendiente: calculo.tieneSaldoPendiente,
+          ...(dto.observaciones?.trim() && {
+            observaciones: existing.observaciones
+              ? `${existing.observaciones}\n[REGULARIZACION]: ${dto.observaciones.trim()}`
+              : `[REGULARIZACION]: ${dto.observaciones.trim()}`,
+          }),
+        },
+      });
+
+      await this.registrarAuditoriaBeneficiarios({
+        expedienteId: id,
+        accion: 'REGULARIZACION',
+        usuarioId: userId,
+        montoFaltante: calculo.saldoPendiente,
+        montoTotal: calculo.montoTotalAsignado,
+        detalleJson: {
+          motivo: dto.motivo || 'Regularización de saldo pendiente',
+          observaciones: dto.observaciones || null,
+          saldoAnterior: Number(existing.saldoPendiente || 0),
+          saldoNuevo: calculo.saldoPendiente,
+          regularizadoCompletamente: !calculo.tieneSaldoPendiente,
+          beneficiariosAgregados: dto.beneficiarios?.length || 0,
+        },
+        ipAddress: ip,
+        tx,
+      });
     });
 
     return this.obtenerPorId(id);

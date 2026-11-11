@@ -260,6 +260,9 @@ model FamSolicitudBeneficio {
   covidAsignacionId        String?  @map("covid_asignacion_id") @db.NVarChar(36)
   descuentoCovid           Decimal  @default(0) @map("descuento_covid") @db.Decimal(12, 2)
   montoFinal               Decimal? @map("monto_final") @db.Decimal(12, 2)
+  montoTotalAsignado       Decimal? @map("monto_total_asignado") @db.Decimal(12, 2)
+  saldoPendiente           Decimal? @default(0) @map("saldo_pendiente") @db.Decimal(12, 2)
+  tieneSaldoPendiente      Boolean  @default(false) @map("tiene_saldo_pendiente") @db.Bit
 
   fechaDefuncion           DateTime? @map("fecha_defuncion")
   causaFallecimiento       String?   @map("causa_fallecimiento") @db.NVarChar(300)
@@ -268,15 +271,17 @@ model FamSolicitudBeneficio {
   fechaAccidente           DateTime? @map("fecha_accidente")
   descripcionAccidente     String?   @map("descripcion_accidente") @db.NVarChar(500)
 
-  tipoBeneficio TipoBeneficio @relation(fields: [tipoBeneficioId], references: [id])
-  vinculos      FamSolicitudBeneficiario[]
-  depositos     FamDepositoBeneficiario[]
+  tipoBeneficio            TipoBeneficio @relation(fields: [tipoBeneficioId], references: [id])
+  vinculos                 FamSolicitudBeneficiario[]
+  depositos                FamDepositoBeneficiario[]
   sucesionIntestadaDetalle FamSucesionIntestada?
+  auditoriasBeneficiarios   ExpedienteBeneficiarioAudit[]
 
   @@index([colegiadoId])
   @@index([tipoBeneficioId])
   @@index([estado])
   @@index([fechaSolicitud])
+  @@index([tieneSaldoPendiente])
   @@map("fam_solicitud_beneficio")
 }
 
@@ -662,5 +667,24 @@ model FamSucesionVersion {
   @@index([sucesionId])
   @@map("fam_sucesion_versiones")
 }
+
+model ExpedienteBeneficiarioAudit {
+  id            String   @id @default(uuid()) @db.NVarChar(36)
+  expedienteId  String   @map("expediente_id") @db.NVarChar(36)
+  accion        String   @db.VarChar(50)
+  usuarioId     String   @map("usuario_id") @db.NVarChar(36)
+  fecha         DateTime @default(now())
+  montoFaltante Decimal  @default(0) @map("monto_faltante") @db.Decimal(12, 2)
+  montoTotal    Decimal  @default(0) @map("monto_total") @db.Decimal(12, 2)
+  detalleJson   String?  @map("detalle_json") @db.NVarChar(MAX)
+  ipAddress     String?  @map("ip_address") @db.VarChar(45)
+
+  expediente    FamSolicitudBeneficio @relation(fields: [expedienteId], references: [id], onDelete: Cascade)
+
+  @@index([expedienteId])
+  @@index([fecha])
+  @@map("expediente_beneficiario_audit")
+}
+
 
 

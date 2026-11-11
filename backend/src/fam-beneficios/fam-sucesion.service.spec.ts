@@ -29,7 +29,23 @@ describe('FamSucesionService', () => {
       log: jest.fn().mockResolvedValue({}),
     };
 
-    service = new FamSucesionService(prisma, auditService, famService);
+    const famBeneficiosService: any = {
+      obtenerMontoMinimoFallecimiento: jest.fn().mockResolvedValue(3000),
+      calcularSaldoPendiente: jest.fn().mockImplementation((montoTotal: number, montoMinimo: number) => {
+        const total = Math.round((Number(montoTotal) || 0) * 100) / 100;
+        const minimo = Math.round((Number(montoMinimo) || 0) * 100) / 100;
+        const diff = Math.round((minimo - total) * 100) / 100;
+        return {
+          tieneSaldoPendiente: diff > 0.005,
+          saldoPendiente: diff > 0.005 ? diff : 0,
+          montoTotalAsignado: total,
+          montoMinimo: minimo,
+        };
+      }),
+      registrarAuditoriaBeneficiarios: jest.fn().mockResolvedValue({}),
+    };
+
+    service = new FamSucesionService(prisma, auditService, famService, famBeneficiosService);
   });
 
   it('debe estar definido', () => {
@@ -65,7 +81,7 @@ describe('FamSucesionService', () => {
     ).rejects.toThrow(BadRequestException);
   });
 
-  it('debe rechazar si los porcentajes no suman 100%', async () => {
+  it('debe rechazar si los porcentajes o montos exceden el 100% o el monto total', async () => {
     await expect(
       service.registrarSucesion(
         {
@@ -88,8 +104,8 @@ describe('FamSucesionService', () => {
               nombres: 'Luis',
               apellidos: 'Perez',
               parentesco: 'Hijo(a)',
-              porcentaje: 30, // 60 + 30 = 90%
-              monto: 1500,
+              porcentaje: 50, // 60 + 50 = 110% > 100%
+              monto: 2500, // 3000 + 2500 = 5500 > 5000
             },
           ],
         } as any,
@@ -97,6 +113,47 @@ describe('FamSucesionService', () => {
         '127.0.0.1',
       ),
     ).rejects.toThrow(BadRequestException);
+  });
+
+  it('debe permitir guardar con saldo pendiente si la suma no alcanza el mínimo normativo', async () => {
+    prisma.tipoBeneficio.findFirst.mockResolvedValueOnce({ id: 'tb-1', codigo: 'FALLECIMIENTO', nombre: 'Fallecimiento' });
+    prisma.famSolicitudBeneficio.create.mockResolvedValueOnce({ id: 'sol-1' });
+    prisma.famSucesionIntestada.create.mockResolvedValueOnce({ id: 'suc-1', colegiadoId: 'col-1' });
+    prisma.famBeneficiario.create.mockResolvedValueOnce({ id: 'ben-1' });
+    prisma.famSucesionBeneficiario.create.mockResolvedValueOnce({ id: 'sb-1' });
+    prisma.famSolicitudBeneficiario.create.mockResolvedValueOnce({ id: 'solb-1' });
+
+    const resultado = await service.registrarSucesion(
+      {
+        colegiadoId: 'col-1',
+        montoTotal: 3000,
+        sustentoPdf: 'JVBERi0xLjQK...',
+        herederos: [
+          {
+            tipoDocumento: 'DNI',
+            numeroDocumento: '12345678',
+            nombres: 'Ana',
+            apellidos: 'Perez',
+            parentesco: 'Hijo(a)',
+            porcentaje: 60,
+            monto: 1800,
+          },
+        ],
+      } as any,
+      'u-1',
+      '127.0.0.1',
+    );
+
+    expect(resultado).toBeDefined();
+    expect(prisma.famSolicitudBeneficio.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          montoTotalAsignado: 1800,
+          saldoPendiente: 1200,
+          tieneSaldoPendiente: true,
+        }),
+      }),
+    );
   });
 
   it('debe rechazar si hay documentos duplicados entre los herederos', async () => {

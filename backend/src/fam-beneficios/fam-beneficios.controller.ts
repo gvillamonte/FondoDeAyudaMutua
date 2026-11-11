@@ -1,7 +1,16 @@
 import { Controller, Get, Post, Put, Delete, Param, Query, Body, UseGuards, Req } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { FamBeneficiosService } from './fam-beneficios.service';
-import { CrearFamSolicitudDto, ActualizarFamSolicitudDto, ActualizarBeneficiariosDto, PagarExpedienteDto, ActualizarDepositoDto, SubirDocumentoDto, SubirDeclaracionJuradaDto } from './dto/fam-solicitud.dto';
+import {
+  CrearFamSolicitudDto,
+  ActualizarFamSolicitudDto,
+  ActualizarBeneficiariosDto,
+  PagarExpedienteDto,
+  ActualizarDepositoDto,
+  SubirDocumentoDto,
+  SubirDeclaracionJuradaDto,
+  RegularizarSaldoDto,
+} from './dto/fam-solicitud.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -31,6 +40,7 @@ export class FamBeneficiosController {
     @Query('fechaDesde') fechaDesde?: string,
     @Query('fechaHasta') fechaHasta?: string,
     @Query('documentacionCompleta') documentacionCompleta?: string,
+    @Query('conSaldoPendiente') conSaldoPendiente?: string,
     @Query('ordenarPor') ordenarPor?: string,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
@@ -43,6 +53,7 @@ export class FamBeneficiosController {
       fechaDesde,
       fechaHasta,
       documentacionCompleta,
+      conSaldoPendiente,
       ordenarPor,
       page,
       limit,
@@ -167,6 +178,17 @@ export class FamBeneficiosController {
     @Req() req: any,
   ) {
     return this.famBeneficiosService.actualizarBeneficiarios(id, dto, req.user.sub, req.user?.rol, req.ip);
+  }
+
+  @Post(':id/regularizar-saldo')
+  @Roles('ADMINISTRADOR', 'OPERADOR_PAGOS')
+  @ApiOperation({ summary: 'Regularizar saldo pendiente de un expediente FAM por fallecimiento' })
+  async regularizarSaldo(
+    @Param('id') id: string,
+    @Body() dto: RegularizarSaldoDto,
+    @Req() req: any,
+  ) {
+    return this.famBeneficiosService.regularizarSaldo(id, dto, req.user.sub, req.user?.rol, req.ip);
   }
 
   @Post(':id/pagar')

@@ -9,6 +9,12 @@ import SucesionIntestadaMultiplesBeneficiarios, {
 } from '@/components/fam/SucesionIntestadaMultiplesBeneficiarios';
 import ModalNuevaCarta from '@/components/fam/ModalNuevaCarta';
 import ModalNuevoMemorando from '@/components/fam/ModalNuevoMemorando';
+import ModalAlertaSaldoPendiente from '@/components/fam/ModalAlertaSaldoPendiente';
+import {
+  procesarArchivoDocumento,
+  unirDocumentosPdf,
+  DocumentoParaUnir,
+} from '@/lib/pdf-utils';
 
 interface ColegiadoSel {
   COLEGIADO_ID: string;
@@ -81,6 +87,7 @@ const formatearClaveMonto = (clave: string) =>
 export default function RegistroExpedienteDrawer({ open, onClose, onSaved }: { open: boolean; onClose: () => void; onSaved: () => void }) {
   const [pdfViewer, setPdfViewer] = useState<{ base64: string; nombre: string } | null>(null);
   const abrirPdfBase64 = (base64: string, nombre: string) => setPdfViewer({ base64, nombre });
+  const [uniendoDocs, setUniendoDocs] = useState(false);
   const [colegiado, setColegiado] = useState<ColegiadoSel | null>(null);
   const [busqueda, setBusqueda] = useState('');
   const [sugerencias, setSugerencias] = useState<ColegiadoSel[]>([]);
@@ -134,6 +141,17 @@ export default function RegistroExpedienteDrawer({ open, onClose, onSaved }: { o
   const [catalogoMemorandos, setCatalogoMemorandos] = useState<any[]>([]);
   const [modalCartaOpen, setModalCartaOpen] = useState(false);
   const [modalMemorandoOpen, setModalMemorandoOpen] = useState(false);
+  const [alertaSaldo, setAlertaSaldo] = useState<{
+    isOpen: boolean;
+    montoTotalAsignado: number;
+    montoMinimo: number;
+    saldoPendiente: number;
+  }>({
+    isOpen: false,
+    montoTotalAsignado: 0,
+    montoMinimo: 3000,
+    saldoPendiente: 0,
+  });
 
   const onCartaCreada = (nuevaCarta: any) => {
     setCatalogoCartas((prev) => [nuevaCarta, ...prev.filter((c) => c.numero !== nuevaCarta.numero)]);
@@ -371,48 +389,101 @@ export default function RegistroExpedienteDrawer({ open, onClose, onSaved }: { o
   const esFallecimiento = (tipoSeleccionado?.nombre || '').toUpperCase().includes('FALLECIMIENTO');
   const docsRequeridos = DOCS_PDF.filter(({ key }) => key !== 'otrosDocumentos' && (key !== 'actaDefuncion' || esFallecimiento));
 
-  const handlePdf = (key: DocKey, file: File) => {
+  const handlePdf = async (key: DocKey, file: File) => {
     const label = DOCS_PDF.find((d) => d.key === key)?.label || 'Documento';
-    if (file.type !== 'application/pdf') {
-      showConfirmMessage('error', `${label}: formato inválido`, 'Solo se permiten archivos PDF (.pdf)');
-      setError(`${label}: solo se permiten archivos PDF`);
-      return;
-    }
-    if (file.size > MAX_PDF_MB * 1024 * 1024) {
-      showConfirmMessage('error', `${label}: archivo demasiado grande`, `Máximo permitido: ${MAX_PDF_MB}MB — Archivo: ${(file.size / 1024 / 1024).toFixed(2)}MB`);
-      setError(`El PDF no debe superar ${MAX_PDF_MB}MB`);
-      return;
-    }
-    setError('');
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const base64 = ((e.target?.result as string) || '').split(',')[1] || '';
-      setDocs((prev) => ({ ...prev, [key]: { base64, size: file.size } }));
+    try {
+      setError('');
+      const { base64, size, esImagenConvertida } = await procesarArchivoDocumento(file, MAX_PDF_MB);
+      setDocs((prev) => ({ ...prev, [key]: { base64, size } }));
       setDocsPresentados((prev) => ({ ...prev, [key]: true }));
-      showConfirmMessage('success', `${label} cargado correctamente`, `Tamaño: ${(file.size / 1024 / 1024).toFixed(2)}MB`);
-    };
-    reader.readAsDataURL(file);
+      showConfirmMessage(
+        'success',
+        `${label} cargado correctamente`,
+        esImagenConvertida
+          ? `Imagen convertida a PDF (${(size / 1024 / 1024).toFixed(2)} MB)`
+          : `Tamaño: ${(size / 1024 / 1024).toFixed(2)} MB`,
+      );
+    } catch (err: any) {
+      showConfirmMessage('error', `${label}: formato inválido`, err?.message || 'Error al procesar archivo');
+      setError(`${label}: ${err?.message || 'Solo se permiten archivos PDF o imágenes (JPG, PNG, WEBP)'}`);
+    }
   };
 
-  const handleSucesionPdf = (file: File) => {
-    if (file.type !== 'application/pdf') {
-      showConfirmMessage('error', 'Sucesión Intestada: formato inválido', 'Solo se permiten archivos PDF (.pdf)');
-      setError('La Sucesión Intestada debe ser un archivo PDF');
+  const handleSucesionPdf = async (file: File) => {
+    try {
+      setError('');
+      const { base64, size, esImagenConvertida } = await procesarArchivoDocumento(file, MAX_PDF_MB);
+      setSucesionPdf({ base64, size });
+      showConfirmMessage(
+        'success',
+        'Sucesión Intestada cargada correctamente',
+        esImagenConvertida
+          ? `Imagen convertida a PDF (${(size / 1024 / 1024).toFixed(2)} MB)`
+          : `Tamaño: ${(size / 1024 / 1024).toFixed(2)} MB`,
+      );
+    } catch (err: any) {
+      showConfirmMessage('error', 'Sucesión Intestada: formato inválido', err?.message || 'Error al procesar archivo');
+      setError(err?.message || 'La Sucesión Intestada debe ser un archivo PDF o imagen');
+    }
+  };
+
+  const totalDocsCargados =
+    docsRequeridos.filter(({ key }) => Boolean(docs[key]?.base64)).length +
+    (sucesionPdf?.base64 ? 1 : 0) +
+    herederosSucesion.filter((h) => Boolean(h.declaracionJuradaPdf)).length +
+    herederosSucesion.filter((h) => Boolean(h.ordenPagoPdf)).length;
+
+  const verExpedienteCompletoPdf = async () => {
+    const docsParaUnir: DocumentoParaUnir[] = [];
+    for (const { key, label } of docsRequeridos) {
+      if (docs[key]?.base64) {
+        docsParaUnir.push({ titulo: label, base64: docs[key]!.base64 });
+      }
+    }
+    if (sucesionPdf?.base64) {
+      docsParaUnir.push({ titulo: 'Sucesión Intestada', base64: sucesionPdf.base64 });
+    }
+    for (const h of herederosSucesion) {
+      if (h.declaracionJuradaPdf) {
+        docsParaUnir.push({
+          titulo: `Declaración Jurada - ${h.nombres} ${h.apellidos}`,
+          base64: h.declaracionJuradaPdf,
+          subtitulo: `DNI: ${h.numeroDocumento}`,
+        });
+      }
+      if (h.ordenPagoPdf) {
+        docsParaUnir.push({
+          titulo: `Voucher / Orden de Pago - ${h.nombres} ${h.apellidos}`,
+          base64: h.ordenPagoPdf,
+          subtitulo: `Monto: S/ ${h.monto}`,
+        });
+      }
+    }
+
+    if (docsParaUnir.length === 0) {
+      showConfirmMessage('warning', 'Sin documentos', 'No se ha subido ningún documento o imagen todavía.');
       return;
     }
-    if (file.size > MAX_PDF_MB * 1024 * 1024) {
-      showConfirmMessage('error', 'Sucesión Intestada: archivo demasiado grande', `Máximo: ${MAX_PDF_MB}MB — Archivo: ${(file.size / 1024 / 1024).toFixed(2)}MB`);
-      setError(`El PDF no debe superar ${MAX_PDF_MB}MB`);
-      return;
+
+    setUniendoDocs(true);
+    try {
+      const mergedBase64 = await unirDocumentosPdf(docsParaUnir, {
+        expedienteNumero: form.expedienteNumero || 'EN TRÁMITE',
+        colegiadoNombre: colegiado?.NOMBRE_COLEGIADO,
+        colegiadoCip: colegiado?.NUM_COLEGIATURA,
+        tipoBeneficio: tipoSeleccionado?.nombre || 'BENEFICIO FAM',
+        incluirCaratula: true,
+      });
+
+      abrirPdfBase64(
+        mergedBase64,
+        `Expediente Completo Consolidado - ${colegiado?.NOMBRE_COLEGIADO || 'Colegiado'}`,
+      );
+    } catch (err: any) {
+      showConfirmMessage('error', 'Error al consolidar documentos', err?.message || 'Ocurrió un error al unir los archivos.');
+    } finally {
+      setUniendoDocs(false);
     }
-    setError('');
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const base64 = ((e.target?.result as string) || '').split(',')[1] || '';
-      setSucesionPdf({ base64, size: file.size });
-      showConfirmMessage('success', 'Sucesión Intestada cargada correctamente', `Tamaño: ${(file.size / 1024 / 1024).toFixed(2)}MB`);
-    };
-    reader.readAsDataURL(file);
   };
 
   const sumaPorcentajes = beneficiariosReg.reduce((acc, f) => acc + (parseFloat(f.porcentaje) || 0), 0);
@@ -494,8 +565,14 @@ export default function RegistroExpedienteDrawer({ open, onClose, onSaved }: { o
       }
       if (modalidad === 'monto_unico' && beneficiariosReg.length !== 1)
         return 'Monto Único requiere exactamente 1 beneficiario registrado (tiene ' + beneficiariosReg.length + ')';
-      if (modalidad === 'monto_compartido' && Math.abs(sumaPorcentajes - 100) > 0.05)
-        return `Monto Compartido: los porcentajes suman ${sumaPorcentajes.toFixed(2)}%. Deben sumar 100% (use "Repartir en partes iguales")`;
+      if (modalidad === 'monto_compartido') {
+        if (sumaPorcentajes > 100.05) {
+          return `Monto Compartido: los porcentajes suman ${sumaPorcentajes.toFixed(2)}%. No pueden exceder el 100%`;
+        }
+        if (!esFallecimiento && Math.abs(sumaPorcentajes - 100) > 0.05) {
+          return `Monto Compartido: los porcentajes suman ${sumaPorcentajes.toFixed(2)}%. Deben sumar 100% (use "Repartir en partes iguales")`;
+        }
+      }
       if (!solicitanteKeys.length)
         return 'Seleccione al menos a un solicitante entre los beneficiarios registrados';
       return '';
@@ -532,12 +609,12 @@ export default function RegistroExpedienteDrawer({ open, onClose, onSaved }: { o
         docsVistos.add(k);
       }
       const sumPct = Number(herederosSucesion.reduce((acc, h) => acc + (Number(h.porcentaje) || 0), 0).toFixed(2));
-      if (Math.abs(sumPct - 100) > 0.05) {
-        return `La suma de porcentajes de los herederos (${sumPct}%) debe ser exactamente 100%`;
+      if (sumPct > 100.05) {
+        return `La suma de porcentajes de los herederos (${sumPct}%) no puede exceder el 100%`;
       }
       const sumMto = Number(herederosSucesion.reduce((acc, h) => acc + (Number(h.monto) || 0), 0).toFixed(2));
-      if (Math.abs(sumMto - montoFinal) > 0.05) {
-        return `La suma de montos (S/ ${sumMto.toFixed(2)}) debe coincidir con el monto total (S/ ${montoFinal.toFixed(2)})`;
+      if (sumMto > montoFinal + 0.05) {
+        return `La suma de montos asignados (S/ ${sumMto.toFixed(2)}) no puede exceder el monto total (S/ ${montoFinal.toFixed(2)})`;
       }
       for (const h of herederosSucesion) {
         if (!h.declaracionJuradaPdf) {
@@ -550,10 +627,42 @@ export default function RegistroExpedienteDrawer({ open, onClose, onSaved }: { o
     return '';
   };
 
-  const guardar = async () => {
+  const calcularMontoTotalBeneficiarios = () => {
+    if (esSucesionIntestada) {
+      return herederosSucesion.reduce((acc, h) => acc + (Number(h.monto) || 0), 0);
+    }
+    if (modalidad === 'monto_compartido') {
+      return beneficiariosReg.reduce((acc, f) => {
+        const pct = parseFloat(f.porcentaje) || 0;
+        return acc + ((pct / 100) * montoFinal);
+      }, 0);
+    }
+    return beneficiariosReg.length > 0 ? montoFinal : 0;
+  };
+
+  const guardar = async (ignorarAlerta = false) => {
     const err = validar();
     if (err) { setError(err); return; }
     setError('');
+
+    // Validación NO bloqueante solo al presionar Guardar (Reglas 2, 3, 4, 5)
+    if (!ignorarAlerta && esFallecimiento) {
+      const montoMinimo = montos.find((m) => m.aplicaA === 'FALLECIMIENTO')?.monto || 3000;
+      const totalAsignado = Math.round(calcularMontoTotalBeneficiarios() * 100) / 100;
+      const faltante = Math.round((montoMinimo - totalAsignado) * 100) / 100;
+
+      if (faltante > 0.005) {
+        setAlertaSaldo({
+          isOpen: true,
+          montoTotalAsignado: totalAsignado,
+          montoMinimo,
+          saldoPendiente: faltante,
+        });
+        return;
+      }
+    }
+
+    setAlertaSaldo((prev) => ({ ...prev, isOpen: false }));
     setGuardando(true);
     try {
       const todosPresentados = Boolean(docs.otrosDocumentos) || docsRequeridos.every(({ key }) => docsPresentados[key] === true || docs[key] !== null);
@@ -1099,8 +1208,39 @@ export default function RegistroExpedienteDrawer({ open, onClose, onSaved }: { o
           </section>
 
           {/* 4. Documentos PDF */}
+          {/* 4. Documentos (PDF o Imagen) */}
           <section className="space-y-3">
-            <h4 className="text-xs font-semibold text-text-sec uppercase tracking-wider">4. Documentación (PDF, máx. {MAX_PDF_MB}MB c/u)</h4>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border pb-2">
+              <div>
+                <h4 className="text-xs font-semibold text-text-sec uppercase tracking-wider">
+                  4. Documentación (PDF o Imagen JPG/PNG, máx. {MAX_PDF_MB}MB c/u)
+                </h4>
+                <p className="text-[11px] text-text-sec mt-0.5">
+                  Suba documentos en PDF o fotos/imágenes escaneadas. Se unifican automáticamente.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={verExpedienteCompletoPdf}
+                disabled={totalDocsCargados === 0 || uniendoDocs}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-white bg-[#3258CA] rounded-lg hover:bg-[#2846a3] disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-xs shrink-0 self-start sm:self-auto"
+                title={totalDocsCargados === 0 ? 'Suba al menos un documento para ver el consolidado' : 'Ver todos los documentos en un solo PDF'}
+              >
+                {uniendoDocs ? (
+                  <>
+                    <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Consolidando...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Ver todos en PDF ({totalDocsCargados})
+                  </>
+                )}
+              </button>
+            </div>
             <div className="grid grid-cols-1 gap-2">
               {docsRequeridos.map(({ key, label }) => {
                 const doc = docs[key];
@@ -1135,8 +1275,8 @@ export default function RegistroExpedienteDrawer({ open, onClose, onSaved }: { o
                     ) : (
                       <label className="cursor-pointer inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary-dark">
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
-                        Seleccionar PDF
-                        <input type="file" accept="application/pdf,.pdf" className="hidden" onChange={(e) => { if (e.target.files?.[0]) handlePdf(key, e.target.files[0]); }} />
+                        Subir PDF o Imagen
+                        <input type="file" accept="application/pdf,image/png,image/jpeg,image/jpg,image/webp" className="hidden" onChange={(e) => { if (e.target.files?.[0]) handlePdf(key, e.target.files[0]); }} />
                       </label>
                     )}
                     <div className="ml-auto flex items-center gap-2">
@@ -1300,7 +1440,7 @@ export default function RegistroExpedienteDrawer({ open, onClose, onSaved }: { o
           )}
           <div className="flex items-center justify-end gap-3">
             <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-text-sec bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">Cancelar</button>
-            <button onClick={guardar} disabled={guardando || colegiadoFallecido}
+            <button onClick={() => guardar()} disabled={guardando || colegiadoFallecido}
               className="px-5 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary/90 disabled:opacity-50 inline-flex items-center gap-2 transition-colors">
               {guardando && <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>}
               Registrar Expediente
@@ -1323,6 +1463,16 @@ export default function RegistroExpedienteDrawer({ open, onClose, onSaved }: { o
         open={modalMemorandoOpen}
         onClose={() => setModalMemorandoOpen(false)}
         onSuccess={onMemorandoCreado}
+      />
+
+      <ModalAlertaSaldoPendiente
+        isOpen={alertaSaldo.isOpen}
+        onClose={() => setAlertaSaldo((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={() => guardar(true)}
+        montoTotalAsignado={alertaSaldo.montoTotalAsignado}
+        montoMinimo={alertaSaldo.montoMinimo}
+        saldoPendiente={alertaSaldo.saldoPendiente}
+        guardando={guardando}
       />
     </div>
   );

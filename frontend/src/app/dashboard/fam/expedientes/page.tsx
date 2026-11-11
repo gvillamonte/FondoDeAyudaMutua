@@ -8,6 +8,7 @@ import { getCurrentUser } from '@/lib/auth';
 import ReporteEntregas from '@/components/fam/ReporteEntregas';
 import DuplicadosPanel from '@/components/fam/DuplicadosPanel';
 import EliminarExpedienteModal from '@/components/fam/EliminarExpedienteModal';
+import ModalRegularizarSaldo from '@/components/fam/ModalRegularizarSaldo';
 
 interface Expediente {
   id: string;
@@ -28,6 +29,9 @@ interface Expediente {
   expedienteNumero: string | null;
   descuentoCovid: number | null;
   montoFinal: number | null;
+  tieneSaldoPendiente?: boolean;
+  saldoPendiente?: number;
+  montoTotalAsignado?: number;
   createdAt?: string;
   updatedAt?: string;
   banco?: string | null;
@@ -109,16 +113,16 @@ const fmtMonto = (m: number) => `S/ ${Number(m).toLocaleString('es-PE', { minimu
 
 const ICONS: Record<string, ReactNode> = {
   reloj: (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+    <svg className="w-5 h-5" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
   ),
   persona: (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+    <svg className="w-5 h-5" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
   ),
   alerta: (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+    <svg className="w-5 h-5" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
   ),
   documento: (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+    <svg className="w-5 h-5" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
   ),
 };
 
@@ -142,8 +146,10 @@ export default function ExpedientesPage() {
   const [tipoFiltro, setTipoFiltro] = useState('');
   const [estadoFiltro, setEstadoFiltro] = useState('');
   const [docsFiltro, setDocsFiltro] = useState('');
+  const [saldoFiltro, setSaldoFiltro] = useState('');
   const [fechaDesde, setFechaDesde] = useState('');
   const [fechaHasta, setFechaHasta] = useState('');
+  const [regularizarTarget, setRegularizarTarget] = useState<Expediente | null>(null);
 
   const [tipos, setTipos] = useState<TipoBeneficioOpt[]>([]);
   const [error, setError] = useState('');
@@ -173,6 +179,7 @@ export default function ExpedientesPage() {
       if (search) params.search = search;
       if (tipoFiltro) params.tipoBeneficioId = tipoFiltro;
       if (docsFiltro) params.documentacionCompleta = docsFiltro;
+      if (saldoFiltro) params.conSaldoPendiente = saldoFiltro;
       if (tab === 'todos' && fechaDesde) params.fechaDesde = fechaDesde;
       if (tab === 'todos' && fechaHasta) params.fechaHasta = fechaHasta;
 
@@ -185,10 +192,18 @@ export default function ExpedientesPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, limit, tab, search, tipoFiltro, estadoFiltro, docsFiltro, fechaDesde, fechaHasta]);
+  }, [page, limit, tab, search, tipoFiltro, estadoFiltro, docsFiltro, saldoFiltro, fechaDesde, fechaHasta]);
 
   useEffect(() => { fetchExpedientes(); }, [fetchExpedientes]);
-  useEffect(() => { setPage(1); setExpandidos(new Set()); }, [tab, search, tipoFiltro, estadoFiltro, docsFiltro, fechaDesde, fechaHasta, limit]);
+  useEffect(() => { setPage(1); setExpandidos(new Set()); }, [tab, search, tipoFiltro, estadoFiltro, docsFiltro, saldoFiltro, fechaDesde, fechaHasta, limit]);
+
+  // Debounce para búsqueda reactiva al tipear en el buscador
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearch(searchInput.trim());
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
 
   const grupos = useMemo(() => {
     const map = new Map<string, ColegiadoGrupo>();
@@ -419,6 +434,7 @@ export default function ExpedientesPage() {
     { key: 'pendientes', label: 'Mis Pendientes', value: dashboard.misTendientes || 0, sub: 'asignados a mi', icon: ICONS.reloj, tone: 'text-amber-600 bg-amber-50' },
     { key: 'sinasignar', label: 'Sin Asignar', value: dashboard.sinAsignar || 0, sub: 'sin responsable', icon: ICONS.persona, tone: 'text-blue-600 bg-blue-50' },
     { key: 'vencer', label: 'Próximos a Vencer', value: dashboard.proximosAVencer || 0, sub: `${dashboard.vencidos || 0} vencido${(dashboard.vencidos || 0) === 1 ? '' : 's'}`, icon: ICONS.alerta, tone: (dashboard.vencidos || 0) > 0 ? 'text-red-600 bg-red-50' : 'text-amber-600 bg-amber-50' },
+    { key: 'saldopendiente', label: 'Saldo Pendiente', value: dashboard.conSaldoPendienteCount || 0, sub: `S/ ${(dashboard.saldoPendienteTotal || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })} faltante`, icon: ICONS.alerta, tone: (dashboard.conSaldoPendienteCount || 0) > 0 ? 'text-amber-700 bg-amber-50' : 'text-slate-500 bg-slate-50' },
     { key: 'total', label: 'Total Expedientes', value: total, sub: 'registrados', icon: ICONS.documento, tone: 'text-primary bg-primary/10' },
   ] : [];
 
@@ -533,6 +549,12 @@ export default function ExpedientesPage() {
                 <option value="SI">Documentación completa</option>
                 <option value="NO">Documentación incompleta</option>
               </select>
+              <select value={saldoFiltro} onChange={(e) => setSaldoFiltro(e.target.value)}
+                className="w-full sm:w-auto border border-border-main rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30">
+                <option value="">Todos los saldos</option>
+                <option value="SI">Con saldo pendiente</option>
+                <option value="NO">Sin saldo pendiente</option>
+              </select>
               {tab === 'todos' && (
                 <div className="flex items-center gap-1.5">
                   <input type="date" value={fechaDesde} onChange={(e) => setFechaDesde(e.target.value)}
@@ -580,7 +602,7 @@ export default function ExpedientesPage() {
                 {loading ? (
                   <tr><td colSpan={10} className="px-4 py-16 text-center">
                     <div className="inline-flex items-center gap-2 text-text-sec">
-                      <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                      <svg className="animate-spin w-5 h-5" width="20" height="20" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
                       Cargando expedientes...
                     </div>
                   </td></tr>
@@ -590,8 +612,17 @@ export default function ExpedientesPage() {
                       <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-3">
                         <svg className="w-8 h-8 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                       </div>
-                      <p className="text-sm font-medium">No se encontraron expedientes</p>
+                      <p className="text-sm font-medium">No se encontraron expedientes{tab === 'historial' && search ? ' pagados' : ''}</p>
                       <p className="text-xs text-text-sec mt-1">Intente ajustar los filtros de búsqueda</p>
+                      {tab === 'historial' && search && (
+                        <button
+                          type="button"
+                          onClick={() => setTab('todos')}
+                          className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-primary bg-primary/10 rounded-lg hover:bg-primary/20 transition-colors"
+                        >
+                          Buscar en &quot;Todos los Expedientes&quot; (todos los estados) →
+                        </button>
+                      )}
                     </div>
                   </td></tr>
                 ) : (
@@ -672,6 +703,11 @@ export default function ExpedientesPage() {
                                 {grupo.totalRecibido > 0 && grupo.totalRecibido !== grupo.totalMontoFinal && (
                                   <span className="block text-[10px] text-emerald-600 font-semibold">Recibido: {fmtMonto(grupo.totalRecibido)}</span>
                                 )}
+                                {grupo.expedientes.some((e) => e.tieneSaldoPendiente) && (
+                                  <span className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 text-[9px] font-bold rounded bg-amber-100 text-amber-800 border border-amber-300">
+                                    Saldo pend.: S/ {grupo.expedientes.reduce((sum, e) => sum + (Number(e.saldoPendiente) || 0), 0).toFixed(2)}
+                                  </span>
+                                )}
                               </div>
                             </td>
                             <td className="px-4 py-3.5">
@@ -718,6 +754,13 @@ export default function ExpedientesPage() {
                                     aria-label="Ver detalle del expediente">
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                                   </button>
+                                  {grupo.expedientes[0].tieneSaldoPendiente && puedeCrear && (
+                                    <button onClick={() => setRegularizarTarget(grupo.expedientes[0])}
+                                      className="p-1.5 rounded-lg hover:bg-amber-100 text-amber-700 transition-colors" title="Regularizar saldo pendiente"
+                                      aria-label="Regularizar saldo pendiente">
+                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
+                                    </button>
+                                  )}
                                   {esAdmin && (
                                     <button onClick={() => setEliminarTarget(grupo.expedientes[0])}
                                       className="p-1.5 rounded-lg hover:bg-red-50 text-red-500 transition-colors" title="Eliminar expediente"
@@ -784,6 +827,11 @@ export default function ExpedientesPage() {
                                     {exp.montoFinal != null && exp.montoFinal !== exp.monto && (
                                       <span className="block text-[10px] text-green-600">→ {fmtMonto(exp.montoFinal)}</span>
                                     )}
+                                    {exp.tieneSaldoPendiente && (
+                                      <span className="block text-[10px] text-amber-700 font-semibold" title="Saldo pendiente normativo">
+                                        Falta: S/ {Number(exp.saldoPendiente || 0).toFixed(2)}
+                                      </span>
+                                    )}
                                   </div>
                                 </td>
                                 <td className="px-4 py-2.5">
@@ -807,12 +855,19 @@ export default function ExpedientesPage() {
                                   )}
                                 </td>
                                 <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
-                                  <div className="flex justify-center">
+                                  <div className="flex justify-center gap-1">
                                     <button onClick={() => router.push(`/dashboard/fam/expedientes/${exp.id}`)}
                                       className="p-1 rounded hover:bg-primary/10 text-primary transition-colors" title="Ver detalle del expediente"
                                       aria-label="Ver detalle del expediente">
                                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
                                     </button>
+                                    {exp.tieneSaldoPendiente && puedeCrear && (
+                                      <button onClick={() => setRegularizarTarget(exp)}
+                                        className="p-1 rounded hover:bg-amber-100 text-amber-700 transition-colors" title="Regularizar saldo pendiente"
+                                        aria-label="Regularizar saldo pendiente">
+                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
+                                      </button>
+                                    )}
                                     {esAdmin && (
                                       <button onClick={() => setEliminarTarget(exp)}
                                         className="p-1 rounded hover:bg-red-50 text-red-500 transition-colors" title="Eliminar expediente"
@@ -876,6 +931,24 @@ export default function ExpedientesPage() {
             setEliminarTarget(null);
             fetchExpedientes();
           }}
+        />
+      )}
+
+      {regularizarTarget && (
+        <ModalRegularizarSaldo
+          isOpen={Boolean(regularizarTarget)}
+          onClose={() => setRegularizarTarget(null)}
+          onSuccess={() => {
+            setRegularizarTarget(null);
+            fetchExpedientes();
+            api.get('/expediente-sla/dashboard').then(({ data }) => setDashboard(data)).catch(() => {});
+          }}
+          expedienteId={regularizarTarget.id}
+          expedienteNumero={regularizarTarget.expedienteNumero}
+          colegiadoNombre={regularizarTarget.NOMBRE_COLEGIADO}
+          montoTotalAsignado={Number(regularizarTarget.montoTotalAsignado ?? regularizarTarget.monto)}
+          saldoPendiente={Number(regularizarTarget.saldoPendiente || 0)}
+          montoMinimoNormativo={3000}
         />
       )}
     </div>

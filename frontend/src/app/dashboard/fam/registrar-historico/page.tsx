@@ -6,6 +6,11 @@ import api from '@/lib/api';
 import { showConfirmMessage } from '@/components/common/ConfirmCenterMessage';
 import { getCurrentUser } from '@/lib/auth';
 import PdfViewerModal from '@/components/common/PdfViewerModal';
+import {
+  procesarArchivoDocumento,
+  unirDocumentosPdf,
+  DocumentoParaUnir,
+} from '@/lib/pdf-utils';
 
 interface BeneficiarioVinculado {
   id: string;
@@ -104,57 +109,53 @@ function RegistrarHistoricoContent() {
     setIsAdmin(user?.rol === 'ADMINISTRADOR');
   }, []);
 
-  const handlePdfUpload = (key: string, file: File) => {
+  const [uniendoDocs, setUniendoDocs] = useState(false);
+
+  const handlePdfUpload = async (key: string, file: File) => {
     const label = DOCS_PDF.find((d) => d.key === key)?.label || 'Documento';
-    if (file.type !== 'application/pdf') { showConfirmMessage('error', `${label}: formato inválido`, 'Solo se permiten archivos PDF'); return; }
-    if (file.size > MAX_PDF_MB * 1024 * 1024) { showConfirmMessage('error', `${label}: excede ${MAX_PDF_MB}MB`, `Archivo: ${(file.size / 1024 / 1024).toFixed(2)}MB`); return; }
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const base64 = ((e.target?.result as string) || '').split(',')[1] || '';
-      setDocsPdf((prev) => ({ ...prev, [key]: { base64, size: file.size } }));
+    try {
+      const { base64, size, esImagenConvertida } = await procesarArchivoDocumento(file, MAX_PDF_MB);
+      setDocsPdf((prev) => ({ ...prev, [key]: { base64, size } }));
       setDocsPresentados((prev) => ({ ...prev, [key]: true }));
-      showConfirmMessage('success', `${label} cargado`, `${(file.size / 1024 / 1024).toFixed(2)}MB`);
-    };
-    reader.readAsDataURL(file);
+      showConfirmMessage(
+        'success',
+        `${label} cargado`,
+        esImagenConvertida ? `Imagen convertida a PDF (${(size / 1024 / 1024).toFixed(2)}MB)` : `${(size / 1024 / 1024).toFixed(2)}MB`,
+      );
+    } catch (err: any) {
+      showConfirmMessage('error', `${label}: formato inválido`, err?.message || 'Solo se permiten PDF o imágenes (JPG, PNG, WEBP)');
+    }
   };
 
-  const handleDeclaracionBeneficiario = (id: string, file: File) => {
-    if (file.type !== 'application/pdf') {
-      showConfirmMessage('error', 'Declaración jurada: formato inválido', 'Solo se permiten archivos PDF (.pdf)');
-      return;
+  const handleDeclaracionBeneficiario = async (id: string, file: File) => {
+    try {
+      const { base64, size, esImagenConvertida } = await procesarArchivoDocumento(file, MAX_PDF_MB);
+      setBeneficiarios((prev) => prev.map((b) => (b.id === id ? { ...b, declaracionJurada: base64, declaracionSize: size } : b)));
+      showConfirmMessage(
+        'success',
+        'Declaración jurada cargada',
+        esImagenConvertida ? `Imagen convertida a PDF (${(size / 1024 / 1024).toFixed(2)}MB)` : `Tamaño: ${(size / 1024 / 1024).toFixed(2)}MB`,
+      );
+    } catch (err: any) {
+      showConfirmMessage('error', 'Declaración jurada: formato inválido', err?.message || 'Solo se permiten PDF o imágenes');
     }
-    if (file.size > MAX_PDF_MB * 1024 * 1024) {
-      showConfirmMessage('error', 'Declaración jurada: archivo demasiado grande', `Máximo: ${MAX_PDF_MB}MB`);
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const base64 = ((e.target?.result as string) || '').split(',')[1] || '';
-      setBeneficiarios((prev) => prev.map((b) => (b.id === id ? { ...b, declaracionJurada: base64, declaracionSize: file.size } : b)));
-      showConfirmMessage('success', 'Declaración jurada cargada', `Tamaño: ${(file.size / 1024 / 1024).toFixed(2)}MB`);
-    };
-    reader.readAsDataURL(file);
   };
 
   const [pdfViewer, setPdfViewer] = useState<{ base64: string; nombre: string } | null>(null);
   const abrirPdfBase64 = (base64: string, nombre: string) => setPdfViewer({ base64, nombre });
 
-  const handleOrdenPagoBeneficiario = (id: string, file: File) => {
-    if (file.type !== 'application/pdf') {
-      showConfirmMessage('error', 'Orden de pago: formato inválido', 'Solo se permiten archivos PDF (.pdf)');
-      return;
+  const handleOrdenPagoBeneficiario = async (id: string, file: File) => {
+    try {
+      const { base64, size, esImagenConvertida } = await procesarArchivoDocumento(file, MAX_PDF_MB);
+      setBeneficiarios((prev) => prev.map((b) => (b.id === id ? { ...b, ordenPago: base64, ordenPagoSize: size } : b)));
+      showConfirmMessage(
+        'success',
+        'Orden de pago cargada',
+        esImagenConvertida ? `Imagen convertida a PDF (${(size / 1024 / 1024).toFixed(2)}MB)` : `Tamaño: ${(size / 1024 / 1024).toFixed(2)}MB`,
+      );
+    } catch (err: any) {
+      showConfirmMessage('error', 'Orden de pago: formato inválido', err?.message || 'Solo se permiten PDF o imágenes');
     }
-    if (file.size > MAX_PDF_MB * 1024 * 1024) {
-      showConfirmMessage('error', 'Orden de pago: archivo demasiado grande', `Máximo: ${MAX_PDF_MB}MB`);
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const base64 = ((e.target?.result as string) || '').split(',')[1] || '';
-      setBeneficiarios((prev) => prev.map((b) => (b.id === id ? { ...b, ordenPago: base64, ordenPagoSize: file.size } : b)));
-      showConfirmMessage('success', 'Orden de pago cargada', `Tamaño: ${(file.size / 1024 / 1024).toFixed(2)}MB`);
-    };
-    reader.readAsDataURL(file);
   };
 
   useEffect(() => {
@@ -258,6 +259,61 @@ function RegistrarHistoricoContent() {
     return true;
   });
   const todosPresentados = docsRequeridos.every(({ key }) => docsPresentados[key]);
+
+  const totalDocsCargados =
+    docsRequeridos.filter(({ key }) => Boolean(docsPdf[key]?.base64)).length +
+    beneficiarios.filter((b) => Boolean(b.declaracionJurada)).length +
+    beneficiarios.filter((b) => Boolean(b.ordenPago)).length;
+
+  const verExpedienteCompletoPdf = async () => {
+    const docsParaUnir: DocumentoParaUnir[] = [];
+    for (const { key, label } of docsRequeridos) {
+      if (docsPdf[key]?.base64) {
+        docsParaUnir.push({ titulo: label, base64: docsPdf[key]!.base64 });
+      }
+    }
+    for (const b of beneficiarios) {
+      if (b.declaracionJurada) {
+        docsParaUnir.push({
+          titulo: `Declaración Jurada - ${b.nombre}`,
+          base64: b.declaracionJurada,
+          subtitulo: b.dni ? `DNI: ${b.dni}` : undefined,
+        });
+      }
+      if (b.ordenPago) {
+        docsParaUnir.push({
+          titulo: `Orden de Pago - ${b.nombre}`,
+          base64: b.ordenPago,
+          subtitulo: `Porcentaje: ${b.porcentajeAsignado}%`,
+        });
+      }
+    }
+
+    if (docsParaUnir.length === 0) {
+      showConfirmMessage('warning', 'Sin documentos', 'No se ha cargado ningún documento o imagen todavía.');
+      return;
+    }
+
+    setUniendoDocs(true);
+    try {
+      const mergedBase64 = await unirDocumentosPdf(docsParaUnir, {
+        expedienteNumero: expedienteNumero || 'HISTÓRICO',
+        colegiadoNombre: colegiado?.NOMBRE_COLEGIADO,
+        colegiadoCip: colegiado?.NUM_COLEGIATURA,
+        tipoBeneficio: getTipoNombre(tipoSeleccionado) || 'BENEFICIO HISTÓRICO',
+        incluirCaratula: true,
+      });
+
+      abrirPdfBase64(
+        mergedBase64,
+        `Expediente Histórico Consolidado - ${colegiado?.NOMBRE_COLEGIADO || 'Colegiado'}`,
+      );
+    } catch (err: any) {
+      showConfirmMessage('error', 'Error al consolidar documentos', err?.message || 'No se pudieron unir los PDFs.');
+    } finally {
+      setUniendoDocs(false);
+    }
+  };
 
   const validar = (): string => {
     if (colegiadoFallecido) return 'No se pueden registrar más beneficios porque el colegiado está fallecido.';
@@ -513,14 +569,14 @@ function RegistrarHistoricoContent() {
                           className="text-xs text-primary hover:underline font-medium">Ver</button>
                         <label className="cursor-pointer text-xs text-text-sec hover:underline">
                           Reemplazar
-                          <input type="file" accept="application/pdf,.pdf" className="hidden"
+                          <input type="file" accept="application/pdf,image/png,image/jpeg,image/jpg,image/webp" className="hidden"
                             onChange={(e) => { if (e.target.files?.[0]) handleDeclaracionBeneficiario(b.id, e.target.files[0]); }} />
                         </label>
                       </>
                     ) : (
                       <label className="cursor-pointer inline-flex items-center gap-1 text-xs font-medium text-amber-700 hover:underline">
-                        + Cargar PDF
-                        <input type="file" accept="application/pdf,.pdf" className="hidden"
+                        + Cargar PDF o Imagen
+                        <input type="file" accept="application/pdf,image/png,image/jpeg,image/jpg,image/webp" className="hidden"
                           onChange={(e) => { if (e.target.files?.[0]) handleDeclaracionBeneficiario(b.id, e.target.files[0]); }} />
                       </label>
                     )}
@@ -545,14 +601,14 @@ function RegistrarHistoricoContent() {
                             className="text-xs text-primary hover:underline font-medium">Ver</button>
                           <label className="cursor-pointer text-xs text-text-sec hover:underline">
                             Reemplazar
-                            <input type="file" accept="application/pdf,.pdf" className="hidden"
+                            <input type="file" accept="application/pdf,image/png,image/jpeg,image/jpg,image/webp" className="hidden"
                               onChange={(e) => { if (e.target.files?.[0]) handleOrdenPagoBeneficiario(b.id, e.target.files[0]); }} />
                           </label>
                         </>
                       ) : (
                         <label className="cursor-pointer inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
-                          + Cargar PDF
-                          <input type="file" accept="application/pdf,.pdf" className="hidden"
+                          + Cargar PDF o Imagen
+                          <input type="file" accept="application/pdf,image/png,image/jpeg,image/jpg,image/webp" className="hidden"
                             onChange={(e) => { if (e.target.files?.[0]) handleOrdenPagoBeneficiario(b.id, e.target.files[0]); }} />
                         </label>
                       )}
@@ -585,12 +641,40 @@ function RegistrarHistoricoContent() {
           </div>
 
           {/* 4. Documentación */}
-          <div className="bg-white border border-border rounded-lg p-5">
-            <h3 className="text-xs font-semibold text-text-sec uppercase tracking-wider mb-3 flex items-center gap-2">
-              <div className="w-5 h-5 rounded-full bg-primary text-white flex items-center justify-center text-[10px] font-bold">4</div>
-              Documentación (PDF, máx. {MAX_PDF_MB}MB c/u)
-              <span className="ml-auto text-xs font-normal text-text-sec">{docsRequeridos.filter(({ key }) => docsPresentados[key]).length}/{docsRequeridos.length}</span>
-            </h3>
+          <div className="bg-white border border-border rounded-lg p-5 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border pb-3">
+              <div>
+                <h3 className="text-xs font-semibold text-text-sec uppercase tracking-wider flex items-center gap-2">
+                  <div className="w-5 h-5 rounded-full bg-primary text-white flex items-center justify-center text-[10px] font-bold">4</div>
+                  Documentación (PDF o Imagen JPG/PNG, máx. {MAX_PDF_MB}MB c/u)
+                  <span className="ml-2 text-xs font-normal text-text-sec">({docsRequeridos.filter(({ key }) => docsPresentados[key]).length}/{docsRequeridos.length})</span>
+                </h3>
+                <p className="text-[11px] text-text-sec mt-0.5">
+                  Suba documentos en PDF o fotos escaneadas. Todas se unifican automáticamente.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={verExpedienteCompletoPdf}
+                disabled={totalDocsCargados === 0 || uniendoDocs}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-[#3258CA] hover:bg-[#2846a3] disabled:opacity-40 disabled:cursor-not-allowed rounded-lg shadow-xs transition-colors shrink-0 self-start sm:self-auto"
+                title="Ver todos los documentos en un solo PDF"
+              >
+                {uniendoDocs ? (
+                  <>
+                    <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Consolidando PDF...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Ver todos en PDF ({totalDocsCargados})
+                  </>
+                )}
+              </button>
+            </div>
             <div className="space-y-2">
               {docsRequeridos.map(({ key, label }) => {
                 const presentado = docsPresentados[key];
@@ -619,8 +703,8 @@ function RegistrarHistoricoContent() {
                     ) : (
                       <label className="cursor-pointer inline-flex items-center gap-1 text-xs font-medium text-primary hover:text-primary-dark">
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
-                        Cargar PDF
-                        <input type="file" accept="application/pdf,.pdf" className="hidden" onChange={(e) => { if (e.target.files?.[0]) handlePdfUpload(key, e.target.files[0]); }} />
+                        Cargar PDF o Imagen
+                        <input type="file" accept="application/pdf,image/png,image/jpeg,image/jpg,image/webp" className="hidden" onChange={(e) => { if (e.target.files?.[0]) handlePdfUpload(key, e.target.files[0]); }} />
                       </label>
                     )}
                     <div className="ml-auto flex items-center gap-2">

@@ -4,6 +4,9 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import { getCurrentUser } from '@/lib/auth';
+import ModalRegularizarSaldo from '@/components/fam/ModalRegularizarSaldo';
+import PdfViewerModal from '@/components/common/PdfViewerModal';
+import { unirDocumentosPdf, DocumentoParaUnir } from '@/lib/pdf-utils';
 
 interface BeneficiarioVinculado {
   id: string;
@@ -71,6 +74,11 @@ export interface DetalleExpediente {
   descripcionAccidente?: string | null;
   beneficiariosVinculados: BeneficiarioVinculado[];
   covidMontoTotal: number;
+  tieneSaldoPendiente?: boolean;
+  saldoPendiente?: number;
+  montoTotalAsignado?: number;
+  montoMinimoNormativo?: number;
+  auditoriasBeneficiarios?: any[];
   historialBeneficios: HistorialBeneficio[];
 }
 
@@ -118,7 +126,10 @@ export default function DetalleExpedienteModal({ id, onClose, onDelete }: { id: 
   const router = useRouter();
   const [detalle, setDetalle] = useState<DetalleExpediente | null>(null);
   const [loading, setLoading] = useState(true);
+  const [regularizarOpen, setRegularizarOpen] = useState(false);
   const [pdfLoadingKey, setPdfLoadingKey] = useState<string | null>(null);
+  const [pdfViewer, setPdfViewer] = useState<{ base64: string; nombre: string } | null>(null);
+  const [uniendoDocs, setUniendoDocs] = useState(false);
   const [activeTab, setActiveTab] = useState<'montos' | 'docs' | 'benef' | 'admin'>('montos');
   const [isAdmin, setIsAdmin] = useState(false);
   const [guardandoAdmin, setGuardandoAdmin] = useState(false);
@@ -212,6 +223,119 @@ export default function DetalleExpedienteModal({ id, onClose, onDelete }: { id: 
       setTimeout(() => URL.revokeObjectURL(url), 30000);
     } catch {
       alert('No se pudo abrir la declaración jurada.');
+    }
+  };
+
+  const totalDocsDisponibles = detalle?.documentosDisponibles
+    ? Object.values(detalle.documentosDisponibles).filter(Boolean).length +
+      (detalle.beneficiariosVinculados?.filter((b) => b.tieneDeclaracionJurada).length || 0) +
+      (detalle.beneficiariosVinculados?.filter((b) => b.tieneOrdenPago).length || 0)
+    : 0;
+
+  const verTodosLosDocumentosEnPdf = async () => {
+    if (!detalle) return;
+    setUniendoDocs(true);
+    try {
+      const docsParaUnir: DocumentoParaUnir[] = [];
+      const disponibles = detalle.documentosDisponibles || {};
+
+      // 1. Descargar todos los documentos principales disponibles
+      const promesasDocs = Object.keys(disponibles)
+        .filter((campo) => disponibles[campo])
+        .map(async (campo) => {
+          try {
+            const { data } = await api.get(`/fam-beneficios/${id}/documento/${campo}`);
+            if (data?.contenido) {
+              return {
+                titulo: DOCS_LABELS[campo] || campo,
+                base64: data.contenido as string,
+                campo,
+              };
+            }
+          } catch (e) {
+            console.warn(`No se pudo obtener el documento ${campo}:`, e);
+          }
+          return null;
+        });
+
+      const docsObtenidos = (await Promise.all(promesasDocs)).filter(Boolean) as { titulo: string; base64: string; campo: string }[];
+
+      // Ordenar canónicamente
+      const orden = [
+        'fichaAdmisibilidad',
+        'solicitudAsignacion',
+        'cartaRemision',
+        'memorando',
+        'ordenPago',
+        'sucesionIntestada',
+        'declaracionJurada',
+        'actaDefuncion',
+        'otrosDocumentos',
+      ];
+      docsObtenidos.sort((a, b) => {
+        const ia = orden.indexOf(a.campo);
+        const ib = orden.indexOf(b.campo);
+        return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+      });
+
+      docsObtenidos.forEach((d) => docsParaUnir.push({ titulo: d.titulo, base64: d.base64 }));
+
+      // 2. Beneficiarios (Declaraciones y vouchers)
+      if (detalle.beneficiariosVinculados) {
+        const promesasBenes = detalle.beneficiariosVinculados.map(async (b) => {
+          const benDocs: DocumentoParaUnir[] = [];
+          if (b.tieneDeclaracionJurada) {
+            try {
+              const { data } = await api.get(`/fam-beneficios/${id}/beneficiario/${b.id}/declaracion`);
+              if (data?.contenido) {
+                benDocs.push({
+                  titulo: `Declaración Jurada - ${b.nombre}`,
+                  base64: data.contenido,
+                  subtitulo: b.dni ? `DNI: ${b.dni}` : undefined,
+                });
+              }
+            } catch {}
+          }
+          if (b.tieneOrdenPago) {
+            try {
+              const { data } = await api.get(`/fam-beneficios/${id}/beneficiario/${b.id}/orden-pago`);
+              if (data?.contenido) {
+                benDocs.push({
+                  titulo: `Voucher / Orden de Pago - ${b.nombre}`,
+                  base64: data.contenido,
+                  subtitulo: `Asignado: ${b.porcentajeAsignado}%`,
+                });
+              }
+            } catch {}
+          }
+          return benDocs;
+        });
+
+        const benesDocsList = await Promise.all(promesasBenes);
+        benesDocsList.flat().forEach((d) => docsParaUnir.push(d));
+      }
+
+      if (docsParaUnir.length === 0) {
+        alert('Este expediente no tiene documentos adjuntos para consolidar.');
+        return;
+      }
+
+      const mergedBase64 = await unirDocumentosPdf(docsParaUnir, {
+        expedienteNumero: detalle.expedienteNumero || 'EXP-FAM',
+        colegiadoNombre: detalle.NOMBRE_COLEGIADO,
+        colegiadoCip: detalle.NUM_COLEGIATURA,
+        tipoBeneficio: detalle.tipoBeneficio?.nombre,
+        incluirCaratula: true,
+      });
+
+      setPdfViewer({
+        base64: mergedBase64,
+        nombre: `Expediente Completo Consolidado - ${detalle.expedienteNumero || detalle.NOMBRE_COLEGIADO || 'FAM'}`,
+      });
+    } catch (err: any) {
+      alert(`Error al consolidar documentos: ${err?.message || 'Error desconocido'}`);
+    } finally {
+      setUniendoDocs(false);
     }
   };
 
@@ -342,11 +466,25 @@ export default function DetalleExpedienteModal({ id, onClose, onDelete }: { id: 
               {detalle ? `${detalle.NUM_COLEGIATURA} — ${detalle.NOMBRE_COLEGIADO}` : 'Cargando...'}
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             {detalle && (
-              <span className={`inline-flex px-2.5 py-1 text-xs font-semibold rounded-full ${ESTADO_COLORS[detalle.estado] || 'bg-gray-100 text-gray-700'}`}>
-                {detalle.estado}
-              </span>
+              <>
+                <button
+                  type="button"
+                  onClick={verTodosLosDocumentosEnPdf}
+                  disabled={uniendoDocs || totalDocsDisponibles === 0}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-white bg-[#3258CA] hover:bg-[#2846a3] disabled:opacity-40 rounded-lg shadow-xs transition-colors shrink-0"
+                  title="Ver todos los documentos adjuntos en un solo PDF"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  {uniendoDocs ? 'Consolidando...' : `Expediente en PDF (${totalDocsDisponibles})`}
+                </button>
+                <span className={`inline-flex px-2.5 py-1 text-xs font-semibold rounded-full ${ESTADO_COLORS[detalle.estado] || 'bg-gray-100 text-gray-700'}`}>
+                  {detalle.estado}
+                </span>
+              </>
             )}
             <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100">
               <svg className="w-5 h-5 text-text-sec" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
@@ -388,6 +526,34 @@ export default function DetalleExpedienteModal({ id, onClose, onDelete }: { id: 
                 </div>
               </div>
             </div>
+
+            {/* Banner de Saldo Pendiente */}
+            {detalle.tieneSaldoPendiente && (
+              <div className="mx-4 sm:mx-6 my-2 p-3 bg-amber-50 border border-amber-300 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-1.5 bg-amber-100 text-amber-800 rounded-lg shrink-0">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="font-bold text-amber-900 text-xs">
+                      Expediente con Saldo Pendiente: S/ {Number(detalle.saldoPendiente || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                    </p>
+                    <p className="text-[11px] text-amber-800">
+                      Asignado: S/ {Number(detalle.montoTotalAsignado ?? detalle.monto).toLocaleString('es-PE', { minimumFractionDigits: 2 })} · Mínimo normativo: S/ {Number(detalle.montoMinimoNormativo || 3000).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setRegularizarOpen(true)}
+                  type="button"
+                  className="px-3 py-1.5 bg-primary text-white text-xs font-semibold rounded-lg hover:bg-primary/90 transition-colors shrink-0"
+                >
+                  Regularizar Saldo
+                </button>
+              </div>
+            )}
 
             {/* TABS */}
             <div className="flex-shrink-0 flex border-b border-border bg-gray-50 overflow-x-auto">
@@ -547,11 +713,30 @@ export default function DetalleExpedienteModal({ id, onClose, onDelete }: { id: 
               {activeTab === 'docs' && (
                 <div className="space-y-4">
                   <div className={`rounded-lg p-4 border ${detalle.documentacionCompleta ? 'bg-gray-50 border-border' : 'bg-red-50 border-red-200'}`}>
-                    <h4 className="text-xs font-semibold uppercase tracking-wider mb-3 flex items-center gap-2">
-                      <span className={detalle.documentacionCompleta ? 'text-text-sec' : 'text-red-600'}>
-                        Documentación: {detalle.documentacionCompleta ? 'COMPLETA ✓' : 'INCOMPLETA ⚠️'}
-                      </span>
-                    </h4>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                      <h4 className="text-xs font-semibold uppercase tracking-wider flex items-center gap-2">
+                        <span className={detalle.documentacionCompleta ? 'text-text-sec' : 'text-red-600'}>
+                          Documentación: {detalle.documentacionCompleta ? 'COMPLETA ✓' : 'INCOMPLETA ⚠️'}
+                        </span>
+                      </h4>
+                      <button
+                        type="button"
+                        onClick={verTodosLosDocumentosEnPdf}
+                        disabled={uniendoDocs || totalDocsDisponibles === 0}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-[#3258CA] hover:bg-[#2846a3] disabled:opacity-40 rounded-lg shadow-xs transition-colors shrink-0 self-start sm:self-auto"
+                      >
+                        {uniendoDocs ? (
+                          <>
+                            <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            Consolidando...
+                          </>
+                        ) : (
+                          <>
+                            📄 Ver todos en un solo PDF ({totalDocsDisponibles})
+                          </>
+                        )}
+                      </button>
+                    </div>
                     {!detalle.documentacionCompleta && (
                       <p className="text-sm text-red-700 mb-3">
                         <strong>Justificación:</strong> {detalle.documentacionObservacion || '-'}
@@ -887,6 +1072,30 @@ export default function DetalleExpedienteModal({ id, onClose, onDelete }: { id: 
           <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-text-sec bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">Cerrar</button>
         </div>
       </div>
+
+      {regularizarOpen && detalle && (
+        <ModalRegularizarSaldo
+          isOpen={regularizarOpen}
+          onClose={() => setRegularizarOpen(false)}
+          onSuccess={() => {
+            api.get(`/fam-beneficios/${id}`).then(({ data }) => setDetalle(data));
+          }}
+          expedienteId={id}
+          expedienteNumero={detalle.expedienteNumero}
+          colegiadoNombre={detalle.NOMBRE_COLEGIADO}
+          montoTotalAsignado={Number(detalle.montoTotalAsignado ?? detalle.monto)}
+          saldoPendiente={Number(detalle.saldoPendiente || 0)}
+          montoMinimoNormativo={Number(detalle.montoMinimoNormativo || 3000)}
+        />
+      )}
+
+      {pdfViewer && (
+        <PdfViewerModal
+          base64={pdfViewer.base64}
+          nombre={pdfViewer.nombre}
+          onClose={() => setPdfViewer(null)}
+        />
+      )}
     </div>
   );
 }

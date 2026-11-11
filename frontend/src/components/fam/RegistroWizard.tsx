@@ -90,6 +90,7 @@ export default function RegistroWizard() {
 
   // Paso 2 - Beneficiarios
   const [filas, setFilas] = useState<FilaBeneficiario[]>([nuevaFila()]);
+  const [filasPadron, setFilasPadron] = useState<FilaBeneficiario[]>([]);
   const [beneficiarioEsTitular, setBeneficiarioEsTitular] = useState(false);
   const [cargandoBenes, setCargandoBenes] = useState(false);
   const [personaSearchIdx, setPersonaSearchIdx] = useState<number | null>(null);
@@ -178,9 +179,13 @@ export default function RegistroWizard() {
         porcentaje: String(b.PORCENTAJE ?? ''),
         observaciones: '',
       }));
+      setFilasPadron(existentes);
       setFilas(existentes.length ? existentes : [nuevaFila()]);
+      setBeneficiarioEsTitular(false);
     } catch {
+      setFilasPadron([]);
       setFilas([nuevaFila()]);
+      setBeneficiarioEsTitular(false);
     } finally {
       setCargandoBenes(false);
     }
@@ -680,28 +685,37 @@ export default function RegistroWizard() {
 
           {solicitud.tipoBeneficioConfigId && (
             <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
-              <button type="button" onClick={() => {
-                const nuevoEstado = !beneficiarioEsTitular;
-                setBeneficiarioEsTitular(nuevoEstado);
-                if (nuevoEstado && colegiado) {
-                  const yaExiste = filas.some((f) => f.dni === colegiado.DNI);
-                  if (!yaExiste) {
-                    const nuevaFila: FilaBeneficiario = {
-                      key: Math.random().toString(36).slice(2),
+              <button
+                type="button"
+                onClick={() => {
+                  const nuevoEstado = !beneficiarioEsTitular;
+                  setBeneficiarioEsTitular(nuevoEstado);
+                  if (nuevoEstado && colegiado) {
+                    const titularFila: FilaBeneficiario = {
+                      key: 'titular-' + colegiado.COLEGIADO_ID,
                       nombre: colegiado.NOMBRE_COLEGIADO,
                       dni: colegiado.DNI,
                       parentesco: 'Titular',
                       porcentaje: '100',
                       observaciones: '',
                     };
-                    setFilas((prev) => [...prev.filter((f) => f.nombre.trim()), nuevaFila]);
+                    setFilas([titularFila]);
+                  } else if (!nuevoEstado && colegiado) {
+                    setFilas(filasPadron.length ? filasPadron : [nuevaFila()]);
                   }
-                }
-              }}
-                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${beneficiarioEsTitular ? 'bg-primary' : 'bg-gray-300'}`}>
+                }}
+                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${beneficiarioEsTitular ? 'bg-primary' : 'bg-gray-300'}`}
+              >
                 <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${beneficiarioEsTitular ? 'translate-x-4.5' : 'translate-x-0.5'}`} />
               </button>
-              <span className="text-sm text-text-main font-medium">¿El titular del colegiado es el beneficiario?</span>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between w-full gap-1">
+                <span className="text-sm text-text-main font-medium">¿El titular del colegiado es el beneficiario?</span>
+                {beneficiarioEsTitular && (
+                  <span className="text-[11px] text-blue-700 font-semibold bg-blue-100/60 px-2 py-0.5 rounded">
+                    ✓ Titular asignado como beneficiario único (100%)
+                  </span>
+                )}
+              </div>
             </div>
           )}
 

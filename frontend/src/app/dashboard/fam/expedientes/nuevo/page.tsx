@@ -80,6 +80,7 @@ export default function NuevoExpedientePage() {
   const sugerenciasRef = useRef<HTMLDivElement>(null);
 
   const [beneficiariosReg, setBeneficiariosReg] = useState<BeneficiarioRegistrado[]>([]);
+  const [beneficiariosPadron, setBeneficiariosPadron] = useState<BeneficiarioRegistrado[]>([]);
   const [solicitanteKeys, setSolicitanteKeys] = useState<string[]>([]);
   const [solicitanteManual, setSolicitanteManual] = useState({ nombre: '', dni: '' });
   const [sucesionPdf, setSucesionPdf] = useState<{ base64: string; size: number } | null>(null);
@@ -240,7 +241,9 @@ export default function NuevoExpedientePage() {
         parentesco: b.PARENTESCO || 'Hijo(a)',
         porcentaje: b.PORCENTAJE !== undefined && b.PORCENTAJE !== null ? String(b.PORCENTAJE) : '0',
       }));
+      setBeneficiariosPadron(registrados);
       setBeneficiariosReg(registrados);
+      setBeneficiarioEsTitular(false);
       // Seleccionar a todos los beneficiarios por defecto para que figuren como solicitantes conjuntos
       setSolicitanteKeys(registrados.map((r) => r.key));
       if (registrados.length === 0) {
@@ -285,10 +288,10 @@ export default function NuevoExpedientePage() {
     }));
 
     if (nuevoEsFallecimiento) {
-      // Para Fallecimiento: si el único beneficiario era el titular auto-asignado de un trámite en vida, removerlo
+      // Para Fallecimiento: si el único beneficiario era el titular auto-asignado de un trámite en vida, removerlo y restaurar los del padrón
       if (beneficiarioEsTitular && beneficiariosReg.every((b) => b.parentesco === 'Titular')) {
-        setBeneficiariosReg([]);
-        setSolicitanteKeys([]);
+        setBeneficiariosReg(beneficiariosPadron);
+        setSolicitanteKeys(beneficiariosPadron.map((r) => r.key));
         setBeneficiarioEsTitular(false);
       }
     } else {
@@ -928,25 +931,41 @@ export default function NuevoExpedientePage() {
             </div>
             {form.tipoBeneficioConfigId && !esFallecimiento && (
               <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
-                <button type="button" onClick={() => {
-                  const nuevoEstado = !beneficiarioEsTitular;
-                  setBeneficiarioEsTitular(nuevoEstado);
-                  if (nuevoEstado && colegiado) {
-                    const yaExiste = beneficiariosReg.some((b) => b.dni === colegiado.DNI);
-                    if (!yaExiste) {
-                      const nuevoBene: BeneficiarioRegistrado = { key: 'titular-' + colegiado.COLEGIADO_ID, nombre: colegiado.NOMBRE_COLEGIADO, dni: colegiado.DNI, declaracionJuradaDni: colegiado.DNI, parentesco: 'Titular', porcentaje: modalidad === 'monto_compartido' ? '100' : '100' };
-                      setBeneficiariosReg((prev) => [...prev, nuevoBene]);
-                      setSolicitanteKeys((prev) => [...prev, nuevoBene.key]);
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nuevoEstado = !beneficiarioEsTitular;
+                    setBeneficiarioEsTitular(nuevoEstado);
+                    if (nuevoEstado && colegiado) {
+                      // Al activarse que el titular cobra el beneficio, desaparecen los beneficiarios del padrón y queda solo el titular
+                      const titularBene: BeneficiarioRegistrado = {
+                        key: 'titular-' + colegiado.COLEGIADO_ID,
+                        nombre: colegiado.NOMBRE_COLEGIADO,
+                        dni: colegiado.DNI,
+                        declaracionJuradaDni: colegiado.DNI,
+                        parentesco: 'Titular',
+                        porcentaje: '100',
+                      };
+                      setBeneficiariosReg([titularBene]);
+                      setSolicitanteKeys([titularBene.key]);
+                    } else if (!nuevoEstado && colegiado) {
+                      // Al desactivarse, se restauran los beneficiarios registrados del padrón
+                      setBeneficiariosReg(beneficiariosPadron);
+                      setSolicitanteKeys(beneficiariosPadron.map((r) => r.key));
                     }
-                  } else if (!nuevoEstado && colegiado) {
-                    setBeneficiariosReg((prev) => prev.filter((b) => b.dni !== colegiado.DNI));
-                    setSolicitanteKeys((prev) => prev.filter((k) => !k.startsWith('titular-')));
-                  }
-                }}
-                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${beneficiarioEsTitular ? 'bg-primary' : 'bg-gray-300'}`}>
+                  }}
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${beneficiarioEsTitular ? 'bg-primary' : 'bg-gray-300'}`}
+                >
                   <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${beneficiarioEsTitular ? 'translate-x-4.5' : 'translate-x-0.5'}`} />
                 </button>
-                <span className="text-sm text-text-main font-medium">¿El titular del colegiado es el beneficiario?</span>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between w-full gap-1">
+                  <span className="text-sm text-text-main font-medium">¿El titular del colegiado es el beneficiario?</span>
+                  {beneficiarioEsTitular && (
+                    <span className="text-[11px] text-blue-700 font-semibold bg-blue-100/60 px-2 py-0.5 rounded">
+                      ✓ Titular asignado como beneficiario único (100%)
+                    </span>
+                  )}
+                </div>
               </div>
             )}
             {esFallecimiento && !sinBeneficiarios && (

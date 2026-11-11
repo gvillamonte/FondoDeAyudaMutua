@@ -1,8 +1,31 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Reglas de protección: prevenir que SVGs o spinners sin dimensiones explícitas
+   o durante el retardo de carga de CSS se expandan al 100% de la pantalla */
+svg {
+  max-width: 100%;
+}
+
+svg.animate-spin,
+.animate-spin {
+  display: inline-block;
+  width: 2rem;
+  height: 2rem;
+  max-width: 2rem;
+  max-height: 2rem;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
 
 :root {
   --color-primary: #3258CA;

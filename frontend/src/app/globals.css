@@ -2,21 +2,41 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Reglas de protección: prevenir que SVGs o spinners sin dimensiones explícitas
-   o durante el retardo de carga de CSS se expandan al 100% de la pantalla */
+/* Reglas de protección definitiva contra SVG desbordados */
 svg {
-  max-width: 100%;
+  box-sizing: border-box;
+  flex-shrink: 0;
 }
 
+/* Regla de oro: ningún SVG sin width/height explícito puede desbordarse a pantalla completa */
+svg:not([width]):not([height]) {
+  max-width: 3rem;
+  max-height: 3rem;
+}
+
+/* Spinner animado: estrictamente acotado */
 svg.animate-spin,
 .animate-spin {
-  display: inline-block;
-  width: 2rem;
-  height: 2rem;
-  max-width: 2rem;
-  max-height: 2rem;
+  display: inline-block !important;
+  width: 2rem !important;
+  height: 2rem !important;
+  max-width: 2rem !important;
+  max-height: 2rem !important;
+  flex-shrink: 0 !important;
   animation: spin 1s linear infinite;
 }
+
+/* Fallback de clases de tamaño para SVGs comunes (coincidencia segura por atributo class) */
+svg[class*="w-3.5"], svg[class*="h-3.5"] { width: 0.875rem !important; height: 0.875rem !important; }
+svg[class*="w-4"], svg[class*="h-4"] { width: 1rem !important; height: 1rem !important; }
+svg[class*="w-5"], svg[class*="h-5"] { width: 1.25rem !important; height: 1.25rem !important; }
+svg[class*="w-6"], svg[class*="h-6"] { width: 1.5rem !important; height: 1.5rem !important; }
+svg[class*="w-7"], svg[class*="h-7"] { width: 1.75rem !important; height: 1.75rem !important; }
+svg[class*="w-8"], svg[class*="h-8"] { width: 2rem !important; height: 2rem !important; }
+svg[class*="w-9"], svg[class*="h-9"] { width: 2.25rem !important; height: 2.25rem !important; }
+svg[class*="w-10"], svg[class*="h-10"] { width: 2.5rem !important; height: 2.5rem !important; }
+svg[class*="w-12"], svg[class*="h-12"] { width: 3rem !important; height: 3rem !important; }
+svg[class*="w-16"], svg[class*="h-16"] { width: 4rem !important; height: 4rem !important; }
 
 @keyframes spin {
   from {

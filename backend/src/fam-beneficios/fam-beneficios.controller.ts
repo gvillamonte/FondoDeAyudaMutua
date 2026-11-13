@@ -10,6 +10,7 @@ import {
   SubirDocumentoDto,
   SubirDeclaracionJuradaDto,
   RegularizarSaldoDto,
+  RegistrarCartaPoderDto,
 } from './dto/fam-solicitud.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -41,6 +42,8 @@ export class FamBeneficiosController {
     @Query('fechaHasta') fechaHasta?: string,
     @Query('documentacionCompleta') documentacionCompleta?: string,
     @Query('conSaldoPendiente') conSaldoPendiente?: string,
+    @Query('formaPago') formaPago?: string,
+    @Query('banco') banco?: string,
     @Query('ordenarPor') ordenarPor?: string,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
@@ -54,6 +57,8 @@ export class FamBeneficiosController {
       fechaHasta,
       documentacionCompleta,
       conSaldoPendiente,
+      formaPago,
+      banco,
       ordenarPor,
       page,
       limit,
@@ -198,9 +203,20 @@ export class FamBeneficiosController {
     return this.famBeneficiosService.pagar(id, dto, req.user.sub, req.ip);
   }
 
+  @Post(':id/carta-poder')
+  @Roles('ADMINISTRADOR', 'OPERADOR_PAGOS')
+  @ApiOperation({ summary: 'Registrar o actualizar Carta Poder y trazabilidad de cobro por apoderado' })
+  async registrarCartaPoder(
+    @Param('id') id: string,
+    @Body() dto: RegistrarCartaPoderDto,
+    @Req() req: any,
+  ) {
+    return this.famBeneficiosService.registrarCartaPoder(id, dto, req.user.sub, req.ip);
+  }
+
   @Put(':id/depositos/:depositoId')
   @Roles('ADMINISTRADOR')
-  @ApiOperation({ summary: 'Corregir un deposito o comprobante (solo ADMINISTRADOR)' })
+  @ApiOperation({ summary: 'Corregir un deposito, cheque, comprobante o carta poder' })
   async actualizarDeposito(
     @Param('id') id: string,
     @Param('depositoId') depositoId: string,

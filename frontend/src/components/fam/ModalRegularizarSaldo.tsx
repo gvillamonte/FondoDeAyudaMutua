@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import api from '@/lib/api';
 import Modal from '@/components/ui/Modal';
 import { showConfirmMessage } from '@/components/common/ConfirmCenterMessage';
@@ -53,26 +53,108 @@ export default function ModalRegularizarSaldo({
   montoMinimoNormativo = 3000,
 }: Props) {
   const [modo, setModo] = useState<'beneficiario' | 'monto'>('beneficiario');
-  const [montoAdicional, setMontoAdicional] = useState(saldoPendiente > 0 ? String(saldoPendiente) : '');
+  const [montoAdicional, setMontoAdicional] = useState('');
   const [observaciones, setObservaciones] = useState('');
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState('');
 
-  const [nuevosBeneficiarios, setNuevosBeneficiarios] = useState<BeneficiarioNuevo[]>([
-    {
-      key: 'ben-1',
-      nombre: '',
-      dni: '',
-      parentesco: 'Hijo(a)',
-      monto: saldoPendiente > 0 ? String(saldoPendiente) : '',
-      porcentaje: '0',
-    },
-  ]);
+  const calcularPct = (montoNum: number) => {
+    if (montoMinimoNormativo <= 0 || montoNum <= 0) return '0.00';
+    return Number(((montoNum / montoMinimoNormativo) * 100).toFixed(2)).toString();
+  };
+
+  const calcularMonto = (pctNum: number) => {
+    if (montoMinimoNormativo <= 0 || pctNum <= 0) return '0.00';
+    return Number(((pctNum / 100) * montoMinimoNormativo).toFixed(2)).toString();
+  };
+
+  const [nuevosBeneficiarios, setNuevosBeneficiarios] = useState<BeneficiarioNuevo[]>([]);
+
+  // Sincronizar y rellenar automáticamente con el saldo exacto al abrir el modal
+  useEffect(() => {
+    if (isOpen) {
+      setError('');
+      setObservaciones('');
+      const saldo = Math.max(0, Number(saldoPendiente || 0));
+      setMontoAdicional(saldo > 0 ? saldo.toFixed(2) : '');
+      const pctExacto = calcularPct(saldo);
+      setNuevosBeneficiarios([
+        {
+          key: `ben-${Date.now()}`,
+          nombre: '',
+          dni: '',
+          parentesco: 'Hijo(a)',
+          monto: saldo > 0 ? saldo.toFixed(2) : '',
+          porcentaje: saldo > 0 ? pctExacto : '',
+        },
+      ]);
+    }
+  }, [isOpen, saldoPendiente, montoMinimoNormativo]);
 
   const fmt = (n: number) =>
     `S/ ${Number(n || 0).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
+  const totalAsignadoEnModal = nuevosBeneficiarios.reduce(
+    (acc, b) => acc + (parseFloat(b.monto) || 0),
+    0,
+  );
+  const saldoFaltanteEnModal = Math.max(0, Number((saldoPendiente - totalAsignadoEnModal).toFixed(2)));
+
+  const cambiarMontoBeneficiario = (key: string, val: string) => {
+    const m = Math.max(0, parseFloat(val) || 0);
+    const pct = calcularPct(m);
+    setNuevosBeneficiarios((prev) =>
+      prev.map((item) =>
+        item.key === key ? { ...item, monto: val, porcentaje: m > 0 ? pct : '' } : item,
+      ),
+    );
+  };
+
+  const cambiarPorcentajeBeneficiario = (key: string, val: string) => {
+    const p = Math.max(0, Math.min(100, parseFloat(val) || 0));
+    const m = calcularMonto(p);
+    setNuevosBeneficiarios((prev) =>
+      prev.map((item) =>
+        item.key === key ? { ...item, porcentaje: val, monto: p > 0 ? m : '' } : item,
+      ),
+    );
+  };
+
+  // Botón para autocompletar al monto exacto del saldo pendiente
+  const completarMontoExactoFila = (key: string) => {
+    const otrosSuma = nuevosBeneficiarios
+      .filter((x) => x.key !== key)
+      .reduce((acc, x) => acc + (parseFloat(x.monto) || 0), 0);
+    const faltante = Math.max(0, Number((saldoPendiente - otrosSuma).toFixed(2)));
+    const pct = calcularPct(faltante);
+
+    setNuevosBeneficiarios((prev) =>
+      prev.map((item) =>
+        item.key === key
+          ? {
+              ...item,
+              monto: faltante > 0 ? faltante.toFixed(2) : '',
+              porcentaje: faltante > 0 ? pct : '',
+            }
+          : item,
+      ),
+    );
+
+    showConfirmMessage(
+      'info',
+      'Monto exacto completado',
+      `Asignado S/ ${faltante.toFixed(2)} (${pct}%) automáticamente para cubrir el saldo exacto`,
+    );
+  };
+
   const agregarFilaBeneficiario = () => {
+    const actualSum = nuevosBeneficiarios.reduce(
+      (acc, b) => acc + (parseFloat(b.monto) || 0),
+      0,
+    );
+    const restante = Math.max(0, Number((saldoPendiente - actualSum).toFixed(2)));
+    const pctRestante = calcularPct(restante);
+
     setNuevosBeneficiarios((prev) => [
       ...prev,
       {
@@ -80,13 +162,17 @@ export default function ModalRegularizarSaldo({
         nombre: '',
         dni: '',
         parentesco: 'Hijo(a)',
-        monto: '',
-        porcentaje: '0',
+        monto: restante > 0 ? restante.toFixed(2) : '',
+        porcentaje: restante > 0 ? pctRestante : '',
       },
     ]);
   };
 
   const quitarFilaBeneficiario = (key: string) => {
+    if (nuevosBeneficiarios.length <= 1) {
+      showConfirmMessage('warning', 'Mínimo requerido', 'Debe mantenerse al menos un beneficiario para regularizar');
+      return;
+    }
     setNuevosBeneficiarios((prev) => prev.filter((b) => b.key !== key));
   };
 
@@ -101,12 +187,54 @@ export default function ModalRegularizarSaldo({
       setNuevosBeneficiarios((prev) =>
         prev.map((b) => (b.key === key ? { ...b, declaracionJurada: base64 } : b))
       );
+      showConfirmMessage('success', 'PDF adjunto', 'Declaración jurada cargada correctamente');
     };
     reader.readAsDataURL(file);
   };
 
   const guardarRegularizacion = async () => {
     setError('');
+
+    if (modo === 'monto') {
+      const adic = parseFloat(montoAdicional);
+      if (isNaN(adic) || adic <= 0) {
+        const msg = 'Ingrese un monto adicional válido mayor a S/ 0';
+        setError(msg);
+        showConfirmMessage('warning', 'Monto adicional requerido', msg);
+        return;
+      }
+    } else {
+      if (nuevosBeneficiarios.length === 0) {
+        const msg = 'Debe registrar al menos un beneficiario para regularizar';
+        setError(msg);
+        showConfirmMessage('warning', 'Beneficiario requerido', msg);
+        return;
+      }
+      for (let i = 0; i < nuevosBeneficiarios.length; i++) {
+        const b = nuevosBeneficiarios[i];
+        if (!b.nombre.trim()) {
+          const msg = `El beneficiario #${i + 1} debe tener nombre completo`;
+          setError(msg);
+          showConfirmMessage('warning', 'Nombre requerido', msg);
+          return;
+        }
+        const m = parseFloat(b.monto);
+        if (isNaN(m) || m <= 0) {
+          const msg = `El beneficiario ${b.nombre} debe tener un monto válido mayor a S/ 0 (no puede quedar en cero)`;
+          setError(msg);
+          showConfirmMessage('warning', 'Monto en cero', msg);
+          return;
+        }
+        const p = parseFloat(b.porcentaje);
+        if (isNaN(p) || p <= 0) {
+          const msg = `El beneficiario ${b.nombre} debe tener un porcentaje válido mayor a 0% (no puede quedar en cero)`;
+          setError(msg);
+          showConfirmMessage('warning', 'Porcentaje en cero', msg);
+          return;
+        }
+      }
+    }
+
     setGuardando(true);
 
     try {
@@ -116,33 +244,8 @@ export default function ModalRegularizarSaldo({
       };
 
       if (modo === 'monto') {
-        const adic = parseFloat(montoAdicional);
-        if (isNaN(adic) || adic <= 0) {
-          setError('Ingrese un monto adicional válido (> 0)');
-          setGuardando(false);
-          return;
-        }
-        payload.montoAdicional = adic;
+        payload.montoAdicional = parseFloat(montoAdicional);
       } else {
-        if (nuevosBeneficiarios.length === 0) {
-          setError('Debe registrar al menos un beneficiario para regularizar');
-          setGuardando(false);
-          return;
-        }
-        for (const b of nuevosBeneficiarios) {
-          if (!b.nombre.trim()) {
-            setError('Todos los beneficiarios agregados deben tener nombre completo');
-            setGuardando(false);
-            return;
-          }
-          const m = parseFloat(b.monto);
-          if (isNaN(m) || m <= 0) {
-            setError(`El beneficiario ${b.nombre} debe tener un monto válido (> 0)`);
-            setGuardando(false);
-            return;
-          }
-        }
-
         payload.beneficiarios = nuevosBeneficiarios.map((b) => ({
           nombre: b.nombre.trim(),
           dni: b.dni.trim() || undefined,
@@ -158,7 +261,7 @@ export default function ModalRegularizarSaldo({
       showConfirmMessage(
         'success',
         'Regularización guardada con éxito',
-        'El saldo pendiente ha sido recalculado y auditado correctamente.'
+        'El saldo pendiente ha sido recalculado y registrado en la auditoría.',
       );
       onSuccess();
       onClose();
@@ -218,7 +321,7 @@ export default function ModalRegularizarSaldo({
             onClick={() => setModo('beneficiario')}
             className={`px-3 py-1.5 rounded text-xs font-medium transition-colors ${
               modo === 'beneficiario'
-                ? 'bg-primary text-white'
+                ? 'bg-primary text-white font-semibold'
                 : 'bg-gray-100 text-text-sec hover:bg-gray-200'
             }`}
           >
@@ -229,7 +332,7 @@ export default function ModalRegularizarSaldo({
             onClick={() => setModo('monto')}
             className={`px-3 py-1.5 rounded text-xs font-medium transition-colors ${
               modo === 'monto'
-                ? 'bg-primary text-white'
+                ? 'bg-primary text-white font-semibold'
                 : 'bg-gray-100 text-text-sec hover:bg-gray-200'
             }`}
           >
@@ -239,17 +342,29 @@ export default function ModalRegularizarSaldo({
 
         {modo === 'beneficiario' ? (
           <div className="space-y-3">
-            <div className="flex justify-between items-center">
+            <div className="flex justify-between items-center flex-wrap gap-2">
               <span className="text-xs font-semibold text-text-sec uppercase">
                 Beneficiarios a incorporar
               </span>
-              <button
-                type="button"
-                onClick={agregarFilaBeneficiario}
-                className="text-xs text-primary font-medium hover:underline inline-flex items-center gap-1"
-              >
-                + Añadir otro beneficiario
-              </button>
+              <div className="flex items-center gap-2">
+                {saldoFaltanteEnModal > 0 && nuevosBeneficiarios.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => completarMontoExactoFila(nuevosBeneficiarios[nuevosBeneficiarios.length - 1].key)}
+                    className="px-2.5 py-1 text-xs font-semibold text-[#3258CA] bg-blue-50 border border-[#3258CA]/40 rounded hover:bg-blue-100 transition-colors inline-flex items-center gap-1 shadow-2xs"
+                    title="Asignar el saldo restante exacto al último beneficiario"
+                  >
+                    ⚡ Completar saldo exacto (S/ {saldoFaltanteEnModal.toFixed(2)})
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={agregarFilaBeneficiario}
+                  className="text-xs text-primary font-semibold hover:underline inline-flex items-center gap-1"
+                >
+                  + Añadir otro beneficiario
+                </button>
+              </div>
             </div>
 
             {nuevosBeneficiarios.map((b, idx) => (
@@ -257,15 +372,30 @@ export default function ModalRegularizarSaldo({
                 key={b.key}
                 className="p-3 bg-bg-layout border border-border-main rounded-lg space-y-2 relative"
               >
-                {nuevosBeneficiarios.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => quitarFilaBeneficiario(b.key)}
-                    className="absolute top-2 right-2 text-xs text-red-600 hover:underline"
-                  >
-                    Quitar
-                  </button>
-                )}
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-text-main uppercase">
+                    Beneficiario #{idx + 1}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => completarMontoExactoFila(b.key)}
+                      className="text-[10px] text-primary font-bold hover:underline bg-white px-2 py-0.5 rounded border border-primary/30"
+                      title="Calcular y asignar el saldo faltante exacto a esta fila"
+                    >
+                      ⚡ Completar al monto exacto
+                    </button>
+                    {nuevosBeneficiarios.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => quitarFilaBeneficiario(b.key)}
+                        className="text-xs text-red-600 hover:underline"
+                      >
+                        Quitar
+                      </button>
+                    )}
+                  </div>
+                </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <div className="sm:col-span-2">
@@ -274,7 +404,7 @@ export default function ModalRegularizarSaldo({
                     </label>
                     <input
                       type="text"
-                      placeholder="Nombres y apellidos"
+                      placeholder="Nombres y apellidos completos"
                       value={b.nombre}
                       onChange={(e) => {
                         const val = e.target.value;
@@ -282,7 +412,7 @@ export default function ModalRegularizarSaldo({
                           prev.map((item) => (item.key === b.key ? { ...item, nombre: val } : item))
                         );
                       }}
-                      className="w-full px-2 py-1 text-xs border border-border-main rounded bg-white"
+                      className="w-full px-2 py-1 text-xs border border-border-main rounded bg-white focus:outline-none focus:ring-1 focus:ring-primary"
                     />
                   </div>
                   <div>
@@ -302,12 +432,12 @@ export default function ModalRegularizarSaldo({
                           )
                         );
                       }}
-                      className="w-full px-2 py-1 text-xs border border-border-main rounded bg-white"
+                      className="w-full px-2 py-1 text-xs border border-border-main rounded bg-white focus:outline-none focus:ring-1 focus:ring-primary"
                     />
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-center">
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 items-center">
                   <div>
                     <label className="block text-[10px] font-semibold text-text-sec uppercase mb-0.5">
                       Parentesco
@@ -320,7 +450,7 @@ export default function ModalRegularizarSaldo({
                           prev.map((item) => (item.key === b.key ? { ...item, parentesco: val } : item))
                         );
                       }}
-                      className="w-full px-2 py-1 text-xs border border-border-main rounded bg-white"
+                      className="w-full px-2 py-1 text-xs border border-border-main rounded bg-white focus:outline-none focus:ring-1 focus:ring-primary"
                     >
                       {PARENTESCO_OPTIONS.map((opc) => (
                         <option key={opc} value={opc}>
@@ -329,30 +459,49 @@ export default function ModalRegularizarSaldo({
                       ))}
                     </select>
                   </div>
+
                   <div>
                     <label className="block text-[10px] font-semibold text-text-sec uppercase mb-0.5">
-                      Monto asignado (S/) *
+                      Monto (S/) *
                     </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min={0}
-                      placeholder="0.00"
-                      value={b.monto}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setNuevosBeneficiarios((prev) =>
-                          prev.map((item) => (item.key === b.key ? { ...item, monto: val } : item))
-                        );
-                      }}
-                      className="w-full px-2 py-1 text-xs font-semibold text-green-700 border border-border-main rounded bg-white"
-                    />
+                    <div className="relative">
+                      <span className="absolute left-1.5 top-1 text-[11px] text-text-sec font-medium">S/</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min={0.01}
+                        placeholder="0.00"
+                        value={b.monto}
+                        onChange={(e) => cambiarMontoBeneficiario(b.key, e.target.value)}
+                        className="w-full pl-6 pr-2 py-1 text-xs font-bold text-green-700 border border-border-main rounded bg-white focus:outline-none focus:ring-1 focus:ring-primary"
+                      />
+                    </div>
                   </div>
+
+                  <div>
+                    <label className="block text-[10px] font-semibold text-text-sec uppercase mb-0.5">
+                      % Asignado *
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        step="0.01"
+                        min={0.01}
+                        max={100}
+                        placeholder="0.00"
+                        value={b.porcentaje}
+                        onChange={(e) => cambiarPorcentajeBeneficiario(b.key, e.target.value)}
+                        className="w-full pl-2 pr-5 py-1 text-xs font-bold text-primary border border-border-main rounded bg-white focus:outline-none focus:ring-1 focus:ring-primary"
+                      />
+                      <span className="absolute right-1.5 top-1 text-[11px] text-text-sec font-medium">%</span>
+                    </div>
+                  </div>
+
                   <div>
                     <label className="block text-[10px] font-semibold text-text-sec uppercase mb-0.5">
                       Declaración Jurada (PDF)
                     </label>
-                    <label className="cursor-pointer inline-flex items-center gap-1 text-xs text-primary hover:underline">
+                    <label className="cursor-pointer inline-flex items-center gap-1 text-xs text-primary hover:underline font-medium">
                       {b.declaracionJurada ? '✓ PDF adjunto' : '+ Subir PDF'}
                       <input
                         type="file"
@@ -367,23 +516,51 @@ export default function ModalRegularizarSaldo({
                 </div>
               </div>
             ))}
+
+            <div className="flex justify-between items-center text-xs p-2 bg-gray-50 border border-gray-200 rounded-lg">
+              <span className="text-text-sec">
+                Total a incorporar en regularización: <strong className="text-text-main font-bold">{fmt(totalAsignadoEnModal)}</strong>
+              </span>
+              <span className={`font-bold ${saldoFaltanteEnModal === 0 ? 'text-green-700' : 'text-amber-700'}`}>
+                {saldoFaltanteEnModal === 0
+                  ? '✓ Cubre el saldo pendiente exacto'
+                  : `Resta por cubrir: ${fmt(saldoFaltanteEnModal)}`}
+              </span>
+            </div>
           </div>
         ) : (
-          <div className="space-y-2 p-3 bg-bg-layout border border-border-main rounded-lg">
-            <label className="block text-xs font-semibold text-text-sec uppercase">
-              Monto adicional a regularizar (S/) *
-            </label>
-            <input
-              type="number"
-              step="0.01"
-              min={0}
-              value={montoAdicional}
-              onChange={(e) => setMontoAdicional(e.target.value)}
-              className="w-full px-3 py-2 text-sm font-semibold text-green-700 border border-border-main rounded bg-white"
-              placeholder="0.00"
-            />
+          <div className="space-y-3 p-3 bg-bg-layout border border-border-main rounded-lg">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-semibold text-text-sec uppercase">
+                Monto adicional a regularizar (S/) *
+              </label>
+              {saldoPendiente > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMontoAdicional(Number(saldoPendiente).toFixed(2));
+                    showConfirmMessage('info', 'Monto rellenado', `Monto fijado en S/ ${Number(saldoPendiente).toFixed(2)}`);
+                  }}
+                  className="text-xs text-primary font-semibold hover:underline"
+                >
+                  ⚡ Rellenar saldo exacto (S/ {Number(saldoPendiente).toFixed(2)})
+                </button>
+              )}
+            </div>
+            <div className="relative">
+              <span className="absolute left-2.5 top-2 text-sm text-text-sec font-semibold">S/</span>
+              <input
+                type="number"
+                step="0.01"
+                min={0.01}
+                value={montoAdicional}
+                onChange={(e) => setMontoAdicional(e.target.value)}
+                className="w-full pl-8 pr-3 py-2 text-sm font-bold text-green-700 border border-border-main rounded bg-white focus:outline-none focus:ring-2 focus:ring-primary/30"
+                placeholder="0.00"
+              />
+            </div>
             <p className="text-[11px] text-text-sec">
-              El monto ingresado se sumará al expediente actual para cubrir el saldo pendiente.
+              El monto ingresado se sumará al expediente actual para cubrir el saldo pendiente normativo.
             </p>
           </div>
         )}
@@ -398,11 +575,10 @@ export default function ModalRegularizarSaldo({
             value={observaciones}
             onChange={(e) => setObservaciones(e.target.value)}
             placeholder="Detalles de la regularización, documentación presentada o resolución..."
-            className="w-full px-2.5 py-1.5 text-xs border border-border-main rounded bg-white"
+            className="w-full px-2.5 py-1.5 text-xs border border-border-main rounded bg-white focus:outline-none focus:ring-1 focus:ring-primary"
           />
         </div>
       </div>
     </Modal>
   );
 }
-

@@ -107,6 +107,13 @@ export default function RegistroExpedienteDrawer({ open, onClose, onSaved }: { o
   const [numeroPartida, setNumeroPartida] = useState('');
   const [notariaJuzgado, setNotariaJuzgado] = useState('');
   const [beneficiarioEsTitular, setBeneficiarioEsTitular] = useState(false);
+  const [conCartaPoder, setConCartaPoder] = useState(false);
+  const [apoderado, setApoderado] = useState({
+    nombre: '',
+    dni: '',
+    parentesco: 'Cónyuge',
+  });
+  const [cartaPoderDoc, setCartaPoderDoc] = useState<{ base64: string; size: number } | null>(null);
   const [modalidad, setModalidad] = useState('monto_compartido');
 
   const [tipos, setTipos] = useState<TipoBeneficioOpt[]>([]);
@@ -129,7 +136,7 @@ export default function RegistroExpedienteDrawer({ open, onClose, onSaved }: { o
     declaracionJuradaDni: '',
     documentacionCompleta: true,
     documentacionObservacion: '',
-    fechaPago: new Date().toISOString().slice(0, 10),
+    fechaPago: '',
   });
 
   const [docs, setDocs] = useState<Record<string, { base64: string; size: number } | null>>({});
@@ -190,6 +197,9 @@ export default function RegistroExpedienteDrawer({ open, onClose, onSaved }: { o
     setNotariaJuzgado('');
     setModalidad('monto_compartido');
     setBeneficiarioEsTitular(false);
+    setConCartaPoder(false);
+    setApoderado({ nombre: '', dni: '', parentesco: 'Cónyuge' });
+    setCartaPoderDoc(null);
     setDocs({});
     setDocsPresentados({});
     setError('');
@@ -213,7 +223,7 @@ export default function RegistroExpedienteDrawer({ open, onClose, onSaved }: { o
       declaracionJuradaDni: '',
       documentacionCompleta: true,
       documentacionObservacion: '',
-      fechaPago: new Date().toISOString().slice(0, 10),
+      fechaPago: '',
     });
   }, []);
 
@@ -298,6 +308,9 @@ export default function RegistroExpedienteDrawer({ open, onClose, onSaved }: { o
       setBeneficiariosPadron(registrados);
       setBeneficiariosReg(registrados);
       setBeneficiarioEsTitular(false);
+      setConCartaPoder(false);
+      setApoderado({ nombre: '', dni: '', parentesco: 'Cónyuge' });
+      setCartaPoderDoc(null);
       // Seleccionar a todos los beneficiarios por defecto para que figuren como solicitantes conjuntos
       setSolicitanteKeys(registrados.map((r) => r.key));
 
@@ -367,6 +380,9 @@ export default function RegistroExpedienteDrawer({ open, onClose, onSaved }: { o
     }));
 
     if (nuevoEsFallecimiento) {
+      setConCartaPoder(false);
+      setApoderado({ nombre: '', dni: '', parentesco: 'Cónyuge' });
+      setCartaPoderDoc(null);
       if (beneficiarioEsTitular && beneficiariosReg.every((b) => b.parentesco === 'Titular')) {
         setBeneficiariosReg(beneficiariosPadron);
         setSolicitanteKeys(beneficiariosPadron.map((r) => r.key));
@@ -430,9 +446,28 @@ export default function RegistroExpedienteDrawer({ open, onClose, onSaved }: { o
     }
   };
 
+  const handleCartaPoderPdf = async (file: File) => {
+    try {
+      setError('');
+      const { base64, size, esImagenConvertida } = await procesarArchivoDocumento(file, MAX_PDF_MB);
+      setCartaPoderDoc({ base64, size });
+      showConfirmMessage(
+        'success',
+        'Carta Poder cargada correctamente',
+        esImagenConvertida
+          ? `Imagen convertida a PDF (${(size / 1024 / 1024).toFixed(2)} MB)`
+          : `Tamaño: ${(size / 1024 / 1024).toFixed(2)} MB`,
+      );
+    } catch (err: any) {
+      showConfirmMessage('error', 'Carta Poder: formato inválido', err?.message || 'Error al procesar archivo');
+      setError(err?.message || 'La Carta Poder debe ser un archivo PDF o imagen');
+    }
+  };
+
   const totalDocsCargados =
     docsRequeridos.filter(({ key }) => Boolean(docs[key]?.base64)).length +
     (sucesionPdf?.base64 ? 1 : 0) +
+    (conCartaPoder && cartaPoderDoc?.base64 ? 1 : 0) +
     herederosSucesion.filter((h) => Boolean(h.declaracionJuradaPdf)).length +
     herederosSucesion.filter((h) => Boolean(h.ordenPagoPdf)).length;
 
@@ -442,6 +477,13 @@ export default function RegistroExpedienteDrawer({ open, onClose, onSaved }: { o
       if (docs[key]?.base64) {
         docsParaUnir.push({ titulo: label, base64: docs[key]!.base64 });
       }
+    }
+    if (conCartaPoder && cartaPoderDoc?.base64) {
+      docsParaUnir.push({
+        titulo: `Carta Poder - Apoderado: ${apoderado.nombre || 'Representante'}`,
+        base64: cartaPoderDoc.base64,
+        subtitulo: apoderado.dni ? `DNI: ${apoderado.dni} · ${apoderado.parentesco}` : undefined,
+      });
     }
     if (sucesionPdf?.base64) {
       docsParaUnir.push({ titulo: 'Sucesión Intestada', base64: sucesionPdf.base64 });
@@ -559,6 +601,14 @@ export default function RegistroExpedienteDrawer({ open, onClose, onSaved }: { o
       return 'El DNI de la Declaración Jurada debe tener exactamente 8 dígitos';
 
     if (!esSucesionIntestada) {
+      if (conCartaPoder) {
+        if (!apoderado.nombre.trim()) {
+          return 'Indique el nombre completo de la persona a quien se le entregará el beneficio con Carta Poder';
+        }
+        if (!apoderado.dni.trim() || !/^\d{8}$/.test(apoderado.dni.trim())) {
+          return 'El DNI de la persona con Carta Poder debe tener exactamente 8 dígitos';
+        }
+      }
       if (beneficiariosReg.length === 0) {
         return 'Debe asignar al menos a un beneficiario para este tipo de beneficio (active "¿El titular del colegiado es el beneficiario?" o use "+ Agregar Beneficiario")';
       }
@@ -645,7 +695,11 @@ export default function RegistroExpedienteDrawer({ open, onClose, onSaved }: { o
 
   const guardar = async (ignorarAlerta = false) => {
     const err = validar();
-    if (err) { setError(err); return; }
+    if (err) {
+      setError(err);
+      showConfirmMessage('warning', 'Faltan datos requeridos', err);
+      return;
+    }
     setError('');
 
     // Validación NO bloqueante solo al presionar Guardar (Reglas 2, 3, 4, 5)
@@ -669,6 +723,7 @@ export default function RegistroExpedienteDrawer({ open, onClose, onSaved }: { o
     setGuardando(true);
     try {
       const todosPresentados = Boolean(docs.otrosDocumentos) || docsRequeridos.every(({ key }) => docsPresentados[key] === true || docs[key] !== null);
+      const fechaDepositoEfectiva = form.fechaPago || form.ordenPagoFecha || undefined;
       const body: any = {
         colegiadoId: colegiado!.COLEGIADO_ID,
         estado: todosPresentados ? 'PAGADA' : 'PENDIENTE',
@@ -687,7 +742,7 @@ export default function RegistroExpedienteDrawer({ open, onClose, onSaved }: { o
         modalidadBeneficio: modalidad,
         ...(covidDescuento && { covidAsignacionId: covidDescuento.asignacionId }),
         fechaSolicitud: form.fechaSolicitud || undefined,
-        fechaPago: form.fechaPago || undefined,
+        fechaPago: fechaDepositoEfectiva,
         documentacionCompleta: todosPresentados,
         documentacionObservacion: !todosPresentados ? (form.documentacionObservacion.trim() || 'Documentación pendiente de presentar') : undefined,
         expedienteNumero: form.expedienteNumero.trim() || undefined,
@@ -698,7 +753,7 @@ export default function RegistroExpedienteDrawer({ open, onClose, onSaved }: { o
         memorandoFecha: form.memorandoFecha || undefined,
         formaPago: form.formaPago || undefined,
         banco: form.banco.trim() || undefined,
-        ordenPagoFecha: form.ordenPagoFecha || undefined,
+        ordenPagoFecha: form.ordenPagoFecha || form.fechaPago || undefined,
       };
 
       if (esSucesionIntestada) {
@@ -742,7 +797,7 @@ export default function RegistroExpedienteDrawer({ open, onClose, onSaved }: { o
           ...(docs.ordenPago?.base64 && { ordenPago: docs.ordenPago.base64 }),
           ...(docs.otrosDocumentos?.base64 && { otrosDocumentos: docs.otrosDocumentos.base64 }),
           fechaSolicitud: form.fechaSolicitud || undefined,
-          fechaPago: form.fechaPago || undefined,
+          fechaPago: fechaDepositoEfectiva,
           expedienteNumero: form.expedienteNumero.trim() || undefined,
           cartaNumero: form.cartaNumero.trim() || undefined,
           cartaFecha: form.cartaFecha || undefined,
@@ -772,10 +827,23 @@ export default function RegistroExpedienteDrawer({ open, onClose, onSaved }: { o
         }
         body.solicitanteBeneficiarioIds = selBenes.map((b) => b.id).filter(Boolean) as string[];
         body.solicitanteIndices = selBenes.map((b) => beneficiariosReg.findIndex((f) => f.key === b.key));
-        body.solicitanteNombre = selBenes.map((b) => b.nombre.trim()).join(' / ');
-        const dnis = selBenes.map((b) => b.dni.trim()).filter(Boolean);
-        const dniStr = dnis.join(' / ');
-        body.solicitanteDni = (dniStr.length <= 20 ? dniStr : dnis[0]) || undefined;
+        if (conCartaPoder && apoderado.nombre.trim()) {
+          body.conCartaPoder = true;
+          body.apoderadoNombre = apoderado.nombre.trim();
+          body.apoderadoDni = apoderado.dni.trim() || undefined;
+          body.apoderadoParentesco = apoderado.parentesco || 'Apoderado';
+          body.solicitanteNombre = `${apoderado.nombre.trim()} (Carta Poder)`;
+          body.solicitanteDni = apoderado.dni.trim() || undefined;
+          if (cartaPoderDoc?.base64) {
+            body.cartaPoder = cartaPoderDoc.base64;
+          }
+        } else {
+          body.conCartaPoder = false;
+          body.solicitanteNombre = selBenes.map((b) => b.nombre.trim()).join(' / ');
+          const dnis = selBenes.map((b) => b.dni.trim()).filter(Boolean);
+          const dniStr = dnis.join(' / ');
+          body.solicitanteDni = (dniStr.length <= 20 ? dniStr : dnis[0]) || undefined;
+        }
       }
 
       DOCS_PDF.forEach(({ key }) => {
@@ -915,39 +983,218 @@ export default function RegistroExpedienteDrawer({ open, onClose, onSaved }: { o
               </div>
             </div>
             {form.tipoBeneficioConfigId && !esFallecimiento && (
-              <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const nuevoEstado = !beneficiarioEsTitular;
-                    setBeneficiarioEsTitular(nuevoEstado);
-                    if (nuevoEstado && colegiado) {
-                      // Al activarse que el titular cobra el beneficio, desaparecen los beneficiarios del padrón y queda solo el titular
-                      const titularBene: BeneficiarioRegistrado = {
-                        key: 'titular-' + colegiado.COLEGIADO_ID,
-                        nombre: colegiado.NOMBRE_COLEGIADO,
-                        dni: colegiado.DNI,
-                        parentesco: 'Titular',
-                        porcentaje: '100',
-                      };
-                      setBeneficiariosReg([titularBene]);
-                      setSolicitanteKeys([titularBene.key]);
-                    } else if (!nuevoEstado && colegiado) {
-                      // Al desactivarse, se restauran los beneficiarios registrados del padrón
-                      setBeneficiariosReg(beneficiariosPadron);
-                      setSolicitanteKeys(beneficiariosPadron.map((r) => r.key));
-                    }
-                  }}
-                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${beneficiarioEsTitular ? 'bg-primary' : 'bg-gray-300'}`}
-                >
-                  <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${beneficiarioEsTitular ? 'translate-x-4.5' : 'translate-x-0.5'}`} />
-                </button>
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between w-full gap-1">
-                  <span className="text-sm text-text-main font-medium">¿El titular del colegiado es el beneficiario?</span>
-                  {beneficiarioEsTitular && (
-                    <span className="text-[11px] text-blue-700 font-semibold bg-blue-100/60 px-2 py-0.5 rounded">
-                      ✓ Titular asignado como beneficiario único (100%)
-                    </span>
+              <div className="space-y-3">
+                <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const nuevoEstado = !beneficiarioEsTitular;
+                      setBeneficiarioEsTitular(nuevoEstado);
+                      if (nuevoEstado && colegiado) {
+                        const titularBene: BeneficiarioRegistrado = {
+                          key: 'titular-' + colegiado.COLEGIADO_ID,
+                          nombre: colegiado.NOMBRE_COLEGIADO,
+                          dni: colegiado.DNI,
+                          parentesco: 'Titular',
+                          porcentaje: '100',
+                        };
+                        setBeneficiariosReg([titularBene]);
+                        setSolicitanteKeys([titularBene.key]);
+                      } else if (!nuevoEstado && colegiado) {
+                        setConCartaPoder(false);
+                        setBeneficiariosReg(beneficiariosPadron);
+                        setSolicitanteKeys(beneficiariosPadron.map((r) => r.key));
+                      }
+                    }}
+                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors shrink-0 ${beneficiarioEsTitular ? 'bg-primary' : 'bg-gray-300'}`}
+                  >
+                    <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${beneficiarioEsTitular ? 'translate-x-4.5' : 'translate-x-0.5'}`} />
+                  </button>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between w-full gap-1">
+                    <span className="text-sm text-text-main font-medium">¿El colegiado recibirá el beneficio para él mismo (Titular)?</span>
+                    {beneficiarioEsTitular && (
+                      <span className="text-[11px] text-blue-700 font-semibold bg-blue-100/60 px-2 py-0.5 rounded">
+                        ✓ Colegiado Titular asignado (100%)
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Opción: Entrega mediante Carta Poder */}
+                <div className={`border rounded-lg p-3.5 transition-colors ${conCartaPoder ? 'bg-amber-50/70 border-amber-300' : 'bg-slate-50 border-border'}`}>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nuevo = !conCartaPoder;
+                        setConCartaPoder(nuevo);
+                        if (nuevo && colegiado) {
+                          setBeneficiarioEsTitular(true);
+                          const titularBene: BeneficiarioRegistrado = {
+                            key: 'titular-' + colegiado.COLEGIADO_ID,
+                            nombre: colegiado.NOMBRE_COLEGIADO,
+                            dni: colegiado.DNI,
+                            parentesco: 'Titular',
+                            porcentaje: '100',
+                          };
+                          setBeneficiariosReg([titularBene]);
+                          setSolicitanteKeys([titularBene.key]);
+                        }
+                      }}
+                      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors shrink-0 ${conCartaPoder ? 'bg-amber-600' : 'bg-gray-300'}`}
+                    >
+                      <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${conCartaPoder ? 'translate-x-4.5' : 'translate-x-0.5'}`} />
+                    </button>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between w-full gap-1">
+                      <div>
+                        <span className="text-sm font-semibold text-text-main">
+                          ¿El beneficio es para el colegiado pero se entregará a otra persona con Carta Poder?
+                        </span>
+                        <p className="text-xs text-text-sec">
+                          Active esta opción cuando el colegiado titular otorga una Carta Poder a un familiar o representante para cobrar/recibir el beneficio.
+                        </p>
+                      </div>
+                      {conCartaPoder && (
+                        <span className="text-[11px] text-amber-800 font-bold bg-amber-100 px-2.5 py-0.5 rounded shrink-0">
+                          📋 Con Carta Poder
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {conCartaPoder && (
+                    <div className="mt-3 pt-3 border-t border-amber-200 space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <h5 className="text-xs font-bold text-amber-900 uppercase tracking-wide">
+                          Datos de la persona a quien se le entregará (Otorgado con Carta Poder)
+                        </h5>
+                        {beneficiariosPadron.length > 0 && (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[11px] text-amber-800">Elegir familiar del padrón:</span>
+                            <select
+                              value=""
+                              onChange={(e) => {
+                                const fam = beneficiariosPadron.find((b) => b.key === e.target.value);
+                                if (fam) {
+                                  setApoderado({
+                                    nombre: fam.nombre,
+                                    dni: fam.dni || '',
+                                    parentesco: fam.parentesco || 'Familiar',
+                                  });
+                                }
+                              }}
+                              className="px-2 py-1 border border-amber-300 rounded text-xs bg-white text-text-main"
+                            >
+                              <option value="">-- Seleccionar para autocompletar --</option>
+                              {beneficiariosPadron.map((b) => (
+                                <option key={b.key} value={b.key}>
+                                  {b.nombre} ({b.parentesco}{b.dni ? ` - DNI: ${b.dni}` : ''})
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                        <div className="sm:col-span-6">
+                          <label className="block text-[11px] font-semibold text-text-sec uppercase mb-1">
+                            Nombre Completo (A quién se le dará) *
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="Nombres y apellidos del apoderado / receptor"
+                            value={apoderado.nombre}
+                            onChange={(e) => setApoderado((prev) => ({ ...prev, nombre: e.target.value }))}
+                            className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30"
+                          />
+                        </div>
+                        <div className="sm:col-span-3">
+                          <label className="block text-[11px] font-semibold text-text-sec uppercase mb-1">
+                            DNI Receptor *
+                          </label>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            maxLength={8}
+                            placeholder="8 dígitos"
+                            value={apoderado.dni}
+                            onChange={(e) => setApoderado((prev) => ({ ...prev, dni: e.target.value.replace(/\D/g, '') }))}
+                            className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30"
+                          />
+                        </div>
+                        <div className="sm:col-span-3">
+                          <label className="block text-[11px] font-semibold text-text-sec uppercase mb-1">
+                            Parentesco / Vínculo
+                          </label>
+                          <select
+                            value={apoderado.parentesco}
+                            onChange={(e) => setApoderado((prev) => ({ ...prev, parentesco: e.target.value }))}
+                            className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30"
+                          >
+                            {[
+                              'Cónyuge',
+                              'Hijo(a)',
+                              'Madre',
+                              'Padre',
+                              'Hermano(a)',
+                              'Conviviente',
+                              'Sobrino(a)',
+                              'Tío(a)',
+                              'Nieto(a)',
+                              'Apoderado Legal / Representante',
+                              'Otros',
+                            ].map((op) => (
+                              <option key={op} value={op}>{op}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Subida opcional de la Carta Poder en PDF/Imagen */}
+                      <div className="flex flex-wrap items-center justify-between gap-2 bg-white border border-amber-200 rounded-lg px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-semibold text-text-main">Documento de Carta Poder (PDF o Imagen):</span>
+                          {cartaPoderDoc ? (
+                            <>
+                              <span className="inline-flex items-center gap-1 text-xs text-green-700 bg-green-50 px-2 py-0.5 rounded-full font-medium">
+                                ✓ {(cartaPoderDoc.size / 1024 / 1024).toFixed(2)} MB
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => abrirPdfBase64(cartaPoderDoc.base64, 'Carta Poder')}
+                                className="text-xs font-semibold text-primary hover:underline"
+                              >
+                                Ver Carta Poder
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setCartaPoderDoc(null)}
+                                className="text-xs text-red-600 hover:underline"
+                              >
+                                Quitar
+                              </button>
+                            </>
+                          ) : (
+                            <span className="text-xs text-text-sec">Adjunte la Carta Poder escaneada</span>
+                          )}
+                        </div>
+                        <label className="cursor-pointer inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-primary bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                          </svg>
+                          <span>{cartaPoderDoc ? 'Reemplazar archivo' : 'Subir Carta Poder'}</span>
+                          <input
+                            type="file"
+                            accept="application/pdf,image/png,image/jpeg,image/jpg,image/webp"
+                            className="hidden"
+                            onChange={(e) => {
+                              if (e.target.files?.[0]) handleCartaPoderPdf(e.target.files[0]);
+                            }}
+                          />
+                        </label>
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>
@@ -1171,6 +1418,17 @@ export default function RegistroExpedienteDrawer({ open, onClose, onSaved }: { o
                           )}
                         </span>
                       </div>
+                      {conCartaPoder && f.parentesco === 'Titular' && (
+                        <div className="mt-2 pt-2 border-t border-amber-200 flex flex-wrap items-center justify-between gap-2 text-xs bg-amber-50/80 px-2.5 py-1.5 rounded">
+                          <span className="font-semibold text-amber-900">
+                            📋 Se entregará con Carta Poder a:{' '}
+                            <span className="text-text-main font-bold">{apoderado.nombre || '(Ingrese nombre arriba)'}</span>
+                          </span>
+                          <span className="text-amber-800 font-medium">
+                            DNI: <strong>{apoderado.dni || '—'}</strong> · Vínculo: <strong>{apoderado.parentesco}</strong>
+                          </span>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -1325,9 +1583,19 @@ export default function RegistroExpedienteDrawer({ open, onClose, onSaved }: { o
                 </p>
               </div>
               <div>
-                <label className="block text-xs font-medium text-text-sec uppercase mb-1">Fecha de Pago *</label>
-                <input type="date" value={form.fechaPago} onChange={(e) => setForm({ ...form, fechaPago: e.target.value })}
-                  className="w-full px-3 py-2 border border-border rounded-lg text-sm" />
+                <label className="block text-xs font-medium text-text-sec uppercase mb-1">Fecha de Depósito / Pago</label>
+                <input
+                  type="date"
+                  value={form.fechaPago}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      fechaPago: e.target.value,
+                      ordenPagoFecha: prev.ordenPagoFecha || e.target.value,
+                    }))
+                  }
+                  className="w-full px-3 py-2 border border-border rounded-lg text-sm"
+                />
               </div>
               {form.documentacionCompleta === false && (
                 <div className="col-span-2">
@@ -1434,8 +1702,18 @@ export default function RegistroExpedienteDrawer({ open, onClose, onSaved }: { o
               </div>
               <div>
                 <label className="block text-xs font-medium text-text-sec uppercase mb-1">Fecha Orden de Pago</label>
-                <input type="date" value={form.ordenPagoFecha} onChange={(e) => setForm({ ...form, ordenPagoFecha: e.target.value })}
-                  className="w-full px-3 py-2 border border-border rounded-lg text-sm" />
+                <input
+                  type="date"
+                  value={form.ordenPagoFecha}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      ordenPagoFecha: e.target.value,
+                      fechaPago: prev.fechaPago || e.target.value,
+                    }))
+                  }
+                  className="w-full px-3 py-2 border border-border rounded-lg text-sm"
+                />
               </div>
             </div>
           </section>
@@ -1454,7 +1732,19 @@ export default function RegistroExpedienteDrawer({ open, onClose, onSaved }: { o
             <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-text-sec bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">Cancelar</button>
             <button onClick={() => guardar()} disabled={guardando || colegiadoFallecido}
               className="px-5 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary/90 disabled:opacity-50 inline-flex items-center gap-2 transition-colors">
-              {guardando && <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>}
+              {guardando && (
+                <svg
+                  className="animate-spin w-4 h-4"
+                  width={16}
+                  height={16}
+                  style={{ width: '16px', height: '16px', flexShrink: 0 }}
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              )}
               Registrar Expediente
             </button>
           </div>

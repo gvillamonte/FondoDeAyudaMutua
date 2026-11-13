@@ -238,6 +238,17 @@ model FamSolicitudBeneficio {
   declaracionJuradaDni String?  @map("declaracion_jurada_dni") @db.VarChar(20)
   actaDefuncion       String?   @map("acta_defuncion") @db.NVarChar(MAX)
   otrosDocumentos     String?   @map("otros_documentos") @db.NVarChar(MAX)
+  conCartaPoder            Boolean   @default(false) @map("con_carta_poder") @db.Bit
+  apoderadoNombre          String?   @map("apoderado_nombre") @db.NVarChar(200)
+  apoderadoDni             String?   @map("apoderado_dni") @db.VarChar(20)
+  apoderadoParentesco      String?   @map("apoderado_parentesco") @db.VarChar(50)
+  cartaPoder               String?   @map("carta_poder") @db.NVarChar(MAX)
+  poderOtorganteNombre     String?   @map("poder_otorgante_nombre") @db.NVarChar(200)
+  poderOtorganteDni        String?   @map("poder_otorgante_dni") @db.VarChar(20)
+  poderOtorganteParentesco String?   @map("poder_otorgante_parentesco") @db.VarChar(50)
+  poderFecha               DateTime? @map("poder_fecha") @db.DateTime2
+  poderMotivo              String?   @map("poder_motivo") @db.NVarChar(500)
+  poderChequeNumero        String?   @map("poder_cheque_numero") @db.VarChar(100)
   observaciones       String?   @db.NVarChar(1000)
   registradoPor       String?   @map("registrado_por") @db.NVarChar(36)
   createdAt           DateTime  @default(now()) @map("created_at")
@@ -314,9 +325,15 @@ model FamDepositoBeneficiario {
   banco              String?  @db.VarChar(100)
   numeroCuenta       String?  @map("numero_cuenta") @db.VarChar(50)
   cci                String?  @db.VarChar(30)
-  fechaPago          DateTime? @map("fecha_pago") @db.DateTime2
-  comprobantePdf     String?  @map("comprobante_pdf") @db.NVarChar(MAX)
-  estado             String   @default("PAGADO") @db.VarChar(20)
+  fechaPago           DateTime? @map("fecha_pago") @db.DateTime2
+  comprobantePdf      String?  @map("comprobante_pdf") @db.NVarChar(MAX)
+  conCartaPoder       Boolean  @default(false) @map("con_carta_poder") @db.Bit
+  apoderadoNombre     String?  @map("apoderado_nombre") @db.NVarChar(200)
+  apoderadoDni        String?  @map("apoderado_dni") @db.VarChar(20)
+  apoderadoParentesco String?  @map("apoderado_parentesco") @db.VarChar(50)
+  poderMotivo         String?  @map("poder_motivo") @db.NVarChar(500)
+  cartaPoderPdf       String?  @map("carta_poder_pdf") @db.NVarChar(MAX)
+  estado              String   @default("PAGADO") @db.VarChar(20)
   registradoPor      String?  @map("registrado_por") @db.NVarChar(36)
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")

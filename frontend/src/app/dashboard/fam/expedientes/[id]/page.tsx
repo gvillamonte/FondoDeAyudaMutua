@@ -13,6 +13,7 @@ import EditarDepositoModal from '@/components/fam/EditarDepositoModal';
 import HistorialExpediente from '@/components/fam/HistorialExpediente';
 import EliminarExpedienteModal from '@/components/fam/EliminarExpedienteModal';
 import ModalRegularizarSaldo from '@/components/fam/ModalRegularizarSaldo';
+import ModalCartaPoder from '@/components/fam/ModalCartaPoder';
 import {
   procesarArchivoDocumento,
   unirDocumentosPdf,
@@ -43,6 +44,12 @@ interface DepositoBeneficiario {
   fechaPago: string | null;
   estado: string;
   tieneComprobante: boolean;
+  conCartaPoder?: boolean;
+  apoderadoNombre?: string | null;
+  apoderadoDni?: string | null;
+  apoderadoParentesco?: string | null;
+  poderMotivo?: string | null;
+  tieneCartaPoder?: boolean;
 }
 
 interface EstadoReparto {
@@ -89,6 +96,16 @@ interface DetalleExpediente {
   documentacionObservacion: string | null;
   solicitanteNombre: string | null;
   solicitanteDni: string | null;
+  conCartaPoder?: boolean;
+  apoderadoNombre?: string | null;
+  apoderadoDni?: string | null;
+  apoderadoParentesco?: string | null;
+  poderOtorganteNombre?: string | null;
+  poderOtorganteDni?: string | null;
+  poderOtorganteParentesco?: string | null;
+  poderFecha?: string | null;
+  poderMotivo?: string | null;
+  poderChequeNumero?: string | null;
   expedienteNumero: string | null;
   cartaNumero: string | null;
   cartaFecha: string | null;
@@ -149,6 +166,7 @@ const DOCS_LABELS: Record<string, string> = {
   cartaRemision: 'Carta de Remisión',
   memorando: 'Memorándum',
   ordenPago: 'Orden de Pago',
+  cartaPoder: 'Carta Poder (Apoderado)',
   sucesionIntestada: 'Sucesión Intestada',
   declaracionJurada: 'Declaración Jurada',
   actaDefuncion: 'Acta de Defunción',
@@ -170,7 +188,7 @@ const MODALIDAD_LABELS: Record<string, string> = {
 };
 
 const fmt = (v: string | null | undefined) =>
-  v ? new Date(v).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+  v ? new Date(v).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' }) : '—';
 const fmtMonto = (m: number) => `S/ ${Number(m).toLocaleString('es-PE', { minimumFractionDigits: 2 })}`;
 
 export default function DetalleExpedientePage() {
@@ -198,6 +216,7 @@ export default function DetalleExpedientePage() {
   const [completarOpen, setCompletarOpen] = useState(false);
   const [regularizarOpen, setRegularizarOpen] = useState(false);
   const [pagoOpen, setPagoOpen] = useState(false);
+  const [cartaPoderOpen, setCartaPoderOpen] = useState(false);
   const [depositoEdit, setDepositoEdit] = useState<DepositoBeneficiario | null>(null);
   const [formAdmin, setFormAdmin] = useState({
     estado: '', monto: '', fechaSolicitud: '', fechaPago: '',
@@ -442,6 +461,7 @@ export default function DetalleExpedientePage() {
         'cartaRemision',
         'memorando',
         'ordenPago',
+        'cartaPoder',
         'sucesionIntestada',
         'declaracionJurada',
         'actaDefuncion',
@@ -819,6 +839,19 @@ export default function DetalleExpedientePage() {
           </button>
           {isAdmin && (
             <button
+              onClick={() => setEditHistorialId(id)}
+              type="button"
+              className="inline-flex items-center px-3 py-1.5 text-xs font-semibold text-[#3258CA] bg-white border border-[#3258CA]/40 hover:bg-blue-50 rounded-lg shadow-xs transition-colors"
+              title="Editar datos del expediente (solo Administrador)"
+            >
+              <svg className="w-4 h-4 mr-1 text-[#3258CA]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+              Editar expediente
+            </button>
+          )}
+          {isAdmin && (
+            <button
               onClick={eliminarExpediente}
               type="button"
               className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-red-600 hover:text-red-700 bg-white border border-red-200 hover:bg-red-50 rounded-lg shadow-xs transition-colors"
@@ -972,6 +1005,120 @@ export default function DetalleExpedientePage() {
           </div>
           <span className="text-slate-400 italic font-mono text-[11px] break-all">Expediente ID: {detalle.id}</span>
         </div>
+
+        {detalle.conCartaPoder && detalle.apoderadoNombre && (
+          <div className="mt-4 bg-amber-50/90 border border-amber-300 rounded-xl p-4 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-amber-200/80">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-amber-100 border border-amber-300 text-amber-800 flex items-center justify-center shrink-0">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-amber-900">
+                    📋 Trazabilidad de Cobro con Carta Poder (Beneficio / Cheque)
+                  </p>
+                  <p className="text-[11px] text-amber-800">
+                    Registro auditado de delegación de cobro: se preserva el beneficiario legítimo y se identifica a quien cobra el cheque.
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                {detalle.documentosDisponibles?.cartaPoder ? (
+                  <button
+                    type="button"
+                    onClick={() => abrirPdf(id, 'cartaPoder')}
+                    disabled={pdfLoadingKey === `${id}:cartaPoder`}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-amber-900 bg-white border border-amber-300 rounded-lg hover:bg-amber-100 transition-colors"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                    {pdfLoadingKey === `${id}:cartaPoder` ? 'Abriendo...' : 'Ver Carta Poder PDF'}
+                  </button>
+                ) : (
+                  <span className="text-[11px] font-medium text-amber-800 bg-amber-100 px-2.5 py-1 rounded">
+                    PDF Carta Poder pendiente
+                  </span>
+                )}
+                {puedeOperar && (
+                  <button
+                    type="button"
+                    onClick={() => setCartaPoderOpen(true)}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-white bg-[#3258CA] rounded-lg hover:bg-[#2846a3] transition-colors"
+                  >
+                    Editar Carta Poder
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Cadena de Trazabilidad en 3 pasos */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+              <div className="bg-white/90 border border-amber-200 rounded-lg p-2.5">
+                <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  1. Colegiado Titular
+                </span>
+                <p className="text-xs font-bold text-slate-800 mt-0.5">{detalle.NOMBRE_COLEGIADO}</p>
+                <p className="text-[11px] text-slate-500">
+                  CIP: {detalle.NUM_COLEGIATURA} · DNI: {detalle.DNI}
+                </p>
+              </div>
+
+              <div className="bg-white/90 border border-blue-200 rounded-lg p-2.5">
+                <span className="block text-[10px] font-bold uppercase tracking-wider text-[#3258CA]">
+                  2. Beneficiario / Quien otorga el Poder
+                </span>
+                <p className="text-xs font-bold text-slate-900 mt-0.5">
+                  {detalle.poderOtorganteNombre ||
+                    detalle.beneficiariosVinculados[0]?.nombre ||
+                    detalle.NOMBRE_COLEGIADO}
+                </p>
+                <p className="text-[11px] text-slate-600">
+                  {detalle.poderOtorganteParentesco ||
+                    detalle.beneficiariosVinculados[0]?.parentesco ||
+                    'Titular'}
+                  {(detalle.poderOtorganteDni || detalle.beneficiariosVinculados[0]?.dni)
+                    ? ` · DNI: ${detalle.poderOtorganteDni || detalle.beneficiariosVinculados[0]?.dni}`
+                    : ''}
+                </p>
+              </div>
+
+              <div className="bg-white border-2 border-amber-400 rounded-lg p-2.5">
+                <span className="block text-[10px] font-bold uppercase tracking-wider text-amber-800">
+                  3. Persona que cobra el Cheque (Apoderado)
+                </span>
+                <p className="text-xs font-bold text-slate-900 mt-0.5">{detalle.apoderadoNombre}</p>
+                <p className="text-[11px] text-amber-900 font-medium">
+                  DNI: {detalle.apoderadoDni || '—'} · {detalle.apoderadoParentesco || 'Apoderado'}
+                </p>
+              </div>
+            </div>
+
+            {(detalle.poderFecha || detalle.poderChequeNumero || detalle.poderMotivo) && (
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-amber-950 bg-amber-100/70 px-3 py-2 rounded-lg">
+                {detalle.poderFecha && (
+                  <span>
+                    <strong>Fecha de Poder / Registro:</strong> {fmt(detalle.poderFecha)}
+                  </span>
+                )}
+                {detalle.poderChequeNumero && (
+                  <span>
+                    <strong>N° Cheque / Ref:</strong>{' '}
+                    <span className="font-mono font-bold">{detalle.poderChequeNumero}</span>
+                  </span>
+                )}
+                {detalle.poderMotivo && (
+                  <span>
+                    <strong>Motivo / Trazabilidad:</strong> {detalle.poderMotivo}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </section>
       {/* END: MemberAndFileHeaderCard */}
 
@@ -1072,6 +1219,16 @@ export default function DetalleExpedientePage() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 shrink-0">
+            {puedeOperar && (
+              <button
+                onClick={() => setCartaPoderOpen(true)}
+                className="inline-flex items-center px-3 py-1.5 text-xs font-semibold text-amber-900 bg-amber-100 hover:bg-amber-200 rounded-lg border border-amber-300 transition-colors"
+                type="button"
+                title="Registrar cuando el beneficiario (ej. Hijo) o el colegiado otorga Carta Poder a otra persona para cobrar el cheque"
+              >
+                📋 {detalle.conCartaPoder ? 'Gestionar Carta Poder' : 'Registrar Carta Poder (Cobro)'}
+              </button>
+            )}
             {detalle.estado !== 'PAGADA' && puedeOperar && (
               <button
                 onClick={() => setCompletarOpen(true)}
@@ -1166,11 +1323,40 @@ export default function DetalleExpedientePage() {
                         </div>
                         <p className="text-[11px] sm:text-xs text-slate-500 mt-1 flex items-center gap-2 sm:gap-3 flex-wrap">
                           <span>Banco: <strong className="text-slate-700 font-semibold">{dep?.banco || detalle.banco || 'CMAC'}</strong></span>
+                          {dep?.numeroCuenta && (
+                            <>
+                              <span>•</span>
+                              <span>Cheque/Cta: <strong className="text-slate-700 font-mono font-semibold">{dep.numeroCuenta}</strong></span>
+                            </>
+                          )}
                           <span>•</span>
                           <span>F. Pago: <strong className="text-slate-700 font-semibold">{fmt(dep?.fechaPago || detalle.fechaPago || detalle.fechaSolicitud)}</strong></span>
                           <span>•</span>
                           <span>Parentesco: <strong className="text-slate-700 font-semibold">{b.parentesco}</strong></span>
+                          {dep && puedeOperar && (
+                            <button
+                              type="button"
+                              onClick={() => setDepositoEdit(dep)}
+                              className="text-[#3258CA] hover:underline font-semibold ml-1"
+                            >
+                              ✎ Editar cobro/cheque
+                            </button>
+                          )}
                         </p>
+                        {(dep?.conCartaPoder || (detalle.conCartaPoder && (!detalle.poderOtorganteDni || detalle.poderOtorganteDni === b.dni))) &&
+                          (dep?.apoderadoNombre || detalle.apoderadoNombre) && (
+                            <div className="mt-2 inline-flex flex-wrap items-center gap-2 px-2.5 py-1.5 rounded-lg bg-amber-50 border border-amber-300 text-xs text-amber-900">
+                              <span className="font-bold">
+                                📋 Cobro por Carta Poder:
+                              </span>
+                              <span>
+                                <strong>{b.nombre}</strong> ({b.parentesco}) otorgó poder a{' '}
+                                <strong>{dep?.apoderadoNombre || detalle.apoderadoNombre}</strong>
+                                {(dep?.apoderadoDni || detalle.apoderadoDni) ? ` (DNI: ${dep?.apoderadoDni || detalle.apoderadoDni})` : ''}
+                                {(dep?.apoderadoParentesco || detalle.apoderadoParentesco) ? ` · ${dep?.apoderadoParentesco || detalle.apoderadoParentesco}` : ''}
+                              </span>
+                            </div>
+                          )}
                       </div>
                     </div>
                     <div className="flex flex-wrap sm:flex-nowrap items-center justify-between lg:justify-end gap-3 sm:gap-4 pt-2 sm:pt-0 border-t sm:border-t-0 lg:border-l lg:border-slate-200 lg:pl-4">
@@ -1682,7 +1868,7 @@ export default function DetalleExpedientePage() {
           {/* TAB: BENEFICIARIOS */}
           {activeTab === 'benef' && (
             <div className="space-y-4">
-              {puedeOperar && detalle.estado !== 'PAGADA' && (
+              {puedeOperar && (isAdmin || detalle.estado !== 'PAGADA') && (
                 <div className="flex justify-end">
                   <button
                     onClick={() => setCompletarOpen(true)}
@@ -1879,10 +2065,56 @@ export default function DetalleExpedientePage() {
           onSaved={recargar}
           expedienteId={id}
           monto={detalle.montoFinal ?? detalle.monto}
+          fechaPagoSugerida={detalle.fechaPago || detalle.ordenPagoFecha}
+          formaPagoSugerida={detalle.formaPago}
           bancoSugerido={detalle.banco}
           beneficiarios={detalle.beneficiariosVinculados}
           solicitanteNombre={detalle.solicitanteNombre}
           solicitanteDni={detalle.solicitanteDni}
+          conCartaPoder={detalle.conCartaPoder}
+          apoderadoNombre={detalle.apoderadoNombre}
+          apoderadoDni={detalle.apoderadoDni}
+          apoderadoParentesco={detalle.apoderadoParentesco}
+          poderOtorganteDni={detalle.poderOtorganteDni}
+          poderChequeNumero={detalle.poderChequeNumero}
+          poderMotivo={detalle.poderMotivo}
+        />
+      )}
+
+      {cartaPoderOpen && detalle && (
+        <ModalCartaPoder
+          isOpen={cartaPoderOpen}
+          onClose={() => setCartaPoderOpen(false)}
+          onSaved={recargar}
+          expedienteId={id}
+          expedienteNumero={detalle.expedienteNumero || undefined}
+          colegiadoNombre={detalle.NOMBRE_COLEGIADO}
+          colegiadoDni={detalle.DNI}
+          beneficiarios={detalle.beneficiariosVinculados.map((b) => {
+            const dep = (detalle.depositos || []).find(
+              (d) => d.beneficiarioId === b.id || (d.dniBeneficiario && d.dniBeneficiario === b.dni),
+            );
+            return {
+              id: b.id,
+              nombre: b.nombre,
+              dni: b.dni,
+              parentesco: b.parentesco,
+              depositoId: dep?.id,
+            };
+          })}
+          formaPagoActual={detalle.formaPago}
+          bancoActual={detalle.banco}
+          conCartaPoderActual={detalle.conCartaPoder}
+          poderOtorganteNombreActual={detalle.poderOtorganteNombre}
+          poderOtorganteDniActual={detalle.poderOtorganteDni}
+          poderOtorganteParentescoActual={detalle.poderOtorganteParentesco}
+          apoderadoNombreActual={detalle.apoderadoNombre}
+          apoderadoDniActual={detalle.apoderadoDni}
+          apoderadoParentescoActual={detalle.apoderadoParentesco}
+          poderFechaActual={detalle.poderFecha}
+          poderMotivoActual={detalle.poderMotivo}
+          poderChequeNumeroActual={detalle.poderChequeNumero}
+          tieneCartaPoderDoc={Boolean(detalle.documentosDisponibles?.cartaPoder)}
         />
       )}
 

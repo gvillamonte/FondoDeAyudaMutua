@@ -75,6 +75,35 @@ export class DocumentoExpedienteDto {
   @IsOptional()
   @IsString()
   otrosDocumentos?: string;
+
+  @Validate(EsPdfBase64)
+  @IsOptional()
+  @IsString()
+  cartaPoder?: string;
+
+  @IsOptional()
+  @IsString()
+  poderOtorganteNombre?: string;
+
+  @IsOptional()
+  @IsString()
+  poderOtorganteDni?: string;
+
+  @IsOptional()
+  @IsString()
+  poderOtorganteParentesco?: string;
+
+  @IsOptional()
+  @IsDateString()
+  poderFecha?: string;
+
+  @IsOptional()
+  @IsString()
+  poderMotivo?: string;
+
+  @IsOptional()
+  @IsString()
+  poderChequeNumero?: string;
 }
 
 export class BeneficiarioRegistroDto {
@@ -157,6 +186,14 @@ export class DepositoPagoDto {
 
   @IsOptional()
   @IsString()
+  nombreBeneficiario?: string;
+
+  @IsOptional()
+  @IsString()
+  dniBeneficiario?: string;
+
+  @IsOptional()
+  @IsString()
   banco?: string;
 
   @IsOptional()
@@ -171,12 +208,45 @@ export class DepositoPagoDto {
   @IsOptional()
   @IsString()
   comprobantePdf?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  conCartaPoder?: boolean;
+
+  @IsOptional()
+  @IsString()
+  apoderadoNombre?: string;
+
+  @IsOptional()
+  @IsString()
+  apoderadoDni?: string;
+
+  @IsOptional()
+  @IsString()
+  apoderadoParentesco?: string;
+
+  @IsOptional()
+  @IsString()
+  poderMotivo?: string;
+
+  @Validate(EsPdfBase64)
+  @IsOptional()
+  @IsString()
+  cartaPoderPdf?: string;
 }
 
 export class PagarExpedienteDto {
   @IsOptional()
   @IsDateString()
   fechaPago?: string;
+
+  @IsOptional()
+  @IsString()
+  formaPago?: string;
+
+  @IsOptional()
+  @IsString()
+  banco?: string;
 
   @IsOptional()
   @ValidateNested({ each: true })
@@ -206,6 +276,31 @@ export class ActualizarDepositoDto {
   @IsOptional()
   @IsDateString()
   fechaPago?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  conCartaPoder?: boolean;
+
+  @IsOptional()
+  @IsString()
+  apoderadoNombre?: string;
+
+  @IsOptional()
+  @IsString()
+  apoderadoDni?: string;
+
+  @IsOptional()
+  @IsString()
+  apoderadoParentesco?: string;
+
+  @IsOptional()
+  @IsString()
+  poderMotivo?: string;
+
+  @Validate(EsPdfBase64)
+  @IsOptional()
+  @IsString()
+  cartaPoderPdf?: string;
 }
 
 export class CrearRegistroFamDto {
@@ -292,6 +387,51 @@ export class CrearRegistroFamDto {
   @IsOptional()
   @IsString()
   otrosDocumentos?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  conCartaPoder?: boolean;
+
+  @IsOptional()
+  @IsString()
+  apoderadoNombre?: string;
+
+  @IsOptional()
+  @IsString()
+  apoderadoDni?: string;
+
+  @IsOptional()
+  @IsString()
+  apoderadoParentesco?: string;
+
+  @Validate(EsPdfBase64)
+  @IsOptional()
+  @IsString()
+  cartaPoder?: string;
+
+  @IsOptional()
+  @IsString()
+  poderOtorganteNombre?: string;
+
+  @IsOptional()
+  @IsString()
+  poderOtorganteDni?: string;
+
+  @IsOptional()
+  @IsString()
+  poderOtorganteParentesco?: string;
+
+  @IsOptional()
+  @IsDateString()
+  poderFecha?: string;
+
+  @IsOptional()
+  @IsString()
+  poderMotivo?: string;
+
+  @IsOptional()
+  @IsString()
+  poderChequeNumero?: string;
 
   @IsOptional()
   @IsString()
@@ -467,6 +607,51 @@ export class CrearFamSolicitudDto {
   otrosDocumentos?: string;
 
   @IsOptional()
+  @IsBoolean()
+  conCartaPoder?: boolean;
+
+  @IsOptional()
+  @IsString()
+  apoderadoNombre?: string;
+
+  @IsOptional()
+  @IsString()
+  apoderadoDni?: string;
+
+  @IsOptional()
+  @IsString()
+  apoderadoParentesco?: string;
+
+  @Validate(EsPdfBase64)
+  @IsOptional()
+  @IsString()
+  cartaPoder?: string;
+
+  @IsOptional()
+  @IsString()
+  poderOtorganteNombre?: string;
+
+  @IsOptional()
+  @IsString()
+  poderOtorganteDni?: string;
+
+  @IsOptional()
+  @IsString()
+  poderOtorganteParentesco?: string;
+
+  @IsOptional()
+  @IsDateString()
+  poderFecha?: string;
+
+  @IsOptional()
+  @IsString()
+  poderMotivo?: string;
+
+  @IsOptional()
+  @IsString()
+  poderChequeNumero?: string;
+
+  @IsOptional()
   @IsString()
   formaPago?: string;
 
@@ -602,6 +787,51 @@ export class ActualizarFamSolicitudDto {
   otrosDocumentos?: string;
 
   @IsOptional()
+  @IsBoolean()
+  conCartaPoder?: boolean;
+
+  @IsOptional()
+  @IsString()
+  apoderadoNombre?: string;
+
+  @IsOptional()
+  @IsString()
+  apoderadoDni?: string;
+
+  @IsOptional()
+  @IsString()
+  apoderadoParentesco?: string;
+
+  @Validate(EsPdfBase64)
+  @IsOptional()
+  @IsString()
+  cartaPoder?: string;
+
+  @IsOptional()
+  @IsString()
+  poderOtorganteNombre?: string;
+
+  @IsOptional()
+  @IsString()
+  poderOtorganteDni?: string;
+
+  @IsOptional()
+  @IsString()
+  poderOtorganteParentesco?: string;
+
+  @IsOptional()
+  @IsDateString()
+  poderFecha?: string;
+
+  @IsOptional()
+  @IsString()
+  poderMotivo?: string;
+
+  @IsOptional()
+  @IsString()
+  poderChequeNumero?: string;
+
+  @IsOptional()
   @IsString()
   @Matches(/^\d{8}$/, { message: 'declaracionJuradaDni debe tener exactamente 8 digitos' })
   declaracionJuradaDni?: string;
@@ -709,4 +939,67 @@ export class RegularizarSaldoDto {
   @IsOptional()
   @IsString()
   observacion?: string;
+}
+
+export class RegistrarCartaPoderDto {
+  @IsOptional()
+  @IsBoolean()
+  conCartaPoder?: boolean;
+
+  @IsOptional()
+  @IsString()
+  depositoId?: string;
+
+  @IsOptional()
+  @IsString()
+  beneficiarioId?: string;
+
+  @IsOptional()
+  @IsString()
+  poderOtorganteNombre?: string;
+
+  @IsOptional()
+  @IsString()
+  poderOtorganteDni?: string;
+
+  @IsOptional()
+  @IsString()
+  poderOtorganteParentesco?: string;
+
+  @IsOptional()
+  @IsString()
+  apoderadoNombre?: string;
+
+  @IsOptional()
+  @IsString()
+  apoderadoDni?: string;
+
+  @IsOptional()
+  @IsString()
+  apoderadoParentesco?: string;
+
+  @IsOptional()
+  @IsDateString()
+  poderFecha?: string;
+
+  @IsOptional()
+  @IsString()
+  poderMotivo?: string;
+
+  @IsOptional()
+  @IsString()
+  poderChequeNumero?: string;
+
+  @IsOptional()
+  @IsString()
+  formaPago?: string;
+
+  @IsOptional()
+  @IsString()
+  banco?: string;
+
+  @Validate(EsPdfBase64)
+  @IsOptional()
+  @IsString()
+  cartaPoder?: string;
 }

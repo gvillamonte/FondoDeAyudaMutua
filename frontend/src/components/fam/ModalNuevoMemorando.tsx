@@ -161,7 +161,14 @@ export default function ModalNuevoMemorando({ open, onClose, onSuccess }: ModalN
               className="px-4 py-2 text-sm font-medium text-white bg-[#3258CA] hover:bg-[#2846a2] rounded-lg inline-flex items-center gap-2 transition-colors disabled:opacity-50"
             >
               {guardando && (
-                <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                <svg
+                  className="animate-spin w-4 h-4"
+                  width={16}
+                  height={16}
+                  style={{ width: '16px', height: '16px', flexShrink: 0 }}
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path
                     className="opacity-75"

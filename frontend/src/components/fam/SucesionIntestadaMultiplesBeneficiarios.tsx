@@ -128,8 +128,12 @@ export default function SucesionIntestadaMultiplesBeneficiarios({
       return;
     }
 
-    const pctSugerido = porcentajeRestante > 0 ? porcentajeRestante : 0;
-    const montoSugerido = montoRestante > 0 ? montoRestante : 0;
+    const pctSugerido = porcentajeRestante > 0
+      ? porcentajeRestante
+      : Number((100 / (herederos.length + 1)).toFixed(2));
+    const montoSugerido = montoRestante > 0
+      ? montoRestante
+      : Number((montoTotal / (herederos.length + 1)).toFixed(2));
 
     const nuevo: HerederoForm = {
       key: Math.random().toString(36).slice(2),
@@ -144,6 +148,20 @@ export default function SucesionIntestadaMultiplesBeneficiarios({
       email: '',
     };
     onChangeHerederos([...herederos, nuevo]);
+  };
+
+  const completarMontoExactoHeredero = (key: string) => {
+    const otrosSuma = herederos
+      .filter((x) => x.key !== key)
+      .reduce((acc, x) => acc + (Number(x.monto) || 0), 0);
+    const faltante = Math.max(0, Number((montoTotal - otrosSuma).toFixed(2)));
+    const pct = montoTotal > 0 ? Number(((faltante / montoTotal) * 100).toFixed(2)) : 0;
+    actualizarHeredero(key, { monto: faltante, porcentaje: pct });
+    showConfirmMessage(
+      'info',
+      'Monto completado automáticamente',
+      `Asignado S/ ${faltante.toFixed(2)} (${pct.toFixed(2)}%) para cubrir el monto exacto`,
+    );
   };
 
   const eliminarHeredero = (key: string) => {
@@ -819,9 +837,19 @@ export default function SucesionIntestadaMultiplesBeneficiarios({
                 </div>
 
                 <div className="col-span-6 sm:col-span-2">
-                  <label className="block text-[11px] font-medium text-text-sec uppercase mb-0.5">
-                    Monto (S/.) *
-                  </label>
+                  <div className="flex items-center justify-between mb-0.5">
+                    <label className="block text-[11px] font-medium text-text-sec uppercase">
+                      Monto (S/.) *
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => completarMontoExactoHeredero(h.key)}
+                      className="text-[9px] text-[#3258CA] font-bold hover:underline"
+                      title="Completar el monto restante exacto"
+                    >
+                      ⚡ Exacto
+                    </button>
+                  </div>
                   <div className="relative">
                     <input
                       type="number"

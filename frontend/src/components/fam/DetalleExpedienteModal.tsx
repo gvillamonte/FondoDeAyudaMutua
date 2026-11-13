@@ -52,6 +52,10 @@ export interface DetalleExpediente {
   documentacionObservacion: string | null;
   solicitanteNombre: string | null;
   solicitanteDni: string | null;
+  conCartaPoder?: boolean;
+  apoderadoNombre?: string | null;
+  apoderadoDni?: string | null;
+  apoderadoParentesco?: string | null;
   expedienteNumero: string | null;
   cartaNumero: string | null;
   cartaFecha: string | null;
@@ -102,6 +106,7 @@ const DOCS_LABELS: Record<string, string> = {
   ordenPago: 'Orden de Pago',
   sucesionIntestada: 'Sucesión Intestada',
   declaracionJurada: 'Declaración Jurada',
+  cartaPoder: 'Carta Poder (Apoderado)',
   otrosDocumentos: 'Otros / Documentación Completa',
 };
 
@@ -119,7 +124,7 @@ const MODALIDAD_LABELS: Record<string, string> = {
   opcion_sucesiva: 'Opción Sucesiva',
 };
 
-const fmt = (v: string | null | undefined) => (v ? new Date(v).toLocaleDateString('es-PE') : '-');
+const fmt = (v: string | null | undefined) => (v ? new Date(v).toLocaleDateString('es-PE', { timeZone: 'UTC' }) : '-');
 const fmtMonto = (m: number) => `S/ ${Number(m).toLocaleString('es-PE', { minimumFractionDigits: 2 })}`;
 
 export default function DetalleExpedienteModal({ id, onClose, onDelete }: { id: string; onClose: () => void; onDelete?: () => void }) {
@@ -269,6 +274,7 @@ export default function DetalleExpedienteModal({ id, onClose, onDelete }: { id: 
         'ordenPago',
         'sucesionIntestada',
         'declaracionJurada',
+        'cartaPoder',
         'actaDefuncion',
         'otrosDocumentos',
       ];
@@ -494,7 +500,17 @@ export default function DetalleExpedienteModal({ id, onClose, onDelete }: { id: 
 
         {loading || !detalle ? (
           <div className="flex-1 flex items-center justify-center py-16">
-            <svg className="animate-spin w-6 h-6 text-primary" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+            <svg
+              className="animate-spin w-6 h-6 text-primary"
+              width={24}
+              height={24}
+              style={{ width: '24px', height: '24px' }}
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
           </div>
         ) : (
           <>
@@ -523,6 +539,16 @@ export default function DetalleExpedienteModal({ id, onClose, onDelete }: { id: 
                   <div className="flex justify-between"><span className="text-text-sec">F. Pago</span><span className="text-text-main">{fmt(detalle.fechaPago)}</span></div>
                   <div className="flex justify-between"><span className="text-text-sec">N.° Expediente</span><span className="text-text-main font-medium">{detalle.expedienteNumero || '-'}</span></div>
                   <div className="flex justify-between"><span className="text-text-sec">Solicitante</span><span className="text-primary font-semibold truncate max-w-[160px]" title={detalle.solicitanteNombre || ''}>{detalle.solicitanteNombre || '-'}</span></div>
+                  {detalle.conCartaPoder && detalle.apoderadoNombre && (
+                    <div className="sm:col-span-2 mt-1.5 pt-1.5 border-t border-amber-200 bg-amber-50 px-2.5 py-1.5 rounded flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-[11px] font-bold text-amber-900">
+                        📋 Recibe con Carta Poder: <span className="text-text-main">{detalle.apoderadoNombre}</span>
+                      </span>
+                      <span className="text-[11px] text-amber-800 font-medium">
+                        DNI: {detalle.apoderadoDni || '-'} · {detalle.apoderadoParentesco || 'Apoderado'}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -794,6 +820,23 @@ export default function DetalleExpedienteModal({ id, onClose, onDelete }: { id: 
               {/* TAB: BENEFICIARIOS */}
               {activeTab === 'benef' && (
                 <div className="space-y-4">
+                  {detalle.conCartaPoder && detalle.apoderadoNombre && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div>
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold uppercase bg-amber-100 text-amber-800 rounded mb-1">
+                          📋 Entrega mediante Carta Poder
+                        </span>
+                        <p className="text-xs text-text-main">
+                          El beneficio corresponde al colegiado titular (<strong>{detalle.NOMBRE_COLEGIADO}</strong>), pero se entrega/paga a su apoderado(a):{' '}
+                          <strong className="text-amber-900">{detalle.apoderadoNombre}</strong>
+                        </p>
+                      </div>
+                      <div className="text-xs text-amber-900 font-semibold sm:text-right shrink-0">
+                        <div>DNI: {detalle.apoderadoDni || '-'}</div>
+                        <div className="text-[11px] text-amber-700">Vínculo: {detalle.apoderadoParentesco || 'Apoderado'}</div>
+                      </div>
+                    </div>
+                  )}
                   {detalle.beneficiariosVinculados.length === 0 ? (
                     <p className="text-sm text-text-sec italic text-center py-8">Sin beneficiarios vinculados.</p>
                   ) : (
@@ -1023,7 +1066,17 @@ export default function DetalleExpedienteModal({ id, onClose, onDelete }: { id: 
                       className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center gap-2">
                       {eliminando ? (
                         <>
-                          <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                          <svg
+                            className="animate-spin h-4 w-4"
+                            width={16}
+                            height={16}
+                            style={{ width: '16px', height: '16px' }}
+                            fill="none"
+                            viewBox="0 0 24 24"
+                          >
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                          </svg>
                           Eliminando...
                         </>
                       ) : (

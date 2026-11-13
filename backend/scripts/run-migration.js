@@ -154,7 +154,72 @@ async function run() {
      BEGIN
        CREATE INDEX IX_fam_solicitud_tiene_saldo ON fam_solicitud_beneficio(tiene_saldo_pendiente);
        PRINT 'Indice IX_fam_solicitud_tiene_saldo creado.';
-     END`
+     END`,
+    `IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'fam_solicitud_beneficio' AND COLUMN_NAME = 'con_carta_poder')
+     BEGIN
+       ALTER TABLE fam_solicitud_beneficio ADD
+         con_carta_poder BIT NOT NULL DEFAULT 0,
+         apoderado_nombre NVARCHAR(200) NULL,
+         apoderado_dni VARCHAR(20) NULL,
+         apoderado_parentesco VARCHAR(50) NULL,
+         carta_poder NVARCHAR(MAX) NULL;
+       PRINT 'Columnas de Carta Poder (apoderado) agregadas en fam_solicitud_beneficio.';
+     END`,
+    `IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'fam_solicitud_beneficio' AND COLUMN_NAME = 'poder_otorgante_nombre')
+     BEGIN
+       ALTER TABLE fam_solicitud_beneficio ADD
+         poder_otorgante_nombre NVARCHAR(200) NULL,
+         poder_otorgante_dni VARCHAR(20) NULL,
+         poder_otorgante_parentesco VARCHAR(50) NULL,
+         poder_fecha DATETIME2 NULL,
+         poder_motivo NVARCHAR(500) NULL,
+         poder_cheque_numero VARCHAR(100) NULL;
+       PRINT 'Columnas de trazabilidad de Carta Poder agregadas en fam_solicitud_beneficio.';
+     END`,
+    `IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'fam_depositos_beneficiario' AND COLUMN_NAME = 'con_carta_poder')
+     BEGIN
+       ALTER TABLE fam_depositos_beneficiario ADD
+         con_carta_poder BIT NOT NULL DEFAULT 0,
+         apoderado_nombre NVARCHAR(200) NULL,
+         apoderado_dni VARCHAR(20) NULL,
+         apoderado_parentesco VARCHAR(50) NULL,
+         poder_motivo NVARCHAR(500) NULL,
+         carta_poder_pdf NVARCHAR(MAX) NULL;
+       PRINT 'Columnas de Carta Poder agregadas en fam_depositos_beneficiario.';
+     END`,
+    `UPDATE s
+     SET s.fecha_pago = d_real.fecha_pago
+     FROM fam_solicitud_beneficio s
+     CROSS APPLY (
+       SELECT TOP 1 d.fecha_pago
+       FROM fam_depositos_beneficiario d
+       WHERE d.solicitud_id = s.id
+         AND d.fecha_pago IS NOT NULL
+         AND CAST(d.fecha_pago AS DATE) <> CAST(s.created_at AS DATE)
+       ORDER BY d.fecha_pago DESC
+     ) d_real
+     WHERE s.fecha_pago IS NULL OR CAST(s.fecha_pago AS DATE) = CAST(s.created_at AS DATE)`,
+    `UPDATE s
+     SET s.fecha_pago = s.orden_pago_fecha
+     FROM fam_solicitud_beneficio s
+     WHERE s.orden_pago_fecha IS NOT NULL
+       AND CAST(s.orden_pago_fecha AS DATE) <> CAST(s.created_at AS DATE)
+       AND (s.fecha_pago IS NULL OR CAST(s.fecha_pago AS DATE) = CAST(s.created_at AS DATE))`,
+    `UPDATE d
+     SET d.fecha_pago = s.orden_pago_fecha
+     FROM fam_depositos_beneficiario d
+     INNER JOIN fam_solicitud_beneficio s ON s.id = d.solicitud_id
+     WHERE s.orden_pago_fecha IS NOT NULL
+       AND CAST(s.orden_pago_fecha AS DATE) <> CAST(s.created_at AS DATE)
+       AND (d.fecha_pago IS NULL OR CAST(d.fecha_pago AS DATE) = CAST(s.created_at AS DATE))`,
+    `UPDATE s
+     SET s.fecha_pago = NULL
+     FROM fam_solicitud_beneficio s
+     WHERE s.estado <> 'PAGADA'
+       AND s.orden_pago_fecha IS NULL
+       AND s.fecha_pago IS NOT NULL
+       AND CAST(s.fecha_pago AS DATE) = CAST(s.created_at AS DATE)
+       AND NOT EXISTS (SELECT 1 FROM fam_depositos_beneficiario d WHERE d.solicitud_id = s.id)`
   ];
 
   for (const q of queries) {

@@ -22,8 +22,12 @@ interface ExpedientePago {
   expedienteNumero: string | null;
   descuentoCovid: number | null;
   montoFinal: number | null;
+  montoTotalAsignado?: number;
+  montoEntregado?: number;
   createdAt?: string;
+  formaPago?: string | null;
   banco?: string | null;
+  bancos?: string[];
   beneficiarios?: Array<{
     beneficiarioId?: string | null;
     nombre: string;
@@ -52,10 +56,62 @@ interface BeneficiarioReporte {
   totalEntregas: number;
   montoRecibido: number;
   ultimaFechaPago: string | null;
+  formasPago: string[];
+  bancos: string[];
 }
 
+const FORMA_PAGO_LABELS: Record<string, string> = {
+  DEPOSITO: 'Depósito',
+  CHEQUE: 'Cheque',
+  TRANSFERENCIA: 'Transferencia',
+  EFECTIVO: 'Efectivo',
+};
+
+const FORMA_PAGO_BADGE: Record<string, string> = {
+  DEPOSITO: 'bg-blue-50 text-[#3258CA] border-blue-200',
+  CHEQUE: 'bg-amber-50 text-amber-800 border-amber-200',
+  TRANSFERENCIA: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  EFECTIVO: 'bg-slate-100 text-slate-700 border-slate-300',
+};
+
+const normalizarFormaPago = (fp?: string | null, tieneBanco?: boolean): string => {
+  const limpio = (fp || '')
+    .toUpperCase()
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+  if (limpio.includes('CHEQUE')) return 'CHEQUE';
+  if (limpio.includes('DEPOSITO')) return 'DEPOSITO';
+  if (limpio.includes('TRANSFERENCIA')) return 'TRANSFERENCIA';
+  if (limpio.includes('EFECTIVO')) return 'EFECTIVO';
+  if (limpio) return limpio;
+  return tieneBanco ? 'DEPOSITO' : 'DEPOSITO';
+};
+
+const obtenerBancosRow = (r: ExpedientePago): string[] => {
+  const set = new Set<string>();
+  if (Array.isArray(r.bancos)) {
+    r.bancos.forEach((b) => { if (b && b.trim()) set.add(b.trim().toUpperCase()); });
+  }
+  if (r.banco && r.banco.trim()) {
+    r.banco.split(',').forEach((b) => { if (b.trim()) set.add(b.trim().toUpperCase()); });
+  }
+  if (Array.isArray(r.beneficiarios)) {
+    r.beneficiarios.forEach((b) => {
+      if (b.banco && b.banco.trim()) set.add(b.banco.trim().toUpperCase());
+    });
+  }
+  return Array.from(set);
+};
+
+const obtenerMontoDadoRow = (r: ExpedientePago): number => {
+  if (r.montoEntregado != null && Number(r.montoEntregado) > 0) return Number(r.montoEntregado);
+  if (r.montoTotalAsignado != null && Number(r.montoTotalAsignado) > 0) return Number(r.montoTotalAsignado);
+  return Number(r.montoFinal ?? r.monto) || 0;
+};
+
 const fmtFecha = (v: string | null | undefined) =>
-  v ? new Date(v).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+  v ? new Date(v).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' }) : '—';
 const fmtMonto = (m: number) => `S/ ${Number(m).toLocaleString('es-PE', { minimumFractionDigits: 2 })}`;
 
 const MAX_PAGINAS = 40;
@@ -70,6 +126,8 @@ export default function ReporteEntregas({ tipos }: { tipos: TipoBeneficioOpt[] }
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [tipoFiltro, setTipoFiltro] = useState('');
+  const [formaPagoFiltro, setFormaPagoFiltro] = useState('');
+  const [bancoFiltro, setBancoFiltro] = useState('');
   const [fechaPagoDesde, setFechaPagoDesde] = useState('');
   const [fechaPagoHasta, setFechaPagoHasta] = useState('');
 
@@ -90,6 +148,8 @@ export default function ReporteEntregas({ tipos }: { tipos: TipoBeneficioOpt[] }
         const params: Record<string, string | number> = { page: pagina, limit: 100, estado: 'PAGADA', ordenarPor: 'ingreso' };
         if (search) params.search = search;
         if (tipoFiltro) params.tipoBeneficioId = tipoFiltro;
+        if (formaPagoFiltro) params.formaPago = formaPagoFiltro;
+        if (bancoFiltro) params.banco = bancoFiltro;
         const { data } = await api.get('/fam-beneficios', { params });
         all.push(...(Array.isArray(data?.data) ? data.data : []));
         totalPages = data?.meta?.totalPages || 1;
@@ -102,7 +162,7 @@ export default function ReporteEntregas({ tipos }: { tipos: TipoBeneficioOpt[] }
     } finally {
       setLoading(false);
     }
-  }, [search, tipoFiltro]);
+  }, [search, tipoFiltro, formaPagoFiltro, bancoFiltro]);
 
   useEffect(() => { fetchReporte(); }, [fetchReporte]);
 
@@ -116,11 +176,19 @@ export default function ReporteEntregas({ tipos }: { tipos: TipoBeneficioOpt[] }
     return true;
   });
 
-  const totalEntregado = filtradas.reduce((s, r) => s + (Number(r.montoFinal ?? r.monto) || 0), 0);
+  const totalEntregado = filtradas.reduce((s, r) => s + obtenerMontoDadoRow(r), 0);
+
+  const opcionesBancos = (() => {
+    const s = new Set<string>(['BCP', 'BBVA', 'INTERBANK', 'SCOTIABANK', 'BANCO DE LA NACION', 'BANBIF']);
+    rows.forEach((r) => obtenerBancosRow(r).forEach((b) => s.add(b)));
+    return Array.from(s);
+  })();
 
   const beneficiarios: BeneficiarioReporte[] = (() => {
     const map = new Map<string, BeneficiarioReporte>();
     for (const r of filtradas) {
+      const bancosExp = obtenerBancosRow(r);
+      const fpExp = normalizarFormaPago(r.formaPago, bancosExp.length > 0);
       const bens = Array.isArray(r.beneficiarios) && r.beneficiarios.length > 0
         ? r.beneficiarios
         : [{
@@ -128,7 +196,7 @@ export default function ReporteEntregas({ tipos }: { tipos: TipoBeneficioOpt[] }
             dni: r.solicitanteDni || r.DNI || '',
             parentesco: '',
             porcentaje: 100,
-            monto: Number(r.montoFinal ?? r.monto) || 0,
+            monto: obtenerMontoDadoRow(r),
             banco: r.banco || '',
             numeroCuenta: '',
             cci: '',
@@ -141,9 +209,12 @@ export default function ReporteEntregas({ tipos }: { tipos: TipoBeneficioOpt[] }
         const dni = b.dni || r.solicitanteDni || r.DNI || '';
         const clave = dni || nombre;
         const reg = map.get(clave) || {
-          clave, nombre, dni, colegiados: [], totalEntregas: 0, montoRecibido: 0, ultimaFechaPago: null,
+          clave, nombre, dni, colegiados: [], totalEntregas: 0, montoRecibido: 0, ultimaFechaPago: null, formasPago: [], bancos: [],
         };
         if (r.NUM_COLEGIATURA && !reg.colegiados.includes(r.NUM_COLEGIATURA)) reg.colegiados.push(r.NUM_COLEGIATURA);
+        if (fpExp && !reg.formasPago.includes(fpExp)) reg.formasPago.push(fpExp);
+        const bancoBen = (b.banco || r.banco || '').trim().toUpperCase();
+        if (bancoBen && !reg.bancos.includes(bancoBen)) reg.bancos.push(bancoBen);
         reg.totalEntregas += 1;
         reg.montoRecibido += Number(b.monto) || 0;
         const fPago = b.fechaPago || r.fechaPago;
@@ -172,7 +243,7 @@ export default function ReporteEntregas({ tipos }: { tipos: TipoBeneficioOpt[] }
     ? `${fmtFecha(fechas[0])} — ${fmtFecha(fechas[fechas.length - 1])}`
     : 'Sin pagos en el rango';
 
-  const filtrosActivos = !!(search || tipoFiltro || fechaPagoDesde || fechaPagoHasta);
+  const filtrosActivos = !!(search || tipoFiltro || formaPagoFiltro || bancoFiltro || fechaPagoDesde || fechaPagoHasta);
 
   const toggleOrden = (campo: 'monto' | 'fecha' | 'nombre') => {
     setOrden((o) => (o.campo === campo ? { campo, dir: o.dir === 'asc' ? 'desc' : 'asc' } : { campo, dir: 'desc' }));
@@ -188,6 +259,9 @@ export default function ReporteEntregas({ tipos }: { tipos: TipoBeneficioOpt[] }
       // Hoja 1: Entregas por Beneficiario (detalle por cada beneficiario y su monto exacto entregado)
       const filasDetalle: any[] = [];
       for (const r of filtradas) {
+        const bancosR = obtenerBancosRow(r);
+        const fpR = normalizarFormaPago(r.formaPago, bancosR.length > 0);
+        const tipoPagoLabel = FORMA_PAGO_LABELS[fpR] || fpR;
         const bens = Array.isArray(r.beneficiarios) && r.beneficiarios.length > 0
           ? r.beneficiarios
           : [{
@@ -195,7 +269,7 @@ export default function ReporteEntregas({ tipos }: { tipos: TipoBeneficioOpt[] }
               dni: r.solicitanteDni || r.DNI || '',
               parentesco: r.solicitanteDni && r.solicitanteDni === r.DNI ? 'Colegiado / Titular' : 'Solicitante',
               porcentaje: 100,
-              monto: Number(r.montoFinal ?? r.monto) || 0,
+              monto: obtenerMontoDadoRow(r),
               banco: r.banco || '',
               numeroCuenta: '',
               cci: '',
@@ -215,9 +289,10 @@ export default function ReporteEntregas({ tipos }: { tipos: TipoBeneficioOpt[] }
             'DNI Beneficiario': b.dni || '',
             'Parentesco': b.parentesco || '',
             '% Asignado': b.porcentaje ? `${Number(b.porcentaje)}%` : '100%',
-            'Monto Entregado S/': Number((b.monto || 0).toFixed(2)),
-            'Banco': b.banco || r.banco || '',
-            'N.° Cuenta / CCI': [b.numeroCuenta, b.cci ? `CCI: ${b.cci}` : ''].filter(Boolean).join(' / ') || '',
+            'Monto Dado / Entregado S/': Number((b.monto || 0).toFixed(2)),
+            'Tipo de Pago': tipoPagoLabel,
+            'Banco': b.banco || r.banco || bancosR.join(', ') || '',
+            'N.° Cuenta / Cheque / CCI': [b.numeroCuenta, b.cci ? `CCI: ${b.cci}` : ''].filter(Boolean).join(' / ') || '',
             'F. Pago': b.fechaPago ? b.fechaPago.slice(0, 10) : (r.fechaPago ? r.fechaPago.slice(0, 10) : ''),
             'Estado': b.estado || r.estado,
             'Monto Total Exp. S/': Number((r.montoFinal ?? r.monto).toFixed(2)),
@@ -233,12 +308,17 @@ export default function ReporteEntregas({ tipos }: { tipos: TipoBeneficioOpt[] }
         'Colegiados (CIP)': b.colegiados.join(', '),
         'N.° Entregas': b.totalEntregas,
         'Monto Total Recibido S/': Number(b.montoRecibido.toFixed(2)),
+        'Tipo(s) de Pago': b.formasPago.map((fp) => FORMA_PAGO_LABELS[fp] || fp).join(', '),
+        'Banco(s)': b.bancos.join(', '),
         'Última F. Pago': b.ultimaFechaPago ? b.ultimaFechaPago.slice(0, 10) : '',
       })));
 
       // Hoja 3: Resumen por Expediente
       const wsExpedientes = XLSX.utils.json_to_sheet(filtradas.map((r) => {
-        const desgloseBens = (r.beneficiarios || []).map((b) => `${b.nombre} (${b.porcentaje}% - S/ ${Number(b.monto || 0).toFixed(2)})`).join('; ');
+        const bancosR = obtenerBancosRow(r);
+        const fpR = normalizarFormaPago(r.formaPago, bancosR.length > 0);
+        const tipoPagoLabel = FORMA_PAGO_LABELS[fpR] || fpR;
+        const desgloseBens = (r.beneficiarios || []).map((b) => `${b.nombre} (${b.porcentaje}% - S/ ${Number(b.monto || 0).toFixed(2)}${b.banco ? ` [${b.banco}]` : ''})`).join('; ');
         return {
           'N.° Expediente': r.expedienteNumero || 'S/N',
           'F. Ingreso / Registro': r.createdAt ? new Date(r.createdAt).toLocaleString('es-PE') : '',
@@ -247,7 +327,9 @@ export default function ReporteEntregas({ tipos }: { tipos: TipoBeneficioOpt[] }
           'Tipo Beneficio': r.tipoBeneficio?.nombre || '',
           'Monto S/': Number(r.monto),
           'Descuento COVID S/': Number(r.descuentoCovid || 0),
-          'Monto Recibido S/': Number((r.montoFinal ?? r.monto).toFixed(2)),
+          'Monto Dado / Recibido S/': Number(obtenerMontoDadoRow(r).toFixed(2)),
+          'Tipo de Pago': tipoPagoLabel,
+          'Banco(s)': bancosR.join(', ') || r.banco || '',
           'Beneficiarios y Montos Asignados': desgloseBens || [r.solicitanteNombre, r.solicitanteDni].filter(Boolean).join(' · ') || '',
           'F. Pago': r.fechaPago ? r.fechaPago.slice(0, 10) : '',
           'Estado': r.estado,
@@ -260,15 +342,15 @@ export default function ReporteEntregas({ tipos }: { tipos: TipoBeneficioOpt[] }
       wsDetalle['!cols'] = [
         { wch: 16 }, { wch: 20 }, { wch: 10 }, { wch: 12 }, { wch: 32 },
         { wch: 22 }, { wch: 32 }, { wch: 14 }, { wch: 15 }, { wch: 12 },
-        { wch: 20 }, { wch: 16 }, { wch: 24 }, { wch: 12 }, { wch: 14 },
-        { wch: 18 }, { wch: 16 },
+        { wch: 24 }, { wch: 16 }, { wch: 18 }, { wch: 24 }, { wch: 12 },
+        { wch: 14 }, { wch: 18 }, { wch: 16 },
       ];
       wsResumen['!cols'] = [
-        { wch: 32 }, { wch: 14 }, { wch: 20 }, { wch: 14 }, { wch: 22 }, { wch: 14 },
+        { wch: 32 }, { wch: 14 }, { wch: 20 }, { wch: 14 }, { wch: 22 }, { wch: 18 }, { wch: 20 }, { wch: 14 },
       ];
       wsExpedientes['!cols'] = [
         { wch: 16 }, { wch: 20 }, { wch: 10 }, { wch: 32 }, { wch: 22 },
-        { wch: 14 }, { wch: 16 }, { wch: 18 }, { wch: 45 }, { wch: 12 }, { wch: 14 },
+        { wch: 14 }, { wch: 16 }, { wch: 22 }, { wch: 16 }, { wch: 20 }, { wch: 45 }, { wch: 12 }, { wch: 14 },
       ];
 
       XLSX.utils.book_append_sheet(wb, wsDetalle, 'Entregas por Beneficiario');
@@ -287,9 +369,9 @@ export default function ReporteEntregas({ tipos }: { tipos: TipoBeneficioOpt[] }
       {/* Filtros */}
       <div className="p-4 border-b border-border-main bg-gray-50/50">
         <div className="flex flex-wrap items-center gap-2.5">
-          <div className="relative flex-1 min-w-[240px] max-w-md">
+          <div className="relative flex-1 min-w-[220px] max-w-md">
             <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-sec" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-            <input type="text" placeholder="Buscar por CIP, DNI o nombre..." value={searchInput}
+            <input type="text" placeholder="Buscar por CIP, DNI, nombre o banco..." value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') setSearch(searchInput); }}
               className="w-full pl-10 pr-4 py-2 border border-border-main rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white" />
@@ -298,6 +380,21 @@ export default function ReporteEntregas({ tipos }: { tipos: TipoBeneficioOpt[] }
             className="border border-border-main rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30">
             <option value="">Todos los tipos</option>
             {tipos.map((t) => <option key={t.id} value={t.id}>{t.nombre}</option>)}
+          </select>
+          <select value={formaPagoFiltro} onChange={(e) => setFormaPagoFiltro(e.target.value)}
+            className="border border-border-main rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30">
+            <option value="">Tipo pago (Depósito / Cheque)</option>
+            <option value="DEPOSITO">Depósito</option>
+            <option value="CHEQUE">Cheque</option>
+            <option value="TRANSFERENCIA">Transferencia</option>
+            <option value="EFECTIVO">Efectivo</option>
+          </select>
+          <select value={bancoFiltro} onChange={(e) => setBancoFiltro(e.target.value)}
+            className="border border-border-main rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30">
+            <option value="">Todos los bancos</option>
+            {opcionesBancos.map((bco) => (
+              <option key={bco} value={bco}>{bco}</option>
+            ))}
           </select>
           <div className="flex items-center gap-1.5">
             <span className="text-xs text-text-sec">F. pago</span>
@@ -312,7 +409,7 @@ export default function ReporteEntregas({ tipos }: { tipos: TipoBeneficioOpt[] }
             Buscar
           </button>
           {filtrosActivos && (
-            <button onClick={() => { setSearchInput(''); setSearch(''); setTipoFiltro(''); setFechaPagoDesde(''); setFechaPagoHasta(''); }}
+            <button onClick={() => { setSearchInput(''); setSearch(''); setTipoFiltro(''); setFormaPagoFiltro(''); setBancoFiltro(''); setFechaPagoDesde(''); setFechaPagoHasta(''); }}
               className="px-3 py-2 text-sm text-text-sec bg-white border border-border-main rounded-lg hover:bg-gray-50 transition-colors">
               Limpiar
             </button>
@@ -330,7 +427,7 @@ export default function ReporteEntregas({ tipos }: { tipos: TipoBeneficioOpt[] }
       {/* Cards consolidado */}
       <div className="p-4 grid grid-cols-2 lg:grid-cols-4 gap-3 border-b border-border-main">
         {[
-          { label: 'Total entregado', value: fmtMonto(totalEntregado), sub: periodo, strong: true },
+          { label: 'Total dado / entregado', value: fmtMonto(totalEntregado), sub: periodo, strong: true },
           { label: 'Entregas realizadas', value: filtradas.length, sub: 'expedientes pagados' },
           { label: 'Personas que recibieron', value: beneficiarios.length, sub: 'beneficiarios distintos' },
           { label: 'Promedio por entrega', value: fmtMonto(filtradas.length ? totalEntregado / filtradas.length : 0), sub: 'monto neto promedio' },
@@ -361,7 +458,17 @@ export default function ReporteEntregas({ tipos }: { tipos: TipoBeneficioOpt[] }
         {loading ? (
           <div className="px-4 py-16 text-center">
             <div className="inline-flex items-center gap-2 text-text-sec">
-              <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+              <svg
+                className="animate-spin w-5 h-5"
+                width={20}
+                height={20}
+                style={{ width: '20px', height: '20px', flexShrink: 0 }}
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
               Cargando reporte de entregas...
             </div>
           </div>
@@ -389,10 +496,11 @@ export default function ReporteEntregas({ tipos }: { tipos: TipoBeneficioOpt[] }
                 <th className={`${thCls} text-center`}>Entregas</th>
                 <th className={thCls}>
                   <button onClick={() => toggleOrden('monto')} className="uppercase hover:text-text-main transition-colors inline-flex items-center gap-1">
-                    Monto recibido
+                    Monto dado
                     {orden.campo === 'monto' && <span className="text-primary">{orden.dir === 'asc' ? '↑' : '↓'}</span>}
                   </button>
                 </th>
+                <th className={thCls}>Tipo Pago / Banco</th>
                 <th className={thCls}>
                   <button onClick={() => toggleOrden('fecha')} className="uppercase hover:text-text-main transition-colors inline-flex items-center gap-1">
                     Última F. Pago
@@ -427,7 +535,23 @@ export default function ReporteEntregas({ tipos }: { tipos: TipoBeneficioOpt[] }
                       {b.totalEntregas}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-sm font-bold text-text-main">{fmtMonto(b.montoRecibido)}</td>
+                  <td className="px-4 py-3 text-sm font-bold text-emerald-700">{fmtMonto(b.montoRecibido)}</td>
+                  <td className="px-4 py-3">
+                    <div className="space-y-1">
+                      <div className="flex flex-wrap gap-1">
+                        {b.formasPago.map((fp) => (
+                          <span key={fp} className={`inline-flex px-1.5 py-0.5 text-[10px] font-bold rounded border ${FORMA_PAGO_BADGE[fp] || 'bg-slate-100 text-slate-700 border-slate-300'}`}>
+                            {FORMA_PAGO_LABELS[fp] || fp}
+                          </span>
+                        ))}
+                      </div>
+                      {b.bancos.length > 0 ? (
+                        <p className="text-xs font-semibold text-text-main">{b.bancos.join(', ')}</p>
+                      ) : (
+                        <p className="text-[10px] text-text-sec">Sin banco reg.</p>
+                      )}
+                    </div>
+                  </td>
                   <td className="px-4 py-3 text-xs text-text-sec whitespace-nowrap">{fmtFecha(b.ultimaFechaPago)}</td>
                 </tr>
               ))}
@@ -437,7 +561,7 @@ export default function ReporteEntregas({ tipos }: { tipos: TipoBeneficioOpt[] }
                 </td>
                 <td className="px-4 py-3 text-center text-sm text-primary font-bold">{filtradas.length}</td>
                 <td className="px-4 py-3 text-sm font-bold text-primary">{fmtMonto(totalEntregado)}</td>
-                <td className="px-4 py-3"></td>
+                <td className="px-4 py-3" colSpan={2}></td>
               </tr>
             </tbody>
           </table>
@@ -449,13 +573,17 @@ export default function ReporteEntregas({ tipos }: { tipos: TipoBeneficioOpt[] }
                 <th className={thCls}>Colegiado</th>
                 <th className={thCls}>Tipo de beneficio</th>
                 <th className={thCls}>Beneficiario</th>
-                <th className={thCls}>Monto recibido</th>
+                <th className={thCls}>Monto dado</th>
+                <th className={thCls}>Tipo Pago / Banco</th>
                 <th className={thCls}>F. Pago</th>
                 <th className={`${thCls} text-center`}>Acción</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border-main">
-              {detalleOrdenado.map((r) => (
+              {detalleOrdenado.map((r) => {
+                const bancosR = obtenerBancosRow(r);
+                const fpR = normalizarFormaPago(r.formaPago, bancosR.length > 0);
+                return (
                 <tr key={r.id} className="hover:bg-gray-50/80 transition-colors">
                   <td className="px-4 py-3 text-sm font-medium text-text-main">{r.expedienteNumero || 'S/N'}</td>
                   <td className="px-4 py-3">
@@ -490,17 +618,17 @@ export default function ReporteEntregas({ tipos }: { tipos: TipoBeneficioOpt[] }
                       <div className="space-y-1">
                         {r.beneficiarios.map((b, bi) => (
                           <div key={bi} className="text-xs">
-                            <span className="font-bold text-primary">{fmtMonto(b.monto)}</span>
+                            <span className="font-bold text-emerald-700">{fmtMonto(b.monto)}</span>
                             <span className="text-[10px] text-text-sec ml-1">({b.porcentaje}%)</span>
                           </div>
                         ))}
                         <div className="pt-0.5 border-t border-border-main text-[11px] font-bold text-text-main">
-                          Total: {fmtMonto(Number(r.montoFinal ?? r.monto))}
+                          Total: {fmtMonto(obtenerMontoDadoRow(r))}
                         </div>
                       </div>
                     ) : (
                       <>
-                        <span className="text-sm font-bold text-text-main">{fmtMonto(Number(r.montoFinal ?? r.monto))}</span>
+                        <span className="text-sm font-bold text-emerald-700">{fmtMonto(obtenerMontoDadoRow(r))}</span>
                         {r.descuentoCovid != null && r.descuentoCovid > 0 && (
                           <span className="block text-[10px] text-amber-600 font-medium" title={`Monto original: ${fmtMonto(r.monto)} · Descuento COVID: ${fmtMonto(r.descuentoCovid)}`}>
                             Dto. COVID {fmtMonto(r.descuentoCovid)}
@@ -508,6 +636,18 @@ export default function ReporteEntregas({ tipos }: { tipos: TipoBeneficioOpt[] }
                         )}
                       </>
                     )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="space-y-1">
+                      <span className={`inline-flex px-2 py-0.5 text-[10px] font-bold rounded border ${FORMA_PAGO_BADGE[fpR] || 'bg-slate-100 text-slate-700 border-slate-300'}`}>
+                        {FORMA_PAGO_LABELS[fpR] || fpR}
+                      </span>
+                      {bancosR.length > 0 ? (
+                        <p className="text-xs font-semibold text-text-main">{bancosR.join(', ')}</p>
+                      ) : (
+                        <p className="text-[10px] text-text-sec">Sin banco reg.</p>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-xs text-text-sec whitespace-nowrap">{fmtFecha(r.fechaPago)}</td>
                   <td className="px-4 py-3 text-center">
@@ -518,11 +658,12 @@ export default function ReporteEntregas({ tipos }: { tipos: TipoBeneficioOpt[] }
                     </button>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
               <tr className="bg-blue-50/40 font-semibold">
                 <td className="px-4 py-3 text-sm text-text-main" colSpan={4}>Total · {filtradas.length} entrega{filtradas.length !== 1 ? 's' : ''}</td>
                 <td className="px-4 py-3 text-sm font-bold text-primary">{fmtMonto(totalEntregado)}</td>
-                <td colSpan={2}></td>
+                <td colSpan={3}></td>
               </tr>
             </tbody>
           </table>

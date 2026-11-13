@@ -167,7 +167,11 @@ export class FamSucesionService {
             ? (dto.observacionSinSucesion?.trim() || dto.observaciones?.trim() || 'Sin documento de sucesión intestada')
             : null,
           fechaSolicitud: dto.fechaSolicitud ? new Date(dto.fechaSolicitud) : new Date(),
-          fechaPago: dto.fechaPago ? new Date(dto.fechaPago) : null,
+          fechaPago: dto.fechaPago
+            ? new Date(dto.fechaPago)
+            : (dto as any).ordenPagoFecha
+              ? new Date((dto as any).ordenPagoFecha)
+              : null,
           fechaDefuncion: dto.fechaDefuncion ? new Date(dto.fechaDefuncion) : null,
           causaFallecimiento: dto.causaFallecimiento || null,
           expedienteNumero: dto.expedienteNumero || null,
@@ -285,7 +289,7 @@ export class FamSucesionService {
               porcentaje: h.porcentaje,
               monto: h.monto,
               banco: dto.banco || null,
-              fechaPago: dto.fechaPago ? new Date(dto.fechaPago) : new Date(),
+              fechaPago: solicitud.fechaPago || null,
               estado: 'PAGADO',
               registradoPor: userId,
             },

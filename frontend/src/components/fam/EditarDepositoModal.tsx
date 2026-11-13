@@ -16,6 +16,12 @@ interface Deposito {
   cci: string | null;
   fechaPago: string | null;
   tieneComprobante: boolean;
+  conCartaPoder?: boolean;
+  apoderadoNombre?: string | null;
+  apoderadoDni?: string | null;
+  apoderadoParentesco?: string | null;
+  poderMotivo?: string | null;
+  tieneCartaPoder?: boolean;
 }
 
 interface Props {
@@ -32,6 +38,12 @@ export default function EditarDepositoModal({ isOpen, onClose, onSaved, expedien
   const [cci, setCci] = useState('');
   const [fechaPago, setFechaPago] = useState('');
   const [comprobante, setComprobante] = useState<string | null>(null);
+  const [conCartaPoder, setConCartaPoder] = useState(false);
+  const [apoderadoNombre, setApoderadoNombre] = useState('');
+  const [apoderadoDni, setApoderadoDni] = useState('');
+  const [apoderadoParentesco, setApoderadoParentesco] = useState('');
+  const [poderMotivo, setPoderMotivo] = useState('');
+  const [cartaPoderPdf, setCartaPoderPdf] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState('');
 
@@ -42,6 +54,12 @@ export default function EditarDepositoModal({ isOpen, onClose, onSaved, expedien
     setCci(deposito.cci || '');
     setFechaPago(deposito.fechaPago ? new Date(deposito.fechaPago).toISOString().slice(0, 10) : '');
     setComprobante(null);
+    setConCartaPoder(Boolean(deposito.conCartaPoder));
+    setApoderadoNombre(deposito.apoderadoNombre || '');
+    setApoderadoDni(deposito.apoderadoDni || '');
+    setApoderadoParentesco(deposito.apoderadoParentesco || 'Tercero Autorizado con Carta Poder');
+    setPoderMotivo(deposito.poderMotivo || '');
+    setCartaPoderPdf(null);
     setError('');
   }, [isOpen, deposito]);
 
@@ -62,6 +80,23 @@ export default function EditarDepositoModal({ isOpen, onClose, onSaved, expedien
     reader.readAsDataURL(file);
   };
 
+  const subirCartaPoder = (file: File) => {
+    if (file.type !== 'application/pdf') {
+      showConfirmMessage('error', 'Formato inválido', 'Solo se permiten archivos PDF');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      showConfirmMessage('error', 'Archivo demasiado grande', 'Máximo 10MB');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setCartaPoderPdf(((e.target?.result as string) || '').split(',')[1] || '');
+      showConfirmMessage('success', 'Carta Poder cargada');
+    };
+    reader.readAsDataURL(file);
+  };
+
   const verComprobante = async () => {
     if (!deposito) return;
     try {
@@ -76,6 +111,16 @@ export default function EditarDepositoModal({ isOpen, onClose, onSaved, expedien
 
   const guardar = async () => {
     if (!deposito) return;
+    if (conCartaPoder) {
+      if (!apoderadoNombre.trim()) {
+        setError('Indique los nombres completos de la persona que cobra con Carta Poder');
+        return;
+      }
+      if (!/^\d{8}$/.test(apoderadoDni.trim())) {
+        setError('El DNI del apoderado debe tener 8 dígitos');
+        return;
+      }
+    }
     setGuardando(true);
     setError('');
     try {
@@ -85,8 +130,14 @@ export default function EditarDepositoModal({ isOpen, onClose, onSaved, expedien
         cci: cci.trim() || undefined,
         ...(fechaPago && { fechaPago }),
         ...(comprobante && { comprobantePdf: comprobante }),
+        conCartaPoder,
+        apoderadoNombre: conCartaPoder ? apoderadoNombre.trim() : '',
+        apoderadoDni: conCartaPoder ? apoderadoDni.trim() : '',
+        apoderadoParentesco: conCartaPoder ? apoderadoParentesco.trim() : '',
+        poderMotivo: conCartaPoder ? poderMotivo.trim() : '',
+        ...(cartaPoderPdf && { cartaPoderPdf }),
       });
-      showConfirmMessage('success', 'Depósito actualizado correctamente');
+      showConfirmMessage('success', 'Depósito y trazabilidad actualizados correctamente');
       onSaved();
       onClose();
     } catch (e: any) {
@@ -98,10 +149,11 @@ export default function EditarDepositoModal({ isOpen, onClose, onSaved, expedien
   };
 
   return (
-    <Drawer isOpen={isOpen} onClose={onClose} title="Corregir depósito" width="sm:w-[28rem]">
+    <Drawer isOpen={isOpen} onClose={onClose} title="Corregir depósito / cheque y Carta Poder" width="sm:w-[34rem]">
       <div className="space-y-3">
         {deposito && (
           <div className="bg-gray-50 border border-border rounded-lg p-3">
+            <p className="text-xs font-semibold uppercase text-slate-500">Beneficiario titular del derecho</p>
             <p className="text-sm font-semibold text-text-main">{deposito.nombreBeneficiario || 'Beneficiario'}</p>
             <p className="text-xs text-text-sec">DNI: {deposito.dniBeneficiario || '—'} · {deposito.porcentaje}%</p>
             <p className="text-sm font-bold text-primary mt-1">S/ {Number(deposito.monto).toLocaleString('es-PE', { minimumFractionDigits: 2 })}</p>
@@ -113,7 +165,7 @@ export default function EditarDepositoModal({ isOpen, onClose, onSaved, expedien
           <input value={banco} onChange={(e) => setBanco(e.target.value)} className="w-full px-3 py-2 border border-border rounded-lg text-sm" />
         </div>
         <div>
-          <label className="block text-xs font-semibold text-text-sec uppercase mb-1">N° cuenta</label>
+          <label className="block text-xs font-semibold text-text-sec uppercase mb-1">N° cuenta / N° Cheque</label>
           <input value={numeroCuenta} onChange={(e) => setNumeroCuenta(e.target.value)} className="w-full px-3 py-2 border border-border rounded-lg text-sm" />
         </div>
         <div>
@@ -124,7 +176,90 @@ export default function EditarDepositoModal({ isOpen, onClose, onSaved, expedien
           <label className="block text-xs font-semibold text-text-sec uppercase mb-1">Fecha de pago</label>
           <input type="date" value={fechaPago} onChange={(e) => setFechaPago(e.target.value)} className="w-full px-3 py-2 border border-border rounded-lg text-sm" />
         </div>
-        <div className="flex items-center gap-3">
+
+        {/* Sección Carta Poder */}
+        <div className="pt-2 border-t border-slate-200 space-y-2.5">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={conCartaPoder}
+              onChange={(e) => setConCartaPoder(e.target.checked)}
+              className="w-4 h-4 accent-[#3258CA] rounded"
+            />
+            <span className="text-xs font-bold text-amber-900">
+              📋 El beneficiario otorgó Carta Poder a otra persona para cobrar el cheque
+            </span>
+          </label>
+
+          {conCartaPoder && (
+            <div className="bg-amber-50/70 border border-amber-300 rounded-lg p-3 space-y-2.5">
+              <div>
+                <label className="block text-[11px] font-semibold text-amber-900 uppercase mb-1">
+                  Nombres y Apellidos de quien cobra (Apoderado) *
+                </label>
+                <input
+                  value={apoderadoNombre}
+                  onChange={(e) => setApoderadoNombre(e.target.value)}
+                  placeholder="Nombre completo del apoderado"
+                  className="w-full px-3 py-1.5 border border-amber-300 rounded-lg text-xs bg-white"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[11px] font-semibold text-amber-900 uppercase mb-1">
+                    DNI Apoderado *
+                  </label>
+                  <input
+                    maxLength={8}
+                    value={apoderadoDni}
+                    onChange={(e) => setApoderadoDni(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                    placeholder="8 dígitos"
+                    className="w-full px-3 py-1.5 border border-amber-300 rounded-lg text-xs font-mono bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-amber-900 uppercase mb-1">
+                    Vínculo / Parentesco
+                  </label>
+                  <input
+                    value={apoderadoParentesco}
+                    onChange={(e) => setApoderadoParentesco(e.target.value)}
+                    placeholder="Ej. Madre, Tío(a), Apoderado..."
+                    className="w-full px-3 py-1.5 border border-amber-300 rounded-lg text-xs bg-white"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-amber-900 uppercase mb-1">
+                  Motivo / Observación de Trazabilidad
+                </label>
+                <input
+                  value={poderMotivo}
+                  onChange={(e) => setPoderMotivo(e.target.value)}
+                  placeholder="Ej. El hijo beneficiario delega el cobro del cheque con carta poder..."
+                  className="w-full px-3 py-1.5 border border-amber-300 rounded-lg text-xs bg-white"
+                />
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-[11px] font-semibold text-amber-900 uppercase">Carta Poder PDF:</span>
+                {cartaPoderPdf && <span className="text-xs text-green-700 font-medium">PDF cargado</span>}
+                <label className="cursor-pointer text-xs font-semibold text-[#3258CA] hover:underline">
+                  {deposito?.tieneCartaPoder || cartaPoderPdf ? 'Reemplazar Carta Poder' : 'Subir Carta Poder PDF'}
+                  <input
+                    type="file"
+                    accept="application/pdf,.pdf"
+                    className="hidden"
+                    onChange={(e) => {
+                      if (e.target.files?.[0]) subirCartaPoder(e.target.files[0]);
+                    }}
+                  />
+                </label>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center gap-3 pt-1">
           <span className="text-xs font-semibold text-text-sec uppercase">Comprobante</span>
           {deposito?.tieneComprobante && (
             <button type="button" onClick={verComprobante} className="text-xs text-primary hover:underline">Ver</button>

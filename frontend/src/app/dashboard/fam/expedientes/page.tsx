@@ -9,6 +9,7 @@ import ReporteEntregas from '@/components/fam/ReporteEntregas';
 import DuplicadosPanel from '@/components/fam/DuplicadosPanel';
 import EliminarExpedienteModal from '@/components/fam/EliminarExpedienteModal';
 import ModalRegularizarSaldo from '@/components/fam/ModalRegularizarSaldo';
+import EditarExpedienteModal from '@/components/fam/EditarExpedienteModal';
 
 interface Expediente {
   id: string;
@@ -26,15 +27,28 @@ interface Expediente {
   documentacionObservacion: string | null;
   solicitanteNombre: string | null;
   solicitanteDni: string | null;
+  conCartaPoder?: boolean;
+  apoderadoNombre?: string | null;
+  apoderadoDni?: string | null;
+  apoderadoParentesco?: string | null;
+  poderOtorganteNombre?: string | null;
+  poderOtorganteDni?: string | null;
+  poderOtorganteParentesco?: string | null;
+  poderFecha?: string | null;
+  poderMotivo?: string | null;
+  poderChequeNumero?: string | null;
   expedienteNumero: string | null;
   descuentoCovid: number | null;
   montoFinal: number | null;
   tieneSaldoPendiente?: boolean;
   saldoPendiente?: number;
   montoTotalAsignado?: number;
+  montoEntregado?: number;
   createdAt?: string;
   updatedAt?: string;
+  formaPago?: string | null;
   banco?: string | null;
+  bancos?: string[];
   beneficiarios?: Array<{
     beneficiarioId?: string | null;
     nombre: string;
@@ -47,6 +61,10 @@ interface Expediente {
     cci: string;
     fechaPago: string | null;
     estado: string;
+    conCartaPoder?: boolean;
+    apoderadoNombre?: string | null;
+    apoderadoDni?: string | null;
+    apoderadoParentesco?: string | null;
   }>;
 }
 
@@ -58,6 +76,7 @@ interface ColegiadoGrupo {
   expedientes: Expediente[];
   totalMonto: number;
   totalMontoFinal: number;
+  totalMontoDado: number;
   totalRecibido: number;
   totalPagados: number;
   ultimoEstado: string;
@@ -66,6 +85,8 @@ interface ColegiadoGrupo {
   docsIncompletos: boolean;
   conteoEstados: Record<string, number>;
   beneficiariosUnicos: { nombre: string; dni: string }[];
+  formasPago: string[];
+  bancos: string[];
 }
 
 interface TipoBeneficioOpt {
@@ -108,7 +129,73 @@ const ESTADO_LABELS_PLURAL: Record<string, string> = {
 
 const ESTADO_OPTIONS = ['PENDIENTE', 'EN_REVISION', 'APROBADA', 'RECHAZADA', 'PAGADA'];
 
-const fmtFecha = (v: string | null | undefined) => (v ? new Date(v).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' }) : '—');
+const FORMA_PAGO_LABELS: Record<string, string> = {
+  DEPOSITO: 'Depósito',
+  CHEQUE: 'Cheque',
+  TRANSFERENCIA: 'Transferencia',
+  EFECTIVO: 'Efectivo',
+};
+
+const FORMA_PAGO_BADGE: Record<string, string> = {
+  DEPOSITO: 'bg-blue-50 text-[#3258CA] border-blue-200',
+  CHEQUE: 'bg-amber-50 text-amber-800 border-amber-200',
+  TRANSFERENCIA: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  EFECTIVO: 'bg-slate-100 text-slate-700 border-slate-300',
+};
+
+const BANCOS_SUGERIDOS = ['BCP', 'BBVA', 'INTERBANK', 'SCOTIABANK', 'BANCO DE LA NACION', 'BANBIF', 'CAJA HUANCAYO'];
+
+const normalizarFormaPagoUI = (fp?: string | null, estado?: string, tieneBeneficiariosBanco?: boolean): string | null => {
+  const limpio = (fp || '')
+    .toUpperCase()
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+  if (limpio.includes('CHEQUE')) return 'CHEQUE';
+  if (limpio.includes('DEPOSITO')) return 'DEPOSITO';
+  if (limpio.includes('TRANSFERENCIA')) return 'TRANSFERENCIA';
+  if (limpio.includes('EFECTIVO')) return 'EFECTIVO';
+  if (limpio) return limpio;
+  if (estado === 'PAGADA' || tieneBeneficiariosBanco) return 'DEPOSITO';
+  return null;
+};
+
+const obtenerBancosExp = (exp: Expediente): string[] => {
+  const set = new Set<string>();
+  if (Array.isArray(exp.bancos)) {
+    exp.bancos.forEach((b) => { if (b && b.trim()) set.add(b.trim().toUpperCase()); });
+  }
+  if (exp.banco && exp.banco.trim()) {
+    exp.banco.split(',').forEach((b) => { if (b.trim()) set.add(b.trim().toUpperCase()); });
+  }
+  if (Array.isArray(exp.beneficiarios)) {
+    exp.beneficiarios.forEach((b) => {
+      if (b.banco && b.banco.trim()) set.add(b.banco.trim().toUpperCase());
+    });
+  }
+  return Array.from(set);
+};
+
+const obtenerMontoDadoExp = (exp: Expediente): number => {
+  if (exp.montoEntregado != null && Number(exp.montoEntregado) > 0) return Number(exp.montoEntregado);
+  if (exp.montoTotalAsignado != null && Number(exp.montoTotalAsignado) > 0) return Number(exp.montoTotalAsignado);
+  if (Array.isArray(exp.beneficiarios) && exp.beneficiarios.length > 0) {
+    const sum = exp.beneficiarios.reduce((acc, b) => acc + (Number(b.monto) || 0), 0);
+    if (sum > 0) return Math.round(sum * 100) / 100;
+  }
+  return Number(exp.montoFinal ?? exp.monto) || 0;
+};
+
+const obtenerFechaDepositoExp = (exp: Expediente): string | null => {
+  if (Array.isArray(exp.beneficiarios) && exp.beneficiarios.length > 0) {
+    const depFecha = exp.beneficiarios.find((b) => b.fechaPago)?.fechaPago;
+    if (depFecha) return depFecha;
+  }
+  return exp.fechaPago || null;
+};
+
+const fmtFecha = (v: string | null | undefined) =>
+  v ? new Date(v).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' }) : '—';
 const fmtMonto = (m: number) => `S/ ${Number(m).toLocaleString('es-PE', { minimumFractionDigits: 2 })}`;
 
 const ICONS: Record<string, ReactNode> = {
@@ -123,6 +210,12 @@ const ICONS: Record<string, ReactNode> = {
   ),
   documento: (
     <svg className="w-5 h-5" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+  ),
+  dinero: (
+    <svg className="w-5 h-5" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+  ),
+  banco: (
+    <svg className="w-5 h-5" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
   ),
 };
 
@@ -147,9 +240,12 @@ export default function ExpedientesPage() {
   const [estadoFiltro, setEstadoFiltro] = useState('');
   const [docsFiltro, setDocsFiltro] = useState('');
   const [saldoFiltro, setSaldoFiltro] = useState('');
+  const [formaPagoFiltro, setFormaPagoFiltro] = useState('');
+  const [bancoFiltro, setBancoFiltro] = useState('');
   const [fechaDesde, setFechaDesde] = useState('');
   const [fechaHasta, setFechaHasta] = useState('');
   const [regularizarTarget, setRegularizarTarget] = useState<Expediente | null>(null);
+  const [editarExpId, setEditarExpId] = useState<string | null>(null);
 
   const [tipos, setTipos] = useState<TipoBeneficioOpt[]>([]);
   const [error, setError] = useState('');
@@ -180,6 +276,8 @@ export default function ExpedientesPage() {
       if (tipoFiltro) params.tipoBeneficioId = tipoFiltro;
       if (docsFiltro) params.documentacionCompleta = docsFiltro;
       if (saldoFiltro) params.conSaldoPendiente = saldoFiltro;
+      if (formaPagoFiltro) params.formaPago = formaPagoFiltro;
+      if (bancoFiltro) params.banco = bancoFiltro;
       if (tab === 'todos' && fechaDesde) params.fechaDesde = fechaDesde;
       if (tab === 'todos' && fechaHasta) params.fechaHasta = fechaHasta;
 
@@ -192,10 +290,10 @@ export default function ExpedientesPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, limit, tab, search, tipoFiltro, estadoFiltro, docsFiltro, saldoFiltro, fechaDesde, fechaHasta]);
+  }, [page, limit, tab, search, tipoFiltro, estadoFiltro, docsFiltro, saldoFiltro, formaPagoFiltro, bancoFiltro, fechaDesde, fechaHasta]);
 
   useEffect(() => { fetchExpedientes(); }, [fetchExpedientes]);
-  useEffect(() => { setPage(1); setExpandidos(new Set()); }, [tab, search, tipoFiltro, estadoFiltro, docsFiltro, saldoFiltro, fechaDesde, fechaHasta, limit]);
+  useEffect(() => { setPage(1); setExpandidos(new Set()); }, [tab, search, tipoFiltro, estadoFiltro, docsFiltro, saldoFiltro, formaPagoFiltro, bancoFiltro, fechaDesde, fechaHasta, limit]);
 
   // Debounce para búsqueda reactiva al tipear en el buscador
   useEffect(() => {
@@ -218,6 +316,7 @@ export default function ExpedientesPage() {
           expedientes: [],
           totalMonto: 0,
           totalMontoFinal: 0,
+          totalMontoDado: 0,
           totalRecibido: 0,
           totalPagados: 0,
           ultimoEstado: exp.estado,
@@ -226,20 +325,35 @@ export default function ExpedientesPage() {
           docsIncompletos: false,
           conteoEstados: {},
           beneficiariosUnicos: [],
+          formasPago: [],
+          bancos: [],
         });
       }
       const g = map.get(key)!;
       g.expedientes.push(exp);
+      const montoDado = obtenerMontoDadoExp(exp);
       g.totalMonto += Number(exp.monto) || 0;
       g.totalMontoFinal += Number(exp.montoFinal ?? exp.monto) || 0;
+      g.totalMontoDado += montoDado;
       g.conteoEstados[exp.estado] = (g.conteoEstados[exp.estado] || 0) + 1;
       if (!exp.documentacionCompleta) g.docsIncompletos = true;
+      const fechaDeposito = obtenerFechaDepositoExp(exp);
       if (exp.estado === 'PAGADA') {
         g.totalPagados += 1;
-        g.totalRecibido += Number(exp.montoFinal ?? exp.monto) || 0;
-        if (exp.fechaPago && (!g.ultimaFechaPago || exp.fechaPago > g.ultimaFechaPago)) {
-          g.ultimaFechaPago = exp.fechaPago;
+        g.totalRecibido += montoDado;
+        if (fechaDeposito && (!g.ultimaFechaPago || fechaDeposito > g.ultimaFechaPago)) {
+          g.ultimaFechaPago = fechaDeposito;
         }
+      } else if (fechaDeposito && (!g.ultimaFechaPago || fechaDeposito > g.ultimaFechaPago)) {
+        g.ultimaFechaPago = fechaDeposito;
+      }
+      const bancosExp = obtenerBancosExp(exp);
+      for (const bco of bancosExp) {
+        if (!g.bancos.includes(bco)) g.bancos.push(bco);
+      }
+      const fp = normalizarFormaPagoUI(exp.formaPago, exp.estado, bancosExp.length > 0);
+      if (fp && !g.formasPago.includes(fp)) {
+        g.formasPago.push(fp);
       }
       if (Array.isArray(exp.beneficiarios) && exp.beneficiarios.length > 0) {
         for (const b of exp.beneficiarios) {
@@ -267,6 +381,77 @@ export default function ExpedientesPage() {
     }
     return Array.from(map.values());
   }, [expedientes]);
+
+  const resumenFinanciero = useMemo(() => {
+    const mapaFp = new Map<string, { formaPago: string; count: number; monto: number }>();
+    const mapaBanco = new Map<string, { banco: string; count: number; monto: number }>();
+    let montoPaginaDado = 0;
+
+    for (const exp of expedientes) {
+      const mDado = obtenerMontoDadoExp(exp);
+      montoPaginaDado += mDado;
+      const bancosExp = obtenerBancosExp(exp);
+      const fp = normalizarFormaPagoUI(exp.formaPago, exp.estado, bancosExp.length > 0);
+      if (fp) {
+        const cur = mapaFp.get(fp) || { formaPago: fp, count: 0, monto: 0 };
+        cur.count += 1;
+        cur.monto = Math.round((cur.monto + mDado) * 100) / 100;
+        mapaFp.set(fp, cur);
+      }
+      if (Array.isArray(exp.beneficiarios) && exp.beneficiarios.some((b) => b.banco && b.banco.trim())) {
+        const vistos = new Set<string>();
+        for (const b of exp.beneficiarios) {
+          const bco = (b.banco || exp.banco || '').trim().toUpperCase();
+          if (!bco) continue;
+          const curB = mapaBanco.get(bco) || { banco: bco, count: 0, monto: 0 };
+          if (!vistos.has(bco)) {
+            curB.count += 1;
+            vistos.add(bco);
+          }
+          curB.monto = Math.round((curB.monto + (Number(b.monto) || 0)) * 100) / 100;
+          mapaBanco.set(bco, curB);
+        }
+      } else {
+        for (const bco of bancosExp) {
+          const curB = mapaBanco.get(bco) || { banco: bco, count: 0, monto: 0 };
+          curB.count += 1;
+          curB.monto = Math.round((curB.monto + mDado) * 100) / 100;
+          mapaBanco.set(bco, curB);
+        }
+      }
+    }
+
+    const porFormaPago: { formaPago: string; count: number; monto: number }[] =
+      Array.isArray(dashboard?.porFormaPago) && dashboard.porFormaPago.length > 0
+        ? dashboard.porFormaPago
+        : Array.from(mapaFp.values()).sort((a, b) => b.monto - a.monto);
+
+    const porBanco: { banco: string; count: number; monto: number }[] =
+      Array.isArray(dashboard?.porBanco) && dashboard.porBanco.length > 0
+        ? dashboard.porBanco
+        : Array.from(mapaBanco.values()).sort((a, b) => b.monto - a.monto);
+
+    const opcionesBancos = Array.from(
+      new Set([
+        ...porBanco.map((b) => b.banco),
+        ...Array.from(mapaBanco.keys()),
+        ...BANCOS_SUGERIDOS,
+      ]),
+    );
+
+    const montoTotalEntregado =
+      dashboard?.montoTotalEntregado != null && Number(dashboard.montoTotalEntregado) > 0
+        ? Number(dashboard.montoTotalEntregado)
+        : Math.round(montoPaginaDado * 100) / 100;
+
+    return {
+      montoTotalEntregado,
+      montoPaginaDado: Math.round(montoPaginaDado * 100) / 100,
+      porFormaPago,
+      porBanco,
+      opcionesBancos,
+    };
+  }, [dashboard, expedientes]);
 
   const toggleGrupo = (key: string) => {
     setExpandidos((prev) => {
@@ -319,6 +504,9 @@ export default function ExpedientesPage() {
         if (search) params.search = search;
         if (tipoFiltro) params.tipoBeneficioId = tipoFiltro;
         if (docsFiltro) params.documentacionCompleta = docsFiltro;
+        if (saldoFiltro) params.conSaldoPendiente = saldoFiltro;
+        if (formaPagoFiltro) params.formaPago = formaPagoFiltro;
+        if (bancoFiltro) params.banco = bancoFiltro;
         if (tab === 'todos' && fechaDesde) params.fechaDesde = fechaDesde;
         if (tab === 'todos' && fechaHasta) params.fechaHasta = fechaHasta;
         const { data } = await api.get('/fam-beneficios', { params });
@@ -332,6 +520,9 @@ export default function ExpedientesPage() {
       // Hoja 1: Entregas por Beneficiario (detalle por cada persona y el monto exacto asignado/entregado)
       const filasDetalle: any[] = [];
       for (const r of all) {
+        const bancosR = obtenerBancosExp(r);
+        const fpR = normalizarFormaPagoUI(r.formaPago, r.estado, bancosR.length > 0);
+        const tipoPagoLabel = fpR ? (FORMA_PAGO_LABELS[fpR] || fpR) : 'Por definir';
         const bens = Array.isArray(r.beneficiarios) && r.beneficiarios.length > 0
           ? r.beneficiarios
           : [{
@@ -339,7 +530,7 @@ export default function ExpedientesPage() {
               dni: r.solicitanteDni || r.DNI || '',
               parentesco: r.solicitanteDni && r.solicitanteDni === r.DNI ? 'Colegiado / Titular' : 'Solicitante',
               porcentaje: 100,
-              monto: Number(r.montoFinal ?? r.monto) || 0,
+              monto: obtenerMontoDadoExp(r),
               banco: r.banco || '',
               numeroCuenta: '',
               cci: '',
@@ -359,10 +550,15 @@ export default function ExpedientesPage() {
             'Beneficiario': b.nombre || '',
             'DNI Beneficiario': b.dni || '',
             'Parentesco': b.parentesco || '',
+            'Con Carta Poder': (b as any).conCartaPoder || r.conCartaPoder ? 'SÍ' : 'NO',
+            'Cobra con Poder (Apoderado)': (b as any).apoderadoNombre || r.apoderadoNombre || '',
+            'DNI Apoderado': (b as any).apoderadoDni || r.apoderadoDni || '',
+            'Motivo / Trazabilidad Poder': r.poderMotivo || '',
             '% Asignado': b.porcentaje ? `${Number(b.porcentaje)}%` : '100%',
-            'Monto Asignado / Entregado (S/)': Number((b.monto || 0).toFixed(2)),
-            'Banco': b.banco || r.banco || '',
-            'N.° Cuenta / CCI': [b.numeroCuenta, b.cci ? `CCI: ${b.cci}` : ''].filter(Boolean).join(' / ') || '',
+            'Monto Dado / Entregado (S/)': Number((b.monto || 0).toFixed(2)),
+            'Tipo de Pago': tipoPagoLabel,
+            'Banco': b.banco || r.banco || bancosR.join(', ') || '',
+            'N.° Cuenta / Cheque / CCI': [b.numeroCuenta, b.cci ? `CCI: ${b.cci}` : ''].filter(Boolean).join(' / ') || '',
             'F. Pago': b.fechaPago ? new Date(b.fechaPago).toISOString().slice(0, 10) : (r.fechaPago ? new Date(r.fechaPago).toISOString().slice(0, 10) : ''),
             'Estado Pago': b.estado || r.estado,
             'Monto Total Exp. (S/)': Number((r.montoFinal ?? r.monto).toFixed(2)),
@@ -374,7 +570,10 @@ export default function ExpedientesPage() {
 
       // Hoja 2: Resumen por Expediente
       const filasResumen = all.map((r) => {
-        const desgloseBens = (r.beneficiarios || []).map((b) => `${b.nombre} (${b.porcentaje}% - S/ ${Number(b.monto || 0).toFixed(2)})`).join('; ');
+        const bancosR = obtenerBancosExp(r);
+        const fpR = normalizarFormaPagoUI(r.formaPago, r.estado, bancosR.length > 0);
+        const tipoPagoLabel = fpR ? (FORMA_PAGO_LABELS[fpR] || fpR) : 'Por definir';
+        const desgloseBens = (r.beneficiarios || []).map((b) => `${b.nombre} (${b.porcentaje}% - S/ ${Number(b.monto || 0).toFixed(2)}${b.banco ? ` [${b.banco}]` : ''})`).join('; ');
         return {
           'N.° Expediente': r.expedienteNumero || 'S/N',
           'F. Ingreso / Registro': r.createdAt ? new Date(r.createdAt).toLocaleString('es-PE') : '',
@@ -383,9 +582,11 @@ export default function ExpedientesPage() {
           'DNI': r.DNI || '',
           'Colegiado': r.NOMBRE_COLEGIADO || '',
           'Tipo Beneficio': r.tipoBeneficio?.nombre || '',
-          'Monto S/': Number(r.monto),
+          'Monto Base S/': Number(r.monto),
           'Descuento COVID S/': Number(r.descuentoCovid || 0),
-          'Monto Final S/': Number((r.montoFinal ?? r.monto).toFixed(2)),
+          'Monto Dado / Entregado S/': Number(obtenerMontoDadoExp(r).toFixed(2)),
+          'Tipo de Pago': tipoPagoLabel,
+          'Banco(s)': bancosR.join(', ') || r.banco || '',
           'N.° Beneficiarios': (r.beneficiarios && r.beneficiarios.length) || 1,
           'Beneficiarios y Montos Asignados': desgloseBens || [r.solicitanteNombre, r.solicitanteDni].filter(Boolean).join(' · ') || '',
           'Estado': r.estado,
@@ -401,13 +602,14 @@ export default function ExpedientesPage() {
       wsDetalle['!cols'] = [
         { wch: 16 }, { wch: 20 }, { wch: 12 }, { wch: 10 }, { wch: 12 },
         { wch: 32 }, { wch: 22 }, { wch: 32 }, { wch: 14 }, { wch: 15 },
-        { wch: 12 }, { wch: 28 }, { wch: 16 }, { wch: 24 }, { wch: 12 },
-        { wch: 14 }, { wch: 18 }, { wch: 16 }, { wch: 16 },
+        { wch: 12 }, { wch: 24 }, { wch: 16 }, { wch: 20 }, { wch: 24 },
+        { wch: 12 }, { wch: 14 }, { wch: 18 }, { wch: 16 }, { wch: 16 },
       ];
       wsResumen['!cols'] = [
         { wch: 16 }, { wch: 20 }, { wch: 12 }, { wch: 10 }, { wch: 12 },
-        { wch: 32 }, { wch: 22 }, { wch: 14 }, { wch: 16 }, { wch: 16 },
-        { wch: 16 }, { wch: 45 }, { wch: 14 }, { wch: 16 }, { wch: 12 },
+        { wch: 32 }, { wch: 22 }, { wch: 14 }, { wch: 16 }, { wch: 22 },
+        { wch: 16 }, { wch: 22 }, { wch: 16 }, { wch: 45 }, { wch: 14 },
+        { wch: 16 }, { wch: 12 },
       ];
 
       XLSX.utils.book_append_sheet(wb, wsDetalle, 'Entregas por Beneficiario');
@@ -419,7 +621,7 @@ export default function ExpedientesPage() {
   };
 
   const totalPages = Math.ceil(total / limit) || 1;
-  const filtrosActivos = search || tipoFiltro || docsFiltro || (tab === 'todos' && (estadoFiltro || fechaDesde || fechaHasta));
+  const filtrosActivos = search || tipoFiltro || docsFiltro || saldoFiltro || formaPagoFiltro || bancoFiltro || (tab === 'todos' && (estadoFiltro || fechaDesde || fechaHasta));
   const desde = total > 0 ? (page - 1) * limit + 1 : 0;
   const hasta = Math.min(page * limit, total);
 
@@ -431,8 +633,8 @@ export default function ExpedientesPage() {
   ];
 
   const kpis = dashboard ? [
+    { key: 'montodado', label: 'Monto Total Dado', value: fmtMonto(resumenFinanciero.montoTotalEntregado), sub: `${dashboard.pagadosCount || total || 0} entrega(s) registrada(s)`, icon: ICONS.dinero, tone: 'text-emerald-700 bg-emerald-50' },
     { key: 'pendientes', label: 'Mis Pendientes', value: dashboard.misTendientes || 0, sub: 'asignados a mi', icon: ICONS.reloj, tone: 'text-amber-600 bg-amber-50' },
-    { key: 'sinasignar', label: 'Sin Asignar', value: dashboard.sinAsignar || 0, sub: 'sin responsable', icon: ICONS.persona, tone: 'text-blue-600 bg-blue-50' },
     { key: 'vencer', label: 'Próximos a Vencer', value: dashboard.proximosAVencer || 0, sub: `${dashboard.vencidos || 0} vencido${(dashboard.vencidos || 0) === 1 ? '' : 's'}`, icon: ICONS.alerta, tone: (dashboard.vencidos || 0) > 0 ? 'text-red-600 bg-red-50' : 'text-amber-600 bg-amber-50' },
     { key: 'saldopendiente', label: 'Saldo Pendiente', value: dashboard.conSaldoPendienteCount || 0, sub: `S/ ${(dashboard.saldoPendienteTotal || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })} faltante`, icon: ICONS.alerta, tone: (dashboard.conSaldoPendienteCount || 0) > 0 ? 'text-amber-700 bg-amber-50' : 'text-slate-500 bg-slate-50' },
     { key: 'total', label: 'Total Expedientes', value: total, sub: 'registrados', icon: ICONS.documento, tone: 'text-primary bg-primary/10' },
@@ -466,21 +668,135 @@ export default function ExpedientesPage() {
 
       {/* Dashboard cards (solo tabs de seguimiento) */}
       {dashboard && tab !== 'reporte' && tab !== 'duplicados' && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          {kpis.map((card) => (
-            <div key={card.key} className="bg-white border border-border-main rounded-xl p-4 shadow-sm">
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-[10px] font-semibold text-text-sec uppercase tracking-wider">{card.label}</p>
-                  <p className="text-2xl font-bold mt-1 text-text-main">{card.value}</p>
-                  <p className="text-[11px] text-text-sec mt-0.5 truncate">{card.sub}</p>
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+            {kpis.map((card) => (
+              <div key={card.key} className="bg-white border border-border-main rounded-xl p-4 shadow-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-semibold text-text-sec uppercase tracking-wider">{card.label}</p>
+                    <p className="text-xl sm:text-2xl font-bold mt-1 text-text-main truncate" title={String(card.value)}>{card.value}</p>
+                    <p className="text-[11px] text-text-sec mt-0.5 truncate">{card.sub}</p>
+                  </div>
+                  <span className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${card.tone}`}>
+                    {card.icon}
+                  </span>
                 </div>
-                <span className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${card.tone}`}>
-                  {card.icon}
-                </span>
               </div>
+            ))}
+          </div>
+
+          {/* Resumen de Montos Dados por Tipo de Pago (Depósito / Cheque) y Bancos */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            <div className="bg-white border border-border-main rounded-xl p-4 shadow-sm">
+              <div className="flex items-center justify-between gap-2 mb-2.5">
+                <div className="flex items-center gap-2">
+                  <span className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+                    {ICONS.dinero}
+                  </span>
+                  <div>
+                    <h3 className="text-xs font-semibold text-text-main uppercase tracking-wider">Monto Dado por Tipo de Pago</h3>
+                    <p className="text-[11px] text-text-sec">Desglose en Depósito, Cheque, Transferencia y Efectivo</p>
+                  </div>
+                </div>
+                {formaPagoFiltro && (
+                  <button
+                    type="button"
+                    onClick={() => setFormaPagoFiltro('')}
+                    className="text-[11px] font-medium text-primary hover:underline"
+                  >
+                    Ver todos
+                  </button>
+                )}
+              </div>
+              {resumenFinanciero.porFormaPago.length > 0 ? (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {resumenFinanciero.porFormaPago.map((item) => {
+                    const activo = formaPagoFiltro === item.formaPago;
+                    const label = FORMA_PAGO_LABELS[item.formaPago] || item.formaPago;
+                    return (
+                      <button
+                        key={item.formaPago}
+                        type="button"
+                        onClick={() => setFormaPagoFiltro(activo ? '' : item.formaPago)}
+                        className={`text-left p-2.5 rounded-lg border transition-colors ${
+                          activo
+                            ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                            : 'border-border-main bg-slate-50/60 hover:bg-slate-100/70'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-1">
+                          <span className={`inline-flex px-1.5 py-0.5 text-[10px] font-bold rounded border ${FORMA_PAGO_BADGE[item.formaPago] || 'bg-slate-100 text-slate-700 border-slate-200'}`}>
+                            {label}
+                          </span>
+                          <span className="text-[10px] font-semibold text-text-sec">{item.count} exp.</span>
+                        </div>
+                        <p className="text-sm font-bold text-text-main mt-1.5 truncate" title={fmtMonto(item.monto)}>
+                          {fmtMonto(item.monto)}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-xs text-text-sec py-2">Sin entregas registradas por medio de pago aún.</p>
+              )}
             </div>
-          ))}
+
+            <div className="bg-white border border-border-main rounded-xl p-4 shadow-sm">
+              <div className="flex items-center justify-between gap-2 mb-2.5">
+                <div className="flex items-center gap-2">
+                  <span className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center">
+                    {ICONS.banco}
+                  </span>
+                  <div>
+                    <h3 className="text-xs font-semibold text-text-main uppercase tracking-wider">Monto Dado por Bancos</h3>
+                    <p className="text-[11px] text-text-sec">Entidades bancarias de depósitos y cheques</p>
+                  </div>
+                </div>
+                {bancoFiltro && (
+                  <button
+                    type="button"
+                    onClick={() => setBancoFiltro('')}
+                    className="text-[11px] font-medium text-primary hover:underline"
+                  >
+                    Ver todos
+                  </button>
+                )}
+              </div>
+              {resumenFinanciero.porBanco.length > 0 ? (
+                <div className="flex flex-wrap gap-2 max-h-[86px] overflow-y-auto pr-1">
+                  {resumenFinanciero.porBanco.map((item) => {
+                    const activo = bancoFiltro.toUpperCase() === item.banco.toUpperCase();
+                    return (
+                      <button
+                        key={item.banco}
+                        type="button"
+                        onClick={() => setBancoFiltro(activo ? '' : item.banco)}
+                        className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-left transition-colors ${
+                          activo
+                            ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                            : 'border-border-main bg-slate-50/60 hover:bg-slate-100/70'
+                        }`}
+                      >
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-bold text-text-main">{item.banco}</span>
+                            <span className="text-[10px] px-1.5 py-0.2 bg-white border border-border-main rounded-full text-text-sec font-semibold">
+                              {item.count}
+                            </span>
+                          </div>
+                          <p className="text-xs font-semibold text-emerald-700">{fmtMonto(item.monto)}</p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-xs text-text-sec py-2">No se han especificado bancos en los expedientes listados.</p>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
@@ -526,7 +842,7 @@ export default function ExpedientesPage() {
             <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2.5">
               <div className="relative w-full sm:flex-1 sm:min-w-[220px] sm:max-w-md">
                 <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-sec" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                <input type="text" placeholder="Buscar por CIP, DNI o nombre..." value={searchInput}
+                <input type="text" placeholder="Buscar por CIP, DNI, nombre o banco..." value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter') { setSearch(searchInput); setPage(1); } }}
                   className="w-full pl-10 pr-4 py-2 border border-border-main rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white" />
@@ -535,6 +851,21 @@ export default function ExpedientesPage() {
                 className="w-full sm:w-auto border border-border-main rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30">
                 <option value="">Todos los tipos</option>
                 {tipos.map((t) => <option key={t.id} value={t.id}>{t.nombre}</option>)}
+              </select>
+              <select value={formaPagoFiltro} onChange={(e) => setFormaPagoFiltro(e.target.value)}
+                className="w-full sm:w-auto border border-border-main rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30">
+                <option value="">Tipo pago (Depósito / Cheque)</option>
+                <option value="DEPOSITO">Depósito</option>
+                <option value="CHEQUE">Cheque</option>
+                <option value="TRANSFERENCIA">Transferencia</option>
+                <option value="EFECTIVO">Efectivo</option>
+              </select>
+              <select value={bancoFiltro} onChange={(e) => setBancoFiltro(e.target.value)}
+                className="w-full sm:w-auto border border-border-main rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30">
+                <option value="">Todos los bancos</option>
+                {resumenFinanciero.opcionesBancos.map((bco) => (
+                  <option key={bco} value={bco}>{bco}</option>
+                ))}
               </select>
               {tab === 'todos' && (
                 <select value={estadoFiltro} onChange={(e) => setEstadoFiltro(e.target.value)}
@@ -570,7 +901,7 @@ export default function ExpedientesPage() {
                   Buscar
                 </button>
                 {filtrosActivos && (
-                  <button onClick={() => { setSearchInput(''); setSearch(''); setTipoFiltro(''); setEstadoFiltro(''); setDocsFiltro(''); setFechaDesde(''); setFechaHasta(''); }}
+                  <button onClick={() => { setSearchInput(''); setSearch(''); setTipoFiltro(''); setEstadoFiltro(''); setDocsFiltro(''); setSaldoFiltro(''); setFormaPagoFiltro(''); setBancoFiltro(''); setFechaDesde(''); setFechaHasta(''); }}
                     className="flex-1 sm:flex-none px-3 py-2 text-sm text-text-sec bg-white border border-border-main rounded-lg hover:bg-gray-50 transition-colors">
                     Limpiar
                   </button>
@@ -583,14 +914,15 @@ export default function ExpedientesPage() {
 
           {/* Table */}
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px]">
+            <table className="w-full min-w-[1040px]">
               <thead>
                 <tr className="bg-gray-50 border-b border-border-main">
                   <th className="w-8 px-3 py-3"></th>
                   <th className={TH_CLS}>Colegiado</th>
                   <th className={TH_CLS}>CIP / DNI</th>
                   <th className={TH_CLS}>Recibido por</th>
-                  <th className={TH_CLS}>Monto</th>
+                  <th className={TH_CLS}>Monto Dado</th>
+                  <th className={TH_CLS}>Tipo Pago / Banco</th>
                   <th className={TH_CLS}>Estado</th>
                   <th className={TH_CLS}>Docs</th>
                   <th className={TH_CLS}>F. Solicitud</th>
@@ -600,14 +932,24 @@ export default function ExpedientesPage() {
               </thead>
               <tbody className="divide-y divide-border-main">
                 {loading ? (
-                  <tr><td colSpan={10} className="px-4 py-16 text-center">
+                  <tr><td colSpan={11} className="px-4 py-16 text-center">
                     <div className="inline-flex items-center gap-2 text-text-sec">
-                      <svg className="animate-spin w-5 h-5" width="20" height="20" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                      <svg
+                        className="animate-spin w-5 h-5"
+                        width="20"
+                        height="20"
+                        style={{ width: '20px', height: '20px', flexShrink: 0 }}
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
                       Cargando expedientes...
                     </div>
                   </td></tr>
                 ) : grupos.length === 0 ? (
-                  <tr><td colSpan={10} className="px-4 py-16 text-center text-text-sec">
+                  <tr><td colSpan={11} className="px-4 py-16 text-center text-text-sec">
                     <div className="flex flex-col items-center">
                       <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-3">
                         <svg className="w-8 h-8 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
@@ -629,10 +971,11 @@ export default function ExpedientesPage() {
                   <>
                     {/* Header resumen */}
                     <tr className="bg-blue-50/40">
-                      <td colSpan={10} className="px-4 py-2">
-                        <div className="flex items-center justify-between">
+                      <td colSpan={11} className="px-4 py-2">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
                           <span className="text-xs text-text-sec">
-                            {grupos.length} colegiado{grupos.length !== 1 ? 's' : ''} en esta página · {total.toLocaleString('es-PE')} expediente{total !== 1 ? 's' : ''} en total
+                            {grupos.length} colegiado{grupos.length !== 1 ? 's' : ''} en esta página · {total.toLocaleString('es-PE')} expediente{total !== 1 ? 's' : ''} en total ·{' '}
+                            <strong className="text-text-main">Monto dado en página: {fmtMonto(resumenFinanciero.montoPaginaDado)}</strong>
                           </span>
                           <button onClick={toggleAll}
                             className="text-xs text-primary hover:text-primary/80 font-medium transition-colors">
@@ -648,6 +991,10 @@ export default function ExpedientesPage() {
                       const soloUno = grupo.expedientes.length === 1;
                       const recibe = nombreRecibido(grupo);
                       const desglose = resumenEstados(grupo);
+                      const expUnico = soloUno ? grupo.expedientes[0] : null;
+                      const cuentasUnico = expUnico?.beneficiarios
+                        ?.map((b) => [b.numeroCuenta, b.cci ? `CCI: ${b.cci}` : ''].filter(Boolean).join(' · '))
+                        .filter(Boolean) || [];
 
                       return (
                         <Fragment key={expKey}>
@@ -672,7 +1019,11 @@ export default function ExpedientesPage() {
                                 </div>
                                 <div className="min-w-0">
                                   <p className="text-sm font-semibold text-text-main truncate" title={grupo.NOMBRE_COLEGIADO}>{grupo.NOMBRE_COLEGIADO}</p>
-                                  <p className="text-[10px] text-text-sec">{grupo.expedientes.length === 1 ? '1 expediente' : `${grupo.expedientes.length} expedientes`}</p>
+                                  <p className="text-[10px] text-text-sec">
+                                    {soloUno
+                                      ? `${expUnico?.tipoBeneficio?.nombre || '1 expediente'}${expUnico?.expedienteNumero ? ` · Exp. ${expUnico.expedienteNumero}` : ''}`
+                                      : `${grupo.expedientes.length} expedientes`}
+                                  </p>
                                 </div>
                               </div>
                             </td>
@@ -682,13 +1033,29 @@ export default function ExpedientesPage() {
                             </td>
                             <td className="px-4 py-3.5">
                               {recibe ? (
-                                <div className="min-w-0 max-w-[160px]">
+                                <div className="min-w-0 max-w-[175px]">
                                   <p className="text-xs font-medium text-text-main truncate" title={grupo.beneficiariosUnicos.length === 1 ? `${grupo.beneficiariosUnicos[0].nombre}${grupo.beneficiariosUnicos[0].dni ? ` · DNI ${grupo.beneficiariosUnicos[0].dni}` : ''}` : undefined}>
                                     {recibe}
                                   </p>
-                                  {grupo.totalPagados > 0 && (
-                                    <p className="text-[10px] text-emerald-600 font-medium">{grupo.totalPagados} pago{grupo.totalPagados !== 1 ? 's' : ''} realizado{grupo.totalPagados !== 1 ? 's' : ''}</p>
+                                  {expUnico?.conCartaPoder && (
+                                    <span
+                                      className="inline-flex items-center gap-1 mt-0.5 px-1.5 py-0.5 text-[9px] font-bold rounded bg-amber-100 text-amber-800 border border-amber-300 max-w-full truncate"
+                                      title={`Otorgante: ${expUnico.poderOtorganteNombre || recibe} (${expUnico.poderOtorganteParentesco || 'Beneficiario'}) → Cobra con Carta Poder: ${expUnico.apoderadoNombre || 'Apoderado'}${expUnico.apoderadoDni ? ` (DNI ${expUnico.apoderadoDni})` : ''}`}
+                                    >
+                                      📋 Cobra: {expUnico.apoderadoNombre || 'Con Poder'}
+                                    </span>
                                   )}
+                                  {expUnico && expUnico.beneficiarios && expUnico.beneficiarios.length > 1 ? (
+                                    <div className="mt-0.5 space-y-0.5">
+                                      {expUnico.beneficiarios.map((b, bi) => (
+                                        <p key={bi} className="text-[10px] text-text-sec truncate" title={`${b.nombre}: ${fmtMonto(b.monto)} (${b.porcentaje}%)`}>
+                                          • {b.nombre}: <span className="font-semibold text-text-main">{fmtMonto(b.monto)}</span>
+                                        </p>
+                                      ))}
+                                    </div>
+                                  ) : grupo.totalPagados > 0 ? (
+                                    <p className="text-[10px] text-emerald-600 font-medium">{grupo.totalPagados} pago{grupo.totalPagados !== 1 ? 's' : ''} realizado{grupo.totalPagados !== 1 ? 's' : ''}</p>
+                                  ) : null}
                                 </div>
                               ) : (
                                 <span className="text-xs text-text-sec">—</span>
@@ -696,17 +1063,49 @@ export default function ExpedientesPage() {
                             </td>
                             <td className="px-4 py-3.5">
                               <div>
-                                <span className="text-sm font-bold text-text-main">{fmtMonto(grupo.totalMonto)}</span>
-                                {grupo.totalMontoFinal !== grupo.totalMonto && (
-                                  <span className="block text-[10px] text-green-600 font-medium">Neto: {fmtMonto(grupo.totalMontoFinal)}</span>
+                                <span className="text-sm font-bold text-emerald-700" title="Monto total dado / entregado">
+                                  {fmtMonto(grupo.totalMontoDado)}
+                                </span>
+                                {grupo.totalMonto !== grupo.totalMontoDado && (
+                                  <span className="block text-[10px] text-text-sec">Base: {fmtMonto(grupo.totalMonto)}</span>
                                 )}
-                                {grupo.totalRecibido > 0 && grupo.totalRecibido !== grupo.totalMontoFinal && (
-                                  <span className="block text-[10px] text-emerald-600 font-semibold">Recibido: {fmtMonto(grupo.totalRecibido)}</span>
+                                {expUnico && expUnico.descuentoCovid != null && expUnico.descuentoCovid > 0 && (
+                                  <span className="block text-[10px] text-amber-700 font-medium">Dto. COVID: -{fmtMonto(expUnico.descuentoCovid)}</span>
                                 )}
                                 {grupo.expedientes.some((e) => e.tieneSaldoPendiente) && (
                                   <span className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 text-[9px] font-bold rounded bg-amber-100 text-amber-800 border border-amber-300">
                                     Saldo pend.: S/ {grupo.expedientes.reduce((sum, e) => sum + (Number(e.saldoPendiente) || 0), 0).toFixed(2)}
                                   </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3.5">
+                              <div className="space-y-1 min-w-[130px]">
+                                {grupo.formasPago.length > 0 ? (
+                                  <div className="flex flex-wrap gap-1">
+                                    {grupo.formasPago.map((fp) => (
+                                      <span
+                                        key={fp}
+                                        className={`inline-flex items-center px-2 py-0.5 text-[10px] font-bold rounded border ${FORMA_PAGO_BADGE[fp] || 'bg-slate-100 text-slate-700 border-slate-300'}`}
+                                      >
+                                        {FORMA_PAGO_LABELS[fp] || fp}
+                                      </span>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <span className="text-[11px] text-text-sec">Por definir</span>
+                                )}
+                                {grupo.bancos.length > 0 ? (
+                                  <p className="text-xs font-semibold text-text-main truncate max-w-[160px]" title={`Banco(s): ${grupo.bancos.join(', ')}`}>
+                                    {grupo.bancos.join(', ')}
+                                  </p>
+                                ) : (
+                                  <p className="text-[10px] text-text-sec">Sin banco reg.</p>
+                                )}
+                                {cuentasUnico.length > 0 && (
+                                  <p className="text-[10px] text-text-sec truncate max-w-[160px]" title={cuentasUnico.join(' | ')}>
+                                    Cta/Ref: {cuentasUnico[0]}
+                                  </p>
                                 )}
                               </div>
                             </td>
@@ -762,6 +1161,13 @@ export default function ExpedientesPage() {
                                     </button>
                                   )}
                                   {esAdmin && (
+                                    <button onClick={() => setEditarExpId(grupo.expedientes[0].id)}
+                                      className="p-1.5 rounded-lg hover:bg-blue-50 text-[#3258CA] transition-colors" title="Editar expediente (Administrador)"
+                                      aria-label="Editar expediente">
+                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                                    </button>
+                                  )}
+                                  {esAdmin && (
                                     <button onClick={() => setEliminarTarget(grupo.expedientes[0])}
                                       className="p-1.5 rounded-lg hover:bg-red-50 text-red-500 transition-colors" title="Eliminar expediente"
                                       aria-label="Eliminar expediente">
@@ -790,6 +1196,9 @@ export default function ExpedientesPage() {
                           {/* Sub-rows: expedientes individuales (solo si expandido) */}
                           {expandido && !soloUno && grupo.expedientes.map((exp) => {
                             const recibeExp = nombreRecibidoExp(exp);
+                            const mDadoExp = obtenerMontoDadoExp(exp);
+                            const bancosExp = obtenerBancosExp(exp);
+                            const fpExp = normalizarFormaPagoUI(exp.formaPago, exp.estado, bancosExp.length > 0);
                             return (
                               <tr key={exp.id} className={`hover:bg-blue-50/30 transition-colors ${!exp.documentacionCompleta ? 'bg-red-50/20' : 'bg-gray-50/50'}`}>
                                 <td className="px-3 py-2.5 pl-10">
@@ -808,14 +1217,22 @@ export default function ExpedientesPage() {
                                     <div className="min-w-0 max-w-[180px] space-y-0.5">
                                       {exp.beneficiarios.map((b, bi) => (
                                         <p key={bi} className="text-[11px] text-text-main truncate" title={`${b.nombre} (${b.porcentaje}% · S/ ${b.monto.toFixed(2)})`}>
-                                          <span className="font-medium">{b.nombre}</span> <span className="text-primary font-semibold">({b.porcentaje}%)</span>
+                                          <span className="font-medium">{b.nombre}</span> <span className="text-primary font-semibold">({b.porcentaje}% · {fmtMonto(b.monto)})</span>
                                         </p>
                                       ))}
                                     </div>
                                   ) : recibeExp ? (
-                                    <div className="min-w-0 max-w-[160px]">
+                                    <div className="min-w-0 max-w-[165px]">
                                       <p className="text-xs font-medium text-text-main truncate" title={exp.solicitanteDni ? `${recibeExp} · DNI ${exp.solicitanteDni}` : recibeExp}>{recibeExp}</p>
                                       {exp.solicitanteDni && <p className="text-[10px] text-text-sec">DNI: {exp.solicitanteDni}</p>}
+                                      {exp.conCartaPoder && (
+                                        <span
+                                          className="inline-flex items-center gap-1 mt-0.5 px-1.5 py-0.5 text-[9px] font-bold rounded bg-amber-100 text-amber-800 border border-amber-300 max-w-full truncate"
+                                          title={`Otorgante: ${exp.poderOtorganteNombre || recibeExp} → Cobra con Carta Poder: ${exp.apoderadoNombre || 'Apoderado'}`}
+                                        >
+                                          📋 Cobra: {exp.apoderadoNombre || 'Carta Poder'}
+                                        </span>
+                                      )}
                                     </div>
                                   ) : (
                                     <span className="text-xs text-text-sec">—</span>
@@ -823,14 +1240,30 @@ export default function ExpedientesPage() {
                                 </td>
                                 <td className="px-4 py-2.5">
                                   <div>
-                                    <span className="text-xs font-semibold text-text-main">{fmtMonto(exp.monto)}</span>
-                                    {exp.montoFinal != null && exp.montoFinal !== exp.monto && (
-                                      <span className="block text-[10px] text-green-600">→ {fmtMonto(exp.montoFinal)}</span>
+                                    <span className="text-xs font-bold text-emerald-700">{fmtMonto(mDadoExp)}</span>
+                                    {exp.monto !== mDadoExp && (
+                                      <span className="block text-[10px] text-text-sec">Base: {fmtMonto(exp.monto)}</span>
                                     )}
                                     {exp.tieneSaldoPendiente && (
                                       <span className="block text-[10px] text-amber-700 font-semibold" title="Saldo pendiente normativo">
                                         Falta: S/ {Number(exp.saldoPendiente || 0).toFixed(2)}
                                       </span>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-4 py-2.5">
+                                  <div className="space-y-0.5">
+                                    {fpExp ? (
+                                      <span className={`inline-flex px-1.5 py-0.5 text-[9px] font-bold rounded border ${FORMA_PAGO_BADGE[fpExp] || 'bg-slate-100 text-slate-700 border-slate-300'}`}>
+                                        {FORMA_PAGO_LABELS[fpExp] || fpExp}
+                                      </span>
+                                    ) : (
+                                      <span className="text-[10px] text-text-sec">Por definir</span>
+                                    )}
+                                    {bancosExp.length > 0 && (
+                                      <p className="text-[11px] font-semibold text-text-main truncate max-w-[140px]" title={bancosExp.join(', ')}>
+                                        {bancosExp.join(', ')}
+                                      </p>
                                     )}
                                   </div>
                                 </td>
@@ -848,8 +1281,8 @@ export default function ExpedientesPage() {
                                 </td>
                                 <td className="px-4 py-2.5 text-[10px] text-text-sec whitespace-nowrap">{fmtFecha(exp.fechaSolicitud)}</td>
                                 <td className="px-4 py-2.5 text-[10px] whitespace-nowrap">
-                                  {exp.fechaPago ? (
-                                    <span className="font-medium text-emerald-700">{fmtFecha(exp.fechaPago)}</span>
+                                  {obtenerFechaDepositoExp(exp) ? (
+                                    <span className="font-medium text-emerald-700">{fmtFecha(obtenerFechaDepositoExp(exp))}</span>
                                   ) : (
                                     <span className="text-text-sec">—</span>
                                   )}
@@ -866,6 +1299,13 @@ export default function ExpedientesPage() {
                                         className="p-1 rounded hover:bg-amber-100 text-amber-700 transition-colors" title="Regularizar saldo pendiente"
                                         aria-label="Regularizar saldo pendiente">
                                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
+                                      </button>
+                                    )}
+                                    {esAdmin && (
+                                      <button onClick={() => setEditarExpId(exp.id)}
+                                        className="p-1 rounded hover:bg-blue-50 text-[#3258CA] transition-colors" title="Editar expediente (Administrador)"
+                                        aria-label="Editar expediente">
+                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                                       </button>
                                     )}
                                     {esAdmin && (
@@ -929,6 +1369,17 @@ export default function ExpedientesPage() {
           estado={eliminarTarget.estado}
           onDeleted={() => {
             setEliminarTarget(null);
+            fetchExpedientes();
+          }}
+        />
+      )}
+
+      {editarExpId && (
+        <EditarExpedienteModal
+          expedienteId={editarExpId}
+          onClose={() => setEditarExpId(null)}
+          onSaved={() => {
+            setEditarExpId(null);
             fetchExpedientes();
           }}
         />

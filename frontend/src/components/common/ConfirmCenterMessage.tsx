@@ -22,7 +22,15 @@ const TYPE_CONFIG: Record<MessageType, { bg: string; border: string; icon: React
     bg: 'bg-white',
     border: 'border-[#16A34A]',
     icon: (
-      <svg className="w-7 h-7 text-[#16A34A]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <svg
+        className="w-7 h-7 text-[#16A34A] flex-shrink-0"
+        width={28}
+        height={28}
+        style={{ width: '28px', height: '28px', minWidth: '28px', minHeight: '28px', flexShrink: 0 }}
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+      >
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
     ),
@@ -31,7 +39,15 @@ const TYPE_CONFIG: Record<MessageType, { bg: string; border: string; icon: React
     bg: 'bg-white',
     border: 'border-[#DC2626]',
     icon: (
-      <svg className="w-7 h-7 text-[#DC2626]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <svg
+        className="w-7 h-7 text-[#DC2626] flex-shrink-0"
+        width={28}
+        height={28}
+        style={{ width: '28px', height: '28px', minWidth: '28px', minHeight: '28px', flexShrink: 0 }}
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+      >
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
     ),
@@ -40,7 +56,15 @@ const TYPE_CONFIG: Record<MessageType, { bg: string; border: string; icon: React
     bg: 'bg-white',
     border: 'border-[#D97706]',
     icon: (
-      <svg className="w-7 h-7 text-[#D97706]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <svg
+        className="w-7 h-7 text-[#D97706] flex-shrink-0"
+        width={28}
+        height={28}
+        style={{ width: '28px', height: '28px', minWidth: '28px', minHeight: '28px', flexShrink: 0 }}
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+      >
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
       </svg>
     ),
@@ -49,7 +73,15 @@ const TYPE_CONFIG: Record<MessageType, { bg: string; border: string; icon: React
     bg: 'bg-white',
     border: 'border-[#3258CA]',
     icon: (
-      <svg className="w-7 h-7 text-[#3258CA]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <svg
+        className="w-7 h-7 text-[#3258CA] flex-shrink-0"
+        width={28}
+        height={28}
+        style={{ width: '28px', height: '28px', minWidth: '28px', minHeight: '28px', flexShrink: 0 }}
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+      >
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
     ),

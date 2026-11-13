@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Sidebar from '@/components/layout/Sidebar';
 import Header from '@/components/layout/Header';
 import Breadcrumbs from '@/components/layout/Breadcrumbs';
+import ConfirmCenterMessage from '@/components/common/ConfirmCenterMessage';
 
 export default function DashboardLayout({
   children,
@@ -61,6 +62,7 @@ export default function DashboardLayout({
   return (
     <div className="min-h-screen flex flex-col bg-bg-layout">
       <Header onMenuClick={() => setMobileOpen(true)} />
+      <ConfirmCenterMessage />
       <div className="flex flex-1 min-h-0">
         <Sidebar mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} />
         {mobileOpen && (

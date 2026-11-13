@@ -58,7 +58,7 @@ export class ExpedienteSlaService {
   async getResumenDashboard(userId: string, userRol: string) {
     const ahora = new Date();
 
-    const [total, porEstado, porTipo, sinAsignar, conSaldoPendienteCount, saldoPendienteAgg] = await Promise.all([
+    const [total, porEstado, porTipo, sinAsignar, conSaldoPendienteCount, saldoPendienteAgg, expedientesFinancieros] = await Promise.all([
       this.prisma.famSolicitudBeneficio.count({ where: { estado: { notIn: ['PAGADA', 'RECHAZADA'] } } }),
       this.prisma.famSolicitudBeneficio.groupBy({ by: ['estado'], _count: true, where: { estado: { notIn: ['PAGADA', 'RECHAZADA'] } } }),
       this.prisma.famSolicitudBeneficio.groupBy({ by: ['tipoBeneficioId'], _count: true }),
@@ -67,6 +67,24 @@ export class ExpedienteSlaService {
       this.prisma.famSolicitudBeneficio.aggregate({
         _sum: { saldoPendiente: true },
         where: { tieneSaldoPendiente: true },
+      }),
+      this.prisma.famSolicitudBeneficio.findMany({
+        where: { estado: { not: 'RECHAZADA' } },
+        select: {
+          id: true,
+          estado: true,
+          monto: true,
+          montoFinal: true,
+          montoTotalAsignado: true,
+          formaPago: true,
+          banco: true,
+          depositos: {
+            select: {
+              monto: true,
+              banco: true,
+            },
+          },
+        },
       }),
     ]);
 
@@ -98,6 +116,75 @@ export class ExpedienteSlaService {
       if (info) info.count = pt._count;
     });
 
+    let montoTotalEntregado = 0;
+    let montoTotalAsignadoGlobal = 0;
+    let pagadosCount = 0;
+    const mapaFormaPago = new Map<string, { formaPago: string; count: number; monto: number }>();
+    const mapaBanco = new Map<string, { banco: string; count: number; monto: number }>();
+
+    const normalizarFormaPago = (fp: string | null | undefined, tieneDepositos: boolean, pagada: boolean): string => {
+      const limpio = (fp || '')
+        .toUpperCase()
+        .trim()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+      if (limpio.includes('CHEQUE')) return 'CHEQUE';
+      if (limpio.includes('DEPOSITO')) return 'DEPOSITO';
+      if (limpio.includes('TRANSFERENCIA')) return 'TRANSFERENCIA';
+      if (limpio.includes('EFECTIVO')) return 'EFECTIVO';
+      if (limpio) return limpio;
+      if (tieneDepositos || pagada) return 'DEPOSITO';
+      return 'POR DEFINIR';
+    };
+
+    for (const exp of expedientesFinancieros) {
+      const depositos = exp.depositos || [];
+      const sumaDepositos = depositos.reduce((acc, d) => acc + (Number(d.monto) || 0), 0);
+      const montoBaseExp =
+        exp.montoTotalAsignado != null && Number(exp.montoTotalAsignado) > 0
+          ? Number(exp.montoTotalAsignado)
+          : exp.montoFinal != null
+            ? Number(exp.montoFinal)
+            : Number(exp.monto) || 0;
+      const montoDado = sumaDepositos > 0 ? sumaDepositos : montoBaseExp;
+
+      montoTotalAsignadoGlobal += montoDado;
+      const esPagada = exp.estado === 'PAGADA';
+      if (esPagada) {
+        pagadosCount += 1;
+        montoTotalEntregado += montoDado;
+      }
+
+      const fpKey = normalizarFormaPago(exp.formaPago, depositos.length > 0, esPagada);
+      if (esPagada || exp.formaPago || depositos.length > 0) {
+        const itemFp = mapaFormaPago.get(fpKey) || { formaPago: fpKey, count: 0, monto: 0 };
+        itemFp.count += 1;
+        itemFp.monto = Math.round((itemFp.monto + montoDado) * 100) / 100;
+        mapaFormaPago.set(fpKey, itemFp);
+      }
+
+      if (depositos.length > 0) {
+        const bancosVistosEnExp = new Set<string>();
+        for (const d of depositos) {
+          const nombreBanco = (d.banco || exp.banco || '').trim().toUpperCase();
+          if (!nombreBanco) continue;
+          const itemB = mapaBanco.get(nombreBanco) || { banco: nombreBanco, count: 0, monto: 0 };
+          if (!bancosVistosEnExp.has(nombreBanco)) {
+            itemB.count += 1;
+            bancosVistosEnExp.add(nombreBanco);
+          }
+          itemB.monto = Math.round((itemB.monto + (Number(d.monto) || 0)) * 100) / 100;
+          mapaBanco.set(nombreBanco, itemB);
+        }
+      } else if (exp.banco && exp.banco.trim()) {
+        const nombreBanco = exp.banco.trim().toUpperCase();
+        const itemB = mapaBanco.get(nombreBanco) || { banco: nombreBanco, count: 0, monto: 0 };
+        itemB.count += 1;
+        itemB.monto = Math.round((itemB.monto + montoDado) * 100) / 100;
+        mapaBanco.set(nombreBanco, itemB);
+      }
+    }
+
     return {
       misTendientes: userRol === 'ADMINISTRADOR' ? total : porEstado.reduce((s, e) => s + e._count, 0),
       sinAsignar,
@@ -106,6 +193,11 @@ export class ExpedienteSlaService {
       porTipo: Array.from(mapaTipos.values()),
       conSaldoPendienteCount,
       saldoPendienteTotal: Number(saldoPendienteAgg._sum.saldoPendiente || 0),
+      montoTotalEntregado: Math.round(montoTotalEntregado * 100) / 100,
+      montoTotalAsignadoGlobal: Math.round(montoTotalAsignadoGlobal * 100) / 100,
+      pagadosCount,
+      porFormaPago: Array.from(mapaFormaPago.values()).sort((a, b) => b.monto - a.monto),
+      porBanco: Array.from(mapaBanco.values()).sort((a, b) => b.monto - a.monto),
     };
   }
 

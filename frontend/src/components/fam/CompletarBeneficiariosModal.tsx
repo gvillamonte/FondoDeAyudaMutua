@@ -171,7 +171,7 @@ export default function CompletarBeneficiariosModal({
   const seleccionarTodos = (checked: boolean) => {
     setFilas((prev) => {
       const actualizadas = prev.map((f) => ({ ...f, incluido: checked }));
-      if (!checked || pagada || modalidad !== 'monto_compartido') return actualizadas;
+      if (!checked || (pagada && !isAdmin) || modalidad !== 'monto_compartido') return actualizadas;
       const sumaActual = actualizadas.reduce(
         (acc, f) => acc + (parseFloat(f.porcentaje) || 0),
         0,
@@ -183,12 +183,12 @@ export default function CompletarBeneficiariosModal({
   };
 
   const repartirManual = () => {
-    if (pagada) return;
+    if (pagada && !isAdmin) return;
     setFilas((prev) => repartirEntreIncluidos(prev));
   };
 
   const agregarFilaManual = () => {
-    if (pagada) return;
+    if (pagada && !isAdmin) return;
     const nuevaKey = `nuevo-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     setFilas((prev) => {
       const nuevaLista: FilaBeneficiario[] = [
@@ -212,7 +212,7 @@ export default function CompletarBeneficiariosModal({
   };
 
   const eliminarFilaManual = (key: string) => {
-    if (pagada) return;
+    if (pagada && !isAdmin) return;
     setFilas((prev) => repartirEntreIncluidos(prev.filter((f) => f.key !== key)));
   };
 
@@ -359,7 +359,7 @@ export default function CompletarBeneficiariosModal({
                   <input
                     type="checkbox"
                     checked={todosIncluidos}
-                    disabled={pagada || filas.length === 0}
+                    disabled={(!isAdmin && pagada) || filas.length === 0}
                     onChange={(e) => seleccionarTodos(e.target.checked)}
                     className="w-4 h-4 accent-[#3258CA]"
                   />
@@ -369,7 +369,7 @@ export default function CompletarBeneficiariosModal({
                   <span className="text-[11px] text-text-sec">
                     {filas.filter((f) => f.incluido).length} de {filas.length} seleccionados
                   </span>
-                  {!pagada && (
+                  {(!pagada || isAdmin) && (
                     <>
                       {filas.filter((f) => f.incluido).length > 1 && (
                         <button
@@ -405,7 +405,7 @@ export default function CompletarBeneficiariosModal({
                 {filas.map((f) => (
                   <div key={f.key} className={`border rounded-lg p-3 ${f.incluido ? 'border-primary/40 bg-primary/5' : 'border-border bg-white'}`}>
                     <div className="flex items-start gap-3">
-                      <input type="checkbox" checked={f.incluido} disabled={pagada || (f.yaVinculado && pagada)}
+                      <input type="checkbox" checked={f.incluido} disabled={(!isAdmin && pagada) || (f.yaVinculado && !isAdmin && pagada)}
                         onChange={(e) => actualizar(f.key, { incluido: e.target.checked })}
                         className="mt-1 w-4 h-4 accent-[#3258CA]" />
                       <div className="flex-1 min-w-0 space-y-2">
@@ -444,7 +444,7 @@ export default function CompletarBeneficiariosModal({
                               {f.yaVinculado && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-primary/10 text-primary">YA INCLUIDO</span>}
                             </div>
                           )}
-                          {f.esNuevoManual && !pagada && (
+                          {f.esNuevoManual && (!pagada || isAdmin) && (
                             <button
                               type="button"
                               onClick={() => eliminarFilaManual(f.key)}
@@ -476,7 +476,7 @@ export default function CompletarBeneficiariosModal({
                               <div>
                                 <label className="block text-[10px] font-semibold text-text-sec uppercase mb-0.5">%</label>
                                 <input type="number" min={0} max={100} step="0.01" value={f.porcentaje}
-                                  disabled={pagada}
+                                  disabled={!isAdmin && pagada}
                                   onChange={(e) => actualizar(f.key, { porcentaje: e.target.value })}
                                   className="w-full px-2 py-1.5 border border-border rounded text-xs" />
                               </div>

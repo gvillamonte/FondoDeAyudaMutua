@@ -270,16 +270,15 @@ export default function ExpedientesPage() {
     setError('');
     try {
       const params: Record<string, string | number> = { page, limit };
-      if (tab === 'historial') params.estado = 'PAGADA';
-      else if (estadoFiltro) params.estado = estadoFiltro;
+      if (estadoFiltro) params.estado = estadoFiltro;
       if (search) params.search = search;
       if (tipoFiltro) params.tipoBeneficioId = tipoFiltro;
       if (docsFiltro) params.documentacionCompleta = docsFiltro;
       if (saldoFiltro) params.conSaldoPendiente = saldoFiltro;
       if (formaPagoFiltro) params.formaPago = formaPagoFiltro;
       if (bancoFiltro) params.banco = bancoFiltro;
-      if (tab === 'todos' && fechaDesde) params.fechaDesde = fechaDesde;
-      if (tab === 'todos' && fechaHasta) params.fechaHasta = fechaHasta;
+      if (fechaDesde) params.fechaDesde = fechaDesde;
+      if (fechaHasta) params.fechaHasta = fechaHasta;
 
       const { data } = await api.get('/fam-beneficios', { params });
       setExpedientes(Array.isArray(data?.data) ? data.data : []);
@@ -499,16 +498,15 @@ export default function ExpedientesPage() {
       let totalPagesExport = 1;
       for (let p = 1; p <= totalPagesExport && p <= 40; p++) {
         const params: Record<string, string | number> = { page: p, limit: 100, ordenarPor: 'ingreso' };
-        if (tab === 'historial') params.estado = 'PAGADA';
-        else if (estadoFiltro) params.estado = estadoFiltro;
+        if (estadoFiltro) params.estado = estadoFiltro;
         if (search) params.search = search;
         if (tipoFiltro) params.tipoBeneficioId = tipoFiltro;
         if (docsFiltro) params.documentacionCompleta = docsFiltro;
         if (saldoFiltro) params.conSaldoPendiente = saldoFiltro;
         if (formaPagoFiltro) params.formaPago = formaPagoFiltro;
         if (bancoFiltro) params.banco = bancoFiltro;
-        if (tab === 'todos' && fechaDesde) params.fechaDesde = fechaDesde;
-        if (tab === 'todos' && fechaHasta) params.fechaHasta = fechaHasta;
+        if (fechaDesde) params.fechaDesde = fechaDesde;
+        if (fechaHasta) params.fechaHasta = fechaHasta;
         const { data } = await api.get('/fam-beneficios', { params });
         all.push(...(data?.data || []));
         totalPagesExport = data?.meta?.totalPages || 1;
@@ -621,12 +619,12 @@ export default function ExpedientesPage() {
   };
 
   const totalPages = Math.ceil(total / limit) || 1;
-  const filtrosActivos = search || tipoFiltro || docsFiltro || saldoFiltro || formaPagoFiltro || bancoFiltro || (tab === 'todos' && (estadoFiltro || fechaDesde || fechaHasta));
+  const filtrosActivos = search || tipoFiltro || estadoFiltro || docsFiltro || saldoFiltro || formaPagoFiltro || bancoFiltro || fechaDesde || fechaHasta;
   const desde = total > 0 ? (page - 1) * limit + 1 : 0;
   const hasta = Math.min(page * limit, total);
 
   const TABS = [
-    { key: 'historial' as const, label: 'Historial de Entregas', desc: 'Beneficios ya pagados' },
+    { key: 'historial' as const, label: 'Historial de Entregas', desc: 'Todo lo registrado' },
     { key: 'todos' as const, label: 'Todos los Expedientes', desc: 'Todos los estados' },
     { key: 'reporte' as const, label: 'Reporte de Entregas', desc: 'Quién recibió y cuánto' },
     { key: 'duplicados' as const, label: 'Duplicados', desc: 'Beneficios otorgados más de una vez' },
@@ -867,13 +865,11 @@ export default function ExpedientesPage() {
                   <option key={bco} value={bco}>{bco}</option>
                 ))}
               </select>
-              {tab === 'todos' && (
-                <select value={estadoFiltro} onChange={(e) => setEstadoFiltro(e.target.value)}
-                  className="w-full sm:w-auto border border-border-main rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30">
-                  <option value="">Todos los estados</option>
-                  {ESTADO_OPTIONS.map((e) => <option key={e} value={e}>{ESTADO_LABELS[e]}</option>)}
-                </select>
-              )}
+              <select value={estadoFiltro} onChange={(e) => setEstadoFiltro(e.target.value)}
+                className="w-full sm:w-auto border border-border-main rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30">
+                <option value="">Todos los estados</option>
+                {ESTADO_OPTIONS.map((e) => <option key={e} value={e}>{ESTADO_LABELS[e]}</option>)}
+              </select>
               <select value={docsFiltro} onChange={(e) => setDocsFiltro(e.target.value)}
                 className="w-full sm:w-auto border border-border-main rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30">
                 <option value="">Toda documentación</option>
@@ -886,15 +882,13 @@ export default function ExpedientesPage() {
                 <option value="SI">Con saldo pendiente</option>
                 <option value="NO">Sin saldo pendiente</option>
               </select>
-              {tab === 'todos' && (
-                <div className="flex items-center gap-1.5">
-                  <input type="date" value={fechaDesde} onChange={(e) => setFechaDesde(e.target.value)}
-                    className="flex-1 sm:flex-none border border-border-main rounded-lg px-2.5 py-2 text-sm bg-white min-w-0" />
-                  <span className="text-xs text-text-sec">a</span>
-                  <input type="date" value={fechaHasta} onChange={(e) => setFechaHasta(e.target.value)}
-                    className="flex-1 sm:flex-none border border-border-main rounded-lg px-2.5 py-2 text-sm bg-white min-w-0" />
-                </div>
-              )}
+              <div className="flex items-center gap-1.5">
+                <input type="date" value={fechaDesde} onChange={(e) => setFechaDesde(e.target.value)}
+                  className="flex-1 sm:flex-none border border-border-main rounded-lg px-2.5 py-2 text-sm bg-white min-w-0" />
+                <span className="text-xs text-text-sec">a</span>
+                <input type="date" value={fechaHasta} onChange={(e) => setFechaHasta(e.target.value)}
+                  className="flex-1 sm:flex-none border border-border-main rounded-lg px-2.5 py-2 text-sm bg-white min-w-0" />
+              </div>
               <div className="flex items-center gap-2">
                 <button onClick={() => { setSearch(searchInput); setPage(1); }}
                   className="flex-1 sm:flex-none px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary/90 transition-colors">
@@ -954,17 +948,8 @@ export default function ExpedientesPage() {
                       <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-3">
                         <svg className="w-8 h-8 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                       </div>
-                      <p className="text-sm font-medium">No se encontraron expedientes{tab === 'historial' && search ? ' pagados' : ''}</p>
+                      <p className="text-sm font-medium">No se encontraron expedientes</p>
                       <p className="text-xs text-text-sec mt-1">Intente ajustar los filtros de búsqueda</p>
-                      {tab === 'historial' && search && (
-                        <button
-                          type="button"
-                          onClick={() => setTab('todos')}
-                          className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-primary bg-primary/10 rounded-lg hover:bg-primary/20 transition-colors"
-                        >
-                          Buscar en &quot;Todos los Expedientes&quot; (todos los estados) →
-                        </button>
-                      )}
                     </div>
                   </td></tr>
                 ) : (

@@ -593,14 +593,47 @@ export class FamService implements OnModuleInit, OnModuleDestroy {
 
     this.enforceReadOnly(query);
     const result = await request.query(query);
+    const recordset = result.recordset || [];
 
-    return result.recordset.map((r: any) => ({
-      COLEGIADO_ID: String(r.COLEGIADO_ID),
-      NUM_COLEGIATURA: r.NUM_COLEGIATURA,
-      DNI: r.DNI,
-      NOMBRE_COLEGIADO: r.NOMBRE_COLEGIADO,
-      ESTADO: r.ESTADO,
-    }));
+    const ids = recordset.map((r: any) => String(r.COLEGIADO_ID));
+    const idsSinPrefijo = ids.map((id) => id.replace(/^C-/, ''));
+    const todosPosibles = [...new Set([...ids, ...idsSinPrefijo, ...idsSinPrefijo.map((id) => `C-${id}`)])];
+
+    let fallecidosSet = new Set<string>();
+    if (todosPosibles.length > 0) {
+      try {
+        const solsFallecidas = await this.prisma.famSolicitudBeneficio.findMany({
+          where: {
+            colegiadoId: { in: todosPosibles },
+            estado: { not: 'RECHAZADA' },
+            OR: [
+              { tipoBeneficio: { codigo: 'FALLECIMIENTO' } },
+              { tipoBeneficio: { nombre: { contains: 'Fallecimiento' } } },
+              { fechaDefuncion: { not: null } },
+              { actaDefuncion: { not: null } },
+            ],
+          },
+          select: { colegiadoId: true },
+        });
+        fallecidosSet = new Set(
+          solsFallecidas.map((s) => String(s.colegiadoId).replace(/^C-/, '')),
+        );
+      } catch {}
+    }
+
+    return recordset.map((r: any) => {
+      const colId = String(r.COLEGIADO_ID);
+      const rawId = colId.replace(/^C-/, '');
+      const esFallecido = fallecidosSet.has(rawId) || String(r.ESTADO).toUpperCase().includes('FALLEC');
+      return {
+        COLEGIADO_ID: colId,
+        NUM_COLEGIATURA: r.NUM_COLEGIATURA,
+        DNI: r.DNI,
+        NOMBRE_COLEGIADO: r.NOMBRE_COLEGIADO,
+        ESTADO: esFallecido ? 'FALLECIDO' : r.ESTADO,
+        fallecido: esFallecido,
+      };
+    });
   }
 
   /**

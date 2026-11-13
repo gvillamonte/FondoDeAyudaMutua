@@ -10,6 +10,7 @@ import SucesionIntestadaMultiplesBeneficiarios, {
 import ModalNuevaCarta from '@/components/fam/ModalNuevaCarta';
 import ModalNuevoMemorando from '@/components/fam/ModalNuevoMemorando';
 import ModalAlertaSaldoPendiente from '@/components/fam/ModalAlertaSaldoPendiente';
+import ModalBeneficiariosFallecido from '@/components/fam/ModalBeneficiariosFallecido';
 import {
   procesarArchivoDocumento,
   unirDocumentosPdf,
@@ -22,6 +23,7 @@ interface ColegiadoSel {
   DNI: string;
   NOMBRE_COLEGIADO: string;
   ESTADO: string;
+  fallecido?: boolean;
 }
 
 interface FilaBeneficiario {
@@ -180,6 +182,27 @@ export default function RegistroExpedienteDrawer({ open, onClose, onSaved }: { o
   };
   const [colegiadoFallecido, setColegiadoFallecido] = useState(false);
   const [mensajeFallecido, setMensajeFallecido] = useState('');
+  const [expedientePrevioActivo, setExpedientePrevioActivo] = useState<any | null>(null);
+  const [showModalBeneficiariosFallecido, setShowModalBeneficiariosFallecido] = useState(false);
+  const [confirmarRegistroDuplicado, setConfirmarRegistroDuplicado] = useState(true);
+
+  const cargarBeneficiariosPreviosAlFormulario = (bens: any[]) => {
+    if (!bens || bens.length === 0) return;
+    const mapeados: FilaBeneficiario[] = bens.map((b, idx) => ({
+      key: `prev-${idx}-${Date.now()}`,
+      id: b.id,
+      nombre: b.nombre || '',
+      dni: b.dni || '',
+      parentesco: b.parentesco || 'Familiar',
+      porcentaje: String(b.porcentajeAsignado != null ? Number(b.porcentajeAsignado) : (Number(b.porcentaje) || 0)),
+      observaciones: '',
+      esManual: true,
+    }));
+    setBeneficiariosReg(mapeados);
+    if (mapeados.length > 0) {
+      setSolicitanteKeys([mapeados[0].key]);
+    }
+  };
 
   const resetForm = useCallback(() => {
     setColegiado(null);
@@ -205,6 +228,8 @@ export default function RegistroExpedienteDrawer({ open, onClose, onSaved }: { o
     setError('');
     setColegiadoFallecido(false);
     setMensajeFallecido('');
+    setExpedientePrevioActivo(null);
+    setConfirmarRegistroDuplicado(true);
     setCovidDescuento(null);
     setForm({
       tipoBeneficioConfigId: null,
@@ -338,17 +363,18 @@ export default function RegistroExpedienteDrawer({ open, onClose, onSaved }: { o
         const { data: act } = await api.get('/fam-beneficios/activo', {
           params: { colegiadoId: col.COLEGIADO_ID },
         });
-        if (act?.colegiadoFallecido || act?.bloqueadoPorFallecimiento) {
+        setExpedientePrevioActivo(act || null);
+        if (act?.colegiadoFallecido || act?.bloqueadoPorFallecimiento || col.ESTADO === 'FALLECIDO') {
           setColegiadoFallecido(true);
-          const msg = act.mensajeFallecido || 'No se pueden registrar más beneficios porque el colegiado está fallecido.';
+          const msg = act?.mensajeFallecido || 'Colegiado registrado con fallecimiento en el sistema.';
           setMensajeFallecido(msg);
-          setError(msg);
         } else {
           setColegiadoFallecido(false);
           setMensajeFallecido('');
         }
       } catch {
         setColegiadoFallecido(false);
+        setExpedientePrevioActivo(null);
       }
 
       // Verificar asignación COVID activa
@@ -588,7 +614,9 @@ export default function RegistroExpedienteDrawer({ open, onClose, onSaved }: { o
 
   const validar = (): string => {
     if (!colegiado) return 'Seleccione el colegiado';
-    if (colegiadoFallecido) return mensajeFallecido || 'No se pueden registrar más beneficios porque el colegiado está fallecido.';
+    if (colegiadoFallecido && !confirmarRegistroDuplicado) {
+      return mensajeFallecido || 'Confirme la casilla para registrar el expediente del colegiado fallecido.';
+    }
     if (!form.tipoBeneficioConfigId) return 'Seleccione el tipo de beneficio';
     if (!(parseFloat(form.monto) > 0)) return 'Ingrese un monto válido mayor a 0';
     if (form.documentacionCompleta === false && !form.documentacionObservacion.trim())
@@ -740,6 +768,11 @@ export default function RegistroExpedienteDrawer({ open, onClose, onSaved }: { o
         monto: parseFloat(form.monto),
         moneda: 'PEN',
         modalidadBeneficio: modalidad,
+        permitirDuplicado: Boolean(
+          confirmarRegistroDuplicado ||
+          colegiadoFallecido ||
+          colegiado?.ESTADO === 'FALLECIDO'
+        ),
         ...(covidDescuento && { covidAsignacionId: covidDescuento.asignacionId }),
         fechaSolicitud: form.fechaSolicitud || undefined,
         fechaPago: fechaDepositoEfectiva,
@@ -901,6 +934,11 @@ export default function RegistroExpedienteDrawer({ open, onClose, onSaved }: { o
                       className="w-full text-left px-4 py-2.5 hover:bg-gray-50 border-b border-border last:border-0 transition-colors">
                       <span className="text-sm font-semibold text-primary">{s.NUM_COLEGIATURA}</span>
                       <span className="text-sm text-text-main ml-2">{s.NOMBRE_COLEGIADO}</span>
+                      {s.fallecido && (
+                        <span className="ml-2 px-1.5 py-0.5 text-[10px] font-bold rounded bg-red-100 text-red-700 border border-red-200">
+                          FALLECIDO
+                        </span>
+                      )}
                       <span className="text-xs text-text-sec float-right mt-0.5">DNI: {s.DNI || '-'}</span>
                     </button>
                   ))}
@@ -911,17 +949,93 @@ export default function RegistroExpedienteDrawer({ open, onClose, onSaved }: { o
               <div className="bg-gray-50 rounded-lg p-3 flex items-center gap-4 text-sm">
                 <span className="font-semibold text-primary">{colegiado.NUM_COLEGIATURA}</span>
                 <span className="text-text-main">{colegiado.NOMBRE_COLEGIADO}</span>
-                <span className={`ml-auto inline-flex px-2 py-0.5 text-xs rounded-full ${colegiado.ESTADO === 'HABILITADO' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{colegiado.ESTADO}</span>
+                <span className={`ml-auto inline-flex px-2 py-0.5 text-xs rounded-full ${
+                  colegiado.ESTADO === 'HABILITADO'
+                    ? 'bg-green-100 text-green-700'
+                    : (colegiado.ESTADO === 'FALLECIDO' || colegiadoFallecido)
+                    ? 'bg-red-100 text-red-700 font-bold'
+                    : 'bg-gray-100 text-gray-700'
+                }`}>
+                  {colegiado.ESTADO === 'FALLECIDO' || colegiadoFallecido ? 'FALLECIDO' : colegiado.ESTADO}
+                </span>
               </div>
             )}
-            {colegiadoFallecido && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-3.5 flex items-start gap-3 text-sm">
-                <span className="text-xl shrink-0">⚠️</span>
-                <div>
-                  <h4 className="font-bold text-red-800">Colegiado Fallecido - Registro Bloqueado</h4>
-                  <p className="text-xs text-red-700 mt-0.5 font-medium">
-                    {mensajeFallecido || 'No se pueden registrar más beneficios porque el colegiado está fallecido.'}
-                  </p>
+            {(colegiadoFallecido || colegiado?.ESTADO === 'FALLECIDO') && (
+              <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-4 shadow-sm space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-amber-100 text-amber-800 rounded-lg shrink-0 mt-0.5">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" width={20} height={20}>
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="text-sm font-bold text-amber-900">
+                          Alerta: Colegiado Registrado como Fallecido
+                        </h4>
+                        <span className="px-2 py-0.5 text-[11px] font-bold rounded-full bg-red-100 text-red-700 border border-red-200">
+                          FALLECIDO
+                        </span>
+                        {expedientePrevioActivo?.expedienteNumero && (
+                          <span className="px-2 py-0.5 text-[11px] font-semibold rounded-full bg-blue-100 text-blue-700">
+                            Exp. Previo: {expedientePrevioActivo.expedienteNumero}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-amber-800 mt-1">
+                        El colegiado <span className="font-semibold">{colegiado?.NOMBRE_COLEGIADO}</span> (CIP: <span className="font-semibold">{colegiado?.NUM_COLEGIATURA}</span> - DNI: <span className="font-semibold">{colegiado?.DNI || 'S/D'}</span>) figura como fallecido.
+                      </p>
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1.5 text-[11px] text-amber-900/90">
+                        {expedientePrevioActivo?.fechaDefuncion && (
+                          <span>📅 <strong>Fecha defunción:</strong> {new Date(expedientePrevioActivo.fechaDefuncion).toLocaleDateString('es-PE')}</span>
+                        )}
+                        {expedientePrevioActivo?.causaFallecimiento && (
+                          <span>📋 <strong>Causa:</strong> {expedientePrevioActivo.causaFallecimiento}</span>
+                        )}
+                        {expedientePrevioActivo?.solicitanteNombre && (
+                          <span>👤 <strong>Solicitante previo:</strong> {expedientePrevioActivo.solicitanteNombre}</span>
+                        )}
+                        {expedientePrevioActivo?.estado && (
+                          <span>🏷️ <strong>Estado trámite:</strong> {expedientePrevioActivo.estado}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="shrink-0 flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowModalBeneficiariosFallecido(true)}
+                      className="px-3.5 py-2 text-xs font-semibold text-primary bg-white border border-primary/40 rounded-lg hover:bg-primary hover:text-white transition-all shadow-sm flex items-center gap-1.5"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" width={16} height={16}>
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                      <span>Ver beneficiarios registrados</span>
+                      {expedientePrevioActivo?.beneficiarios && expedientePrevioActivo.beneficiarios.length > 0 && (
+                        <span className="ml-1 px-1.5 py-0.2 text-[10px] bg-primary/10 text-primary rounded-full font-bold">
+                          {expedientePrevioActivo.beneficiarios.length}
+                        </span>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-amber-200/70 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                  <label className="inline-flex items-center gap-2 text-xs text-amber-950 font-medium cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={confirmarRegistroDuplicado}
+                      onChange={(e) => setConfirmarRegistroDuplicado(e.target.checked)}
+                      className="w-4 h-4 text-primary rounded border-amber-300 focus:ring-primary"
+                    />
+                    <span>Permitir registrar expediente (Regularización / Duplicado permitido)</span>
+                  </label>
+                  <span className="text-[11px] text-amber-700 italic">
+                    * Puede continuar con el registro para regularizar o registrar este beneficio.
+                  </span>
                 </div>
               </div>
             )}
@@ -1730,7 +1844,7 @@ export default function RegistroExpedienteDrawer({ open, onClose, onSaved }: { o
           )}
           <div className="flex items-center justify-end gap-3">
             <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-text-sec bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">Cancelar</button>
-            <button onClick={() => guardar()} disabled={guardando || colegiadoFallecido}
+            <button onClick={() => guardar()} disabled={guardando}
               className="px-5 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary/90 disabled:opacity-50 inline-flex items-center gap-2 transition-colors">
               {guardando && (
                 <svg
@@ -1775,6 +1889,15 @@ export default function RegistroExpedienteDrawer({ open, onClose, onSaved }: { o
         montoMinimo={alertaSaldo.montoMinimo}
         saldoPendiente={alertaSaldo.saldoPendiente}
         guardando={guardando}
+      />
+
+      <ModalBeneficiariosFallecido
+        isOpen={showModalBeneficiariosFallecido}
+        onClose={() => setShowModalBeneficiariosFallecido(false)}
+        colegiado={colegiado}
+        expedientePrevio={expedientePrevioActivo}
+        beneficiarios={expedientePrevioActivo?.beneficiarios || []}
+        onCargarBeneficiarios={cargarBeneficiariosPreviosAlFormulario}
       />
     </div>
   );

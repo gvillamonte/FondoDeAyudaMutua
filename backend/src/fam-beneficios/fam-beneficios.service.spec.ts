@@ -250,6 +250,35 @@ describe('FamBeneficiosService - expediente unico y reparto por beneficiario', (
     expect(prisma.famSolicitudBeneficio.create).not.toHaveBeenCalled();
   });
 
+  it('permite registrar el beneficio si permitirDuplicado es true aun si el colegiado se encuentra fallecido', async () => {
+    prisma.tipoBeneficioConfig.findUnique.mockResolvedValue({ id: 2, nombre: 'COVID-19' });
+    prisma.tipoBeneficio.findMany.mockResolvedValue([
+      { id: 'TB-FAM-COVID', codigo: 'COVID_19', nombre: 'COVID-19' },
+    ]);
+    prisma.famSolicitudBeneficio.findFirst.mockResolvedValue({
+      id: 'exp-fallecimiento',
+      estado: 'PAGADA',
+      tipoBeneficio: { id: 'TB-FAM-001', codigo: 'FALLECIMIENTO', nombre: 'Fallecimiento' },
+    });
+    prisma.famSolicitudBeneficio.create.mockResolvedValue({ id: 'exp-duplicado' });
+    prisma.famBeneficiario.create.mockResolvedValue({ id: 'B1' });
+    prisma.famSolicitudBeneficiario.create.mockResolvedValue({});
+    jest.spyOn(service, 'obtenerPorId').mockResolvedValue({ id: 'exp-duplicado' } as any);
+
+    const resultado = await service.crearRegistro(
+      dtoRegistro({
+        tipoBeneficioConfigId: 2,
+        permitirDuplicado: true,
+        beneficiarios: [{ nombre: 'Ana', parentesco: 'Hija', porcentaje: 100 }],
+      }) as any,
+      'u-1',
+      '127.0.0.1',
+    );
+
+    expect(prisma.famSolicitudBeneficio.create).toHaveBeenCalled();
+    expect(resultado).toBeDefined();
+  });
+
   it('crear simple bloquea el beneficio si existe un fallecimiento previo', async () => {
     prisma.tipoBeneficio.findUnique.mockResolvedValue({
       id: 'TB-FAM-COVID',
@@ -270,6 +299,28 @@ describe('FamBeneficiosService - expediente unico y reparto por beneficiario', (
     ).rejects.toThrow('No se pueden registrar más beneficios porque el colegiado está fallecido.');
 
     expect(prisma.famSolicitudBeneficio.create).not.toHaveBeenCalled();
+  });
+
+  it('crear simple permite el beneficio si permitirDuplicado es true aun si existe un fallecimiento previo', async () => {
+    prisma.tipoBeneficio.findUnique.mockResolvedValue({
+      id: 'TB-FAM-COVID',
+      codigo: 'COVID_19',
+      nombre: 'COVID-19',
+    });
+    prisma.famSolicitudBeneficio.findFirst.mockResolvedValue({
+      id: 'exp-fallecimiento',
+      estado: 'PAGADA',
+      tipoBeneficio: { id: 'TB-FAM-001', codigo: 'FALLECIMIENTO', nombre: 'Fallecimiento' },
+    });
+    prisma.famSolicitudBeneficio.create.mockResolvedValue({ id: 'exp-simple-dup' });
+
+    const resultado = await service.crear(
+      { colegiadoId: 'C-7148', tipoBeneficioId: 'TB-FAM-COVID', monto: 2000, permitirDuplicado: true } as any,
+      'u-1',
+    );
+
+    expect(prisma.famSolicitudBeneficio.create).toHaveBeenCalled();
+    expect(resultado).toBeDefined();
   });
 
   it('crear simple bloquea un segundo expediente del mismo tipo', async () => {

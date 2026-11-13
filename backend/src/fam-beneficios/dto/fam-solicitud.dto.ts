@@ -307,6 +307,10 @@ export class CrearRegistroFamDto {
   @IsString()
   colegiadoId: string;
 
+  @IsOptional()
+  @IsBoolean()
+  permitirDuplicado?: boolean;
+
   @ValidateNested({ each: true })
   @Type(() => BeneficiarioRegistroDto)
   @ArrayMaxSize(20)
@@ -541,6 +545,10 @@ export class CrearRegistroFamDto {
 export class CrearFamSolicitudDto {
   @IsString()
   colegiadoId: string;
+
+  @IsOptional()
+  @IsBoolean()
+  permitirDuplicado?: boolean;
 
   @IsString()
   tipoBeneficioId: string;

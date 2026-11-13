@@ -356,7 +356,7 @@ function RegistrarHistoricoContent() {
     if (!montoNumerico || montoNumerico <= 0) return 'Ingrese un monto válido';
     if (!fechaSolicitud) return 'Ingrese la fecha de recepción';
     const disponible = getDisponible(getTipoNombre(tipoSeleccionado));
-    if (montoNumerico > disponible) return `El monto ${fmtMonto(montoNumerico)} excede el disponible (${fmtMonto(disponible)})`;
+    if (montoNumerico > disponible && !confirmarRegistroDuplicado && !colegiadoFallecido) return `El monto ${fmtMonto(montoNumerico)} excede el disponible (${fmtMonto(disponible)})`;
     const dni = dniDeclaracion.trim();
     if (dni && !/^\d{8}$/.test(dni)) return 'El DNI de la Declaración Jurada debe tener exactamente 8 dígitos';
     if (!esFallecimiento && conCartaPoder) {
@@ -527,6 +527,9 @@ function RegistrarHistoricoContent() {
                   <span className="px-2 py-0.5 text-[11px] font-bold rounded-full bg-red-100 text-red-700 border border-red-200">
                     FALLECIDO
                   </span>
+                  <span className="px-2 py-0.5 text-[11px] font-semibold rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                    ✓ Se permite registrar beneficios en vida previos
+                  </span>
                   {expedienteFallecimientoPrevio?.expedienteNumero && (
                     <span className="px-2 py-0.5 text-[11px] font-semibold rounded-full bg-blue-100 text-blue-700">
                       Exp. Previo: {expedienteFallecimientoPrevio.expedienteNumero}
@@ -649,11 +652,12 @@ function RegistrarHistoricoContent() {
               {(['Fallecimiento', 'Accidente Grave', 'Enfermedad Terminal'] as const).map((nombre) => {
                 const disponible = getDisponible(nombre);
                 const agotado = disponible <= 0;
+                const deshabilitado = agotado && !confirmarRegistroDuplicado && !colegiadoFallecido;
                 const seleccionado = getTipoNombre(tipoSeleccionado) === nombre;
                 return (
-                  <button key={nombre} type="button" disabled={agotado}
-                    onClick={() => { const tipo = tipos.find((t) => t.nombre === nombre); if (tipo && !agotado) setTipoSeleccionado(String(tipo.id)); }}
-                    className={`p-4 rounded-lg border-2 text-left transition-all ${seleccionado ? 'border-primary bg-primary/5 shadow-md' : agotado ? 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed' : 'border-border hover:border-primary/40 hover:shadow-sm cursor-pointer'}`}>
+                  <button key={nombre} type="button" disabled={deshabilitado}
+                    onClick={() => { const tipo = tipos.find((t) => t.nombre === nombre); if (tipo && (!agotado || confirmarRegistroDuplicado || colegiadoFallecido)) setTipoSeleccionado(String(tipo.id)); }}
+                    className={`p-4 rounded-lg border-2 text-left transition-all ${seleccionado ? 'border-primary bg-primary/5 shadow-md' : deshabilitado ? 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed' : 'border-border hover:border-primary/40 hover:shadow-sm cursor-pointer'}`}>
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-sm font-semibold text-text-main">{nombre}</span>
                       {seleccionado && <span className="px-1.5 py-0.5 bg-primary text-white text-[9px] font-bold rounded">ACTIVO</span>}

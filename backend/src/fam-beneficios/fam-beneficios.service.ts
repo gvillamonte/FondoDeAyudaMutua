@@ -625,11 +625,11 @@ export class FamBeneficiosService {
     const fallecimiento = await this.verificarColegiadoFallecido(colegiadoId, ignorarSolicitudId);
     if (!fallecimiento) return;
 
-    // Si el beneficio solicitado no es fallecimiento, queda totalmente bloqueado
+    // NOTA: Temporalmente se permite registrar beneficios anteriores recibidos en vida
+    // (ej. COVID-19, ACC_GRAVE, ENF_TERMINAL, etc.) incluso si el colegiado ya cuenta
+    // con registro o expediente de fallecimiento previo (regularización de datos históricos).
     if (tipoCodigo && tipoCodigo !== 'FALLECIMIENTO') {
-      throw new BadRequestException(
-        'No se pueden registrar más beneficios porque el colegiado está fallecido.',
-      );
+      return;
     }
 
     // Si el beneficio solicitado es fallecimiento (o no se especificó), verificar si ya está pagado o completo
@@ -3562,6 +3562,80 @@ export class FamBeneficiosService {
           }
         } catch {}
 
+        const depositosPrevios = ((fallecimiento as any).depositos || []).map((d: any) => ({
+          id: d.id,
+          nombreBeneficiario: d.nombreBeneficiario,
+          dniBeneficiario: d.dniBeneficiario,
+          porcentaje: Number(d.porcentaje || 0),
+          monto: Number(d.monto || 0),
+          banco: d.banco,
+          numeroCuenta: d.numeroCuenta,
+          cci: d.cci,
+          fechaPago: d.fechaPago ? d.fechaPago.toISOString() : null,
+        }));
+
+        // Si el usuario está solicitando o consultando un beneficio EN VIDA (ej. Accidente Grave,
+        // Enfermedad Terminal, COVID-19), NO bloquear devolviendo el expediente de Fallecimiento como activo.
+        if (tipo && tipo.codigo !== 'FALLECIMIENTO') {
+          const expVida = await this.obtenerExpedienteActivo(colegiadoId, tipo.codigo);
+          if (expVida) {
+            const repartoVida = this.construirEstadoReparto(expVida);
+            return {
+              id: expVida.id,
+              expedienteNumero: expVida.expedienteNumero || null,
+              estado: expVida.estado,
+              tipoBeneficio: tipo,
+              monto: Number(expVida.monto),
+              montoFinal: expVida.montoFinal ? Number(expVida.montoFinal) : null,
+              montoBase: await this.montoBaseTipo(tipo.codigo),
+              ...repartoVida,
+              beneficiarios: ((expVida as any).vinculos || []).map((v: any) => ({
+                id: v.beneficiario?.id,
+                nombre: v.beneficiario?.nombre,
+                dni: v.beneficiario?.dni,
+                parentesco: v.beneficiario?.parentesco,
+                porcentajeAsignado: Number(v.porcentajeAsignado),
+                monto: Number(v.monto),
+              })),
+              colegiadoFallecido: true,
+              permiteRegistrarEnVida: true,
+              mensajeFallecido: 'Colegiado registrado con fallecimiento en el sistema FAM. Se permite registrar beneficios en vida previos.',
+              fallecimientoPrevio: {
+                id: fallecimiento.id,
+                expedienteNumero: fallecimiento.expedienteNumero || null,
+                estado: fallecimiento.estado,
+                tipoBeneficio: fallecimiento.tipoBeneficio,
+                fechaDefuncion: fallecimiento.fechaDefuncion ? fallecimiento.fechaDefuncion.toISOString() : null,
+                monto: Number(fallecimiento.monto),
+              },
+              beneficiariosFallecimiento: beneficiariosPrevios,
+              depositosFallecimiento: depositosPrevios,
+            };
+          }
+
+          // No tiene expediente de este tipo de beneficio en vida -> formulario completamente habilitado
+          return {
+            id: null,
+            expedienteNumero: null,
+            estado: null,
+            tipoBeneficio: tipo,
+            colegiadoFallecido: true,
+            permiteRegistrar: true,
+            permiteRegistrarEnVida: true,
+            mensajeFallecido: 'Colegiado registrado con fallecimiento en el sistema FAM. Se permite registrar beneficios en vida previos.',
+            fallecimientoPrevio: {
+              id: fallecimiento.id,
+              expedienteNumero: fallecimiento.expedienteNumero || null,
+              estado: fallecimiento.estado,
+              tipoBeneficio: fallecimiento.tipoBeneficio,
+              fechaDefuncion: fallecimiento.fechaDefuncion ? fallecimiento.fechaDefuncion.toISOString() : null,
+              monto: Number(fallecimiento.monto),
+            },
+            beneficiarios: beneficiariosPrevios,
+            depositos: depositosPrevios,
+          };
+        }
+
         return {
           id: fallecimiento.id,
           expedienteNumero: fallecimiento.expedienteNumero || null,
@@ -3576,21 +3650,12 @@ export class FamBeneficiosService {
           colegiadoFallecido: true,
           bloqueadoPorFallecimiento: false,
           permiteRegistrar: true,
+          permiteRegistrarEnVida: false,
           mensajeFallecido: 'Colegiado registrado con fallecimiento en el sistema FAM. Cuenta con expediente previo.',
           porcentajeAsignado: reparto.porcentajeAsignado,
           completo: reparto.completo,
           beneficiarios: beneficiariosPrevios,
-          depositos: ((fallecimiento as any).depositos || []).map((d: any) => ({
-            id: d.id,
-            nombreBeneficiario: d.nombreBeneficiario,
-            dniBeneficiario: d.dniBeneficiario,
-            porcentaje: Number(d.porcentaje || 0),
-            monto: Number(d.monto || 0),
-            banco: d.banco,
-            numeroCuenta: d.numeroCuenta,
-            cci: d.cci,
-            fechaPago: d.fechaPago ? d.fechaPago.toISOString() : null,
-          })),
+          depositos: depositosPrevios,
         };
       }
     }
@@ -3600,6 +3665,60 @@ export class FamBeneficiosService {
       const colPadron = await this.famService.getColegiadoById(colegiadoId);
       if (colPadron && String(colPadron.ESTADO).toUpperCase().includes('FALLEC')) {
         const bensLeg = await this.famService.getBeneficiariosByColegiado(colegiadoId);
+        const beneficiariosPadron = (bensLeg || []).map((b: any) => ({
+          id: b.FAM_ID || b.id,
+          nombre: b.NOMBRE_BENEFICIARIO || b.nombre,
+          dni: b.DNI || b.dni || null,
+          parentesco: b.PARENTESCO || b.parentesco || 'Familiar',
+          porcentajeAsignado: Number(b.PORCENTAJE || b.porcentaje || 0),
+          monto: 0,
+          origen: b.ORIGEN || 'Padrón Legado',
+        }));
+
+        if (tipo && tipo.codigo !== 'FALLECIMIENTO') {
+          const expVida = await this.obtenerExpedienteActivo(colegiadoId, tipo.codigo);
+          if (expVida) {
+            const repartoVida = this.construirEstadoReparto(expVida);
+            return {
+              id: expVida.id,
+              expedienteNumero: expVida.expedienteNumero || null,
+              estado: expVida.estado,
+              tipoBeneficio: tipo,
+              monto: Number(expVida.monto),
+              montoFinal: expVida.montoFinal ? Number(expVida.montoFinal) : null,
+              montoBase: await this.montoBaseTipo(tipo.codigo),
+              ...repartoVida,
+              beneficiarios: ((expVida as any).vinculos || []).map((v: any) => ({
+                id: v.beneficiario?.id,
+                nombre: v.beneficiario?.nombre,
+                dni: v.beneficiario?.dni,
+                parentesco: v.beneficiario?.parentesco,
+                porcentajeAsignado: Number(v.porcentajeAsignado),
+                monto: Number(v.monto),
+              })),
+              colegiadoFallecido: true,
+              permiteRegistrarEnVida: true,
+              mensajeFallecido: 'El colegiado figura con estado FALLECIDO en el padrón institucional. Se permite registrar beneficios en vida previos.',
+            };
+          }
+
+          return {
+            id: null,
+            expedienteNumero: null,
+            estado: 'FALLECIDO',
+            tipoBeneficio: tipo,
+            colegiadoFallecido: true,
+            bloqueadoPorFallecimiento: false,
+            permiteRegistrar: true,
+            permiteRegistrarEnVida: true,
+            mensajeFallecido: 'El colegiado figura con estado FALLECIDO en el padrón institucional. Se permite registrar beneficios en vida previos.',
+            porcentajeAsignado: 0,
+            completo: false,
+            beneficiarios: beneficiariosPadron,
+            depositos: [],
+          };
+        }
+
         return {
           id: null,
           expedienteNumero: null,
@@ -3610,18 +3729,11 @@ export class FamBeneficiosService {
           colegiadoFallecido: true,
           bloqueadoPorFallecimiento: false,
           permiteRegistrar: true,
+          permiteRegistrarEnVida: true,
           mensajeFallecido: 'El colegiado figura con estado FALLECIDO en el padrón institucional.',
           porcentajeAsignado: 0,
           completo: false,
-          beneficiarios: (bensLeg || []).map((b: any) => ({
-            id: b.FAM_ID || b.id,
-            nombre: b.NOMBRE_BENEFICIARIO || b.nombre,
-            dni: b.DNI || b.dni || null,
-            parentesco: b.PARENTESCO || b.parentesco || 'Familiar',
-            porcentajeAsignado: Number(b.PORCENTAJE || b.porcentaje || 0),
-            monto: 0,
-            origen: b.ORIGEN || 'Padrón Legado',
-          })),
+          beneficiarios: beneficiariosPadron,
           depositos: [],
         };
       }

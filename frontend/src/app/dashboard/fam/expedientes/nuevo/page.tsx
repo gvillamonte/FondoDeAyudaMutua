@@ -581,7 +581,11 @@ export default function NuevoExpedientePage() {
 
   const validar = (): string => {
     if (!colegiado) return 'Seleccione el colegiado';
-    if ((expedienteActivo?.colegiadoFallecido || expedienteActivo?.bloqueadoPorFallecimiento) && !confirmarRegistroDuplicado) {
+    if (
+      (expedienteActivo?.colegiadoFallecido || expedienteActivo?.bloqueadoPorFallecimiento) &&
+      !expedienteActivo?.permiteRegistrarEnVida &&
+      !confirmarRegistroDuplicado
+    ) {
       return expedienteActivo.mensajeFallecido || 'Confirme la casilla para registrar el expediente del colegiado fallecido.';
     }
     if (!form.tipoBeneficioConfigId) return 'Seleccione el tipo de beneficio';
@@ -948,6 +952,11 @@ export default function NuevoExpedientePage() {
                       <span className="px-2 py-0.5 text-[11px] font-bold rounded-full bg-red-100 text-red-700 border border-red-200">
                         FALLECIDO
                       </span>
+                      {expedienteActivo?.permiteRegistrarEnVida && (
+                        <span className="px-2 py-0.5 text-[11px] font-semibold rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                          ✓ Se permite registrar beneficios en vida previos
+                        </span>
+                      )}
                       {expedienteActivo?.expedienteNumero && (
                         <span className="px-2 py-0.5 text-[11px] font-semibold rounded-full bg-blue-100 text-blue-700">
                           Exp. Previo: {expedienteActivo.expedienteNumero}
@@ -2070,7 +2079,7 @@ export default function NuevoExpedientePage() {
         <button onClick={() => router.back()} className="px-4 py-2 text-sm font-medium text-text-sec bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
           Cancelar
         </button>
-        <button onClick={() => guardar()} disabled={guardando || Boolean(expedienteActivo)}
+        <button onClick={() => guardar()} disabled={guardando || Boolean(expedienteActivo?.id && !confirmarRegistroDuplicado)}
           className="px-5 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary/90 disabled:opacity-50 inline-flex items-center gap-2 transition-colors">
           {guardando && (
             <svg

@@ -225,10 +225,38 @@ describe('FamBeneficiosService - expediente unico y reparto por beneficiario', (
     expect(prisma.famSolicitudBeneficio.create).not.toHaveBeenCalled();
   });
 
-  it('bloquea el registro de otros beneficios si el colegiado se encuentra fallecido', async () => {
+  it('permite el registro de otros beneficios en vida (ej. COVID-19) aun si el colegiado se encuentra fallecido', async () => {
     prisma.tipoBeneficioConfig.findUnique.mockResolvedValue({ id: 2, nombre: 'COVID-19' });
     prisma.tipoBeneficio.findMany.mockResolvedValue([
       { id: 'TB-FAM-COVID', codigo: 'COVID_19', nombre: 'COVID-19' },
+    ]);
+    prisma.famSolicitudBeneficio.findFirst.mockResolvedValue({
+      id: 'exp-fallecimiento',
+      estado: 'PAGADA',
+      tipoBeneficio: { id: 'TB-FAM-001', codigo: 'FALLECIMIENTO', nombre: 'Fallecimiento' },
+    });
+    prisma.famSolicitudBeneficio.create.mockResolvedValue({ id: 'exp-covid' });
+    prisma.famBeneficiario.create.mockResolvedValue({ id: 'B1' });
+    prisma.famSolicitudBeneficiario.create.mockResolvedValue({});
+    jest.spyOn(service, 'obtenerPorId').mockResolvedValue({ id: 'exp-covid' } as any);
+
+    const resultado = await service.crearRegistro(
+      dtoRegistro({
+        tipoBeneficioConfigId: 2,
+        beneficiarios: [{ nombre: 'Ana', parentesco: 'Hija', porcentaje: 100 }],
+      }) as any,
+      'u-1',
+      '127.0.0.1',
+    );
+
+    expect(prisma.famSolicitudBeneficio.create).toHaveBeenCalled();
+    expect(resultado).toBeDefined();
+  });
+
+  it('bloquea el registro de un segundo beneficio de fallecimiento si ya se encuentra pagado y completo', async () => {
+    prisma.tipoBeneficioConfig.findUnique.mockResolvedValue({ id: 1, nombre: 'Fallecimiento' });
+    prisma.tipoBeneficio.findMany.mockResolvedValue([
+      { id: 'TB-FAM-001', codigo: 'FALLECIMIENTO', nombre: 'Fallecimiento' },
     ]);
     prisma.famSolicitudBeneficio.findFirst.mockResolvedValue({
       id: 'exp-fallecimiento',
@@ -239,7 +267,7 @@ describe('FamBeneficiosService - expediente unico y reparto por beneficiario', (
     await expect(
       service.crearRegistro(
         dtoRegistro({
-          tipoBeneficioConfigId: 2,
+          tipoBeneficioConfigId: 1,
           beneficiarios: [{ nombre: 'Ana', parentesco: 'Hija', porcentaje: 100 }],
         }) as any,
         'u-1',
@@ -251,9 +279,9 @@ describe('FamBeneficiosService - expediente unico y reparto por beneficiario', (
   });
 
   it('permite registrar el beneficio si permitirDuplicado es true aun si el colegiado se encuentra fallecido', async () => {
-    prisma.tipoBeneficioConfig.findUnique.mockResolvedValue({ id: 2, nombre: 'COVID-19' });
+    prisma.tipoBeneficioConfig.findUnique.mockResolvedValue({ id: 1, nombre: 'Fallecimiento' });
     prisma.tipoBeneficio.findMany.mockResolvedValue([
-      { id: 'TB-FAM-COVID', codigo: 'COVID_19', nombre: 'COVID-19' },
+      { id: 'TB-FAM-001', codigo: 'FALLECIMIENTO', nombre: 'Fallecimiento' },
     ]);
     prisma.famSolicitudBeneficio.findFirst.mockResolvedValue({
       id: 'exp-fallecimiento',
@@ -267,7 +295,7 @@ describe('FamBeneficiosService - expediente unico y reparto por beneficiario', (
 
     const resultado = await service.crearRegistro(
       dtoRegistro({
-        tipoBeneficioConfigId: 2,
+        tipoBeneficioConfigId: 1,
         permitirDuplicado: true,
         beneficiarios: [{ nombre: 'Ana', parentesco: 'Hija', porcentaje: 100 }],
       }) as any,
@@ -279,11 +307,29 @@ describe('FamBeneficiosService - expediente unico y reparto por beneficiario', (
     expect(resultado).toBeDefined();
   });
 
-  it('crear simple bloquea el beneficio si existe un fallecimiento previo', async () => {
+  it('crear simple permite el beneficio en vida (ej. COVID-19) aun si existe un fallecimiento previo', async () => {
     prisma.tipoBeneficio.findUnique.mockResolvedValue({
       id: 'TB-FAM-COVID',
       codigo: 'COVID_19',
       nombre: 'COVID-19',
+    });
+    prisma.famSolicitudBeneficio.findFirst.mockResolvedValue(null);
+    prisma.famSolicitudBeneficio.create.mockResolvedValue({ id: 'exp-covid-simple' });
+
+    const resultado = await service.crear(
+      { colegiadoId: 'C-7148', tipoBeneficioId: 'TB-FAM-COVID', monto: 2000 } as any,
+      'u-1',
+    );
+
+    expect(prisma.famSolicitudBeneficio.create).toHaveBeenCalled();
+    expect(resultado).toBeDefined();
+  });
+
+  it('crear simple bloquea el beneficio de fallecimiento si existe un fallecimiento previo pagado', async () => {
+    prisma.tipoBeneficio.findUnique.mockResolvedValue({
+      id: 'TB-FAM-001',
+      codigo: 'FALLECIMIENTO',
+      nombre: 'Fallecimiento',
     });
     prisma.famSolicitudBeneficio.findFirst.mockResolvedValue({
       id: 'exp-fallecimiento',
@@ -293,7 +339,7 @@ describe('FamBeneficiosService - expediente unico y reparto por beneficiario', (
 
     await expect(
       service.crear(
-        { colegiadoId: 'C-7148', tipoBeneficioId: 'TB-FAM-COVID', monto: 2000 } as any,
+        { colegiadoId: 'C-7148', tipoBeneficioId: 'TB-FAM-001', monto: 3000 } as any,
         'u-1',
       ),
     ).rejects.toThrow('No se pueden registrar más beneficios porque el colegiado está fallecido.');
@@ -303,9 +349,9 @@ describe('FamBeneficiosService - expediente unico y reparto por beneficiario', (
 
   it('crear simple permite el beneficio si permitirDuplicado es true aun si existe un fallecimiento previo', async () => {
     prisma.tipoBeneficio.findUnique.mockResolvedValue({
-      id: 'TB-FAM-COVID',
-      codigo: 'COVID_19',
-      nombre: 'COVID-19',
+      id: 'TB-FAM-001',
+      codigo: 'FALLECIMIENTO',
+      nombre: 'Fallecimiento',
     });
     prisma.famSolicitudBeneficio.findFirst.mockResolvedValue({
       id: 'exp-fallecimiento',
@@ -315,7 +361,7 @@ describe('FamBeneficiosService - expediente unico y reparto por beneficiario', (
     prisma.famSolicitudBeneficio.create.mockResolvedValue({ id: 'exp-simple-dup' });
 
     const resultado = await service.crear(
-      { colegiadoId: 'C-7148', tipoBeneficioId: 'TB-FAM-COVID', monto: 2000, permitirDuplicado: true } as any,
+      { colegiadoId: 'C-7148', tipoBeneficioId: 'TB-FAM-001', monto: 3000, permitirDuplicado: true } as any,
       'u-1',
     );
 

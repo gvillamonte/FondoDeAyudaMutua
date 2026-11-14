@@ -1,6 +1,7 @@
 import {
   IsString,
   IsNumber,
+  IsBoolean,
   IsOptional,
   IsDateString,
   IsArray,
@@ -110,6 +111,14 @@ export class RegistrarSucesionIntestadaDto {
   @IsOptional()
   @IsString()
   observaciones?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  documentacionCompleta?: boolean;
+
+  @IsOptional()
+  @IsString()
+  documentacionObservacion?: string;
 
   @IsArray()
   @ValidateNested({ each: true })

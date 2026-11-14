@@ -1002,6 +1002,18 @@ export default function DetalleExpedientePage() {
                 <span><strong>Detalle:</strong> {detalle.descripcionAccidente}</span>
               </>
             )}
+            {detalle.documentacionObservacion && (
+              <>
+                <span className="text-slate-300">•</span>
+                <span className="text-amber-800 font-medium"><strong>Obs. Docs:</strong> {detalle.documentacionObservacion}</span>
+              </>
+            )}
+            {detalle.observaciones && (
+              <>
+                <span className="text-slate-300">•</span>
+                <span><strong>Observaciones:</strong> {detalle.observaciones}</span>
+              </>
+            )}
           </div>
           <span className="text-slate-400 italic font-mono text-[11px] break-all">Expediente ID: {detalle.id}</span>
         </div>
@@ -1745,10 +1757,15 @@ export default function DetalleExpedientePage() {
               />
 
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-                <div className={`rounded-lg px-3 py-1.5 border inline-flex items-center gap-2 ${detalle.documentacionCompleta ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
-                  <p className="text-xs sm:text-sm font-semibold">
-                    {detalle.documentacionCompleta ? '✓ Documentación del expediente completa' : '⚠️ Documentación del expediente pendiente'}
+                <div className={`rounded-lg px-3.5 py-2 border flex flex-col gap-1 ${detalle.documentacionCompleta ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
+                  <p className="text-xs sm:text-sm font-semibold flex items-center gap-1.5">
+                    {detalle.documentacionCompleta ? '✓ Documentación del expediente completa' : '⚠️ Documentación del expediente incompleta / observada'}
                   </p>
+                  {detalle.documentacionObservacion && (
+                    <p className="text-xs text-amber-900 bg-amber-100/70 rounded px-2 py-1 font-medium">
+                      <strong>Observación / Justificación:</strong> {detalle.documentacionObservacion}
+                    </p>
+                  )}
                 </div>
 
                 <button

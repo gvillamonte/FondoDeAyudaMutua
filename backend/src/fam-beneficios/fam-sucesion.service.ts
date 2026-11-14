@@ -162,10 +162,14 @@ export class FamSucesionService {
           solicitanteNombre: nombresConcat.slice(0, 200),
           solicitanteDni: dnisConcat.slice(0, 20) || dto.herederos[0]?.numeroDocumento,
           modalidadBeneficio: 'monto_compartido',
-          documentacionCompleta: Boolean(dto.sustentoPdf),
-          documentacionObservacion: !dto.sustentoPdf
-            ? (dto.observacionSinSucesion?.trim() || dto.observaciones?.trim() || 'Sin documento de sucesión intestada')
-            : null,
+          documentacionCompleta:
+            dto.documentacionCompleta !== undefined
+              ? Boolean(dto.documentacionCompleta && dto.sustentoPdf)
+              : Boolean(dto.sustentoPdf),
+          documentacionObservacion:
+            (dto.documentacionCompleta === false || !dto.sustentoPdf)
+              ? (dto.documentacionObservacion?.trim() || dto.observacionSinSucesion?.trim() || dto.observaciones?.trim() || 'Sin documento de sucesión intestada')
+              : (dto.documentacionObservacion?.trim() || null),
           fechaSolicitud: dto.fechaSolicitud ? new Date(dto.fechaSolicitud) : new Date(),
           fechaPago: dto.fechaPago
             ? new Date(dto.fechaPago)

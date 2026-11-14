@@ -2153,7 +2153,7 @@ export class FamBeneficiosService {
     const estado = solicitud.estado;
     const pagada = estado === 'PAGADA';
     const aprobada = estado === 'APROBADA' || pagada;
-    const documentacionCompleta = Boolean(solicitud.documentacionCompleta) || pagada;
+    const documentacionCompleta = Boolean(solicitud.documentacionCompleta);
     const puedeSubir = this.puedeSubirDocumentos(estado, userRole);
     const vinculos = solicitud.vinculos || [];
     const tieneBeneficiarios = vinculos.length > 0;

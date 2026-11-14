@@ -619,8 +619,9 @@ export default function RegistroExpedienteDrawer({ open, onClose, onSaved }: { o
     }
     if (!form.tipoBeneficioConfigId) return 'Seleccione el tipo de beneficio';
     if (!(parseFloat(form.monto) > 0)) return 'Ingrese un monto válido mayor a 0';
-    if (form.documentacionCompleta === false && !form.documentacionObservacion.trim())
-      return 'Si la documentación está incompleta, la justificación es obligatoria';
+    if (form.documentacionCompleta === false && !form.documentacionObservacion.trim() && !form.observaciones.trim()) {
+      return 'Si la documentación no cumple o está incompleta, la justificación u observación es obligatoria';
+    }
 
     const dniDJ = form.declaracionJuradaDni.trim();
     if (docs.declaracionJurada?.base64 && !/^\d{8}$/.test(dniDJ))
@@ -750,11 +751,15 @@ export default function RegistroExpedienteDrawer({ open, onClose, onSaved }: { o
     setAlertaSaldo((prev) => ({ ...prev, isOpen: false }));
     setGuardando(true);
     try {
-      const todosPresentados = Boolean(docs.otrosDocumentos) || docsRequeridos.every(({ key }) => docsPresentados[key] === true || docs[key] !== null);
-      const fechaDepositoEfectiva = form.fechaPago || form.ordenPagoFecha || undefined;
+      const todosDocsFisicosPresentados = Boolean(docs.otrosDocumentos) || docsRequeridos.every(({ key }) => docsPresentados[key] === true || docs[key] !== null);
+      const docCompletaFinal = form.documentacionCompleta === false ? false : todosDocsFisicosPresentados;
+      const obsDocumentacionFinal = form.documentacionCompleta === false
+        ? (form.documentacionObservacion.trim() || form.observaciones.trim() || 'Documentación incompleta / no cumple')
+        : (form.documentacionObservacion.trim() || undefined);
+      const fechaDepositoEfectiva = form.ordenPagoFecha || form.fechaPago || undefined;
       const body: any = {
         colegiadoId: colegiado!.COLEGIADO_ID,
-        estado: todosPresentados ? 'PAGADA' : 'PENDIENTE',
+        estado: docCompletaFinal ? 'PAGADA' : 'PENDIENTE',
         // Beneficiarios ya registrados: solo se vinculan (sin creacion/edicion)
         beneficiarios: beneficiariosReg.map((f, i) => ({
           ...(f.id ? { id: f.id } : {}),
@@ -776,8 +781,8 @@ export default function RegistroExpedienteDrawer({ open, onClose, onSaved }: { o
         ...(covidDescuento && { covidAsignacionId: covidDescuento.asignacionId }),
         fechaSolicitud: form.fechaSolicitud || undefined,
         fechaPago: fechaDepositoEfectiva,
-        documentacionCompleta: todosPresentados,
-        documentacionObservacion: !todosPresentados ? (form.documentacionObservacion.trim() || 'Documentación pendiente de presentar') : undefined,
+        documentacionCompleta: docCompletaFinal,
+        documentacionObservacion: obsDocumentacionFinal,
         expedienteNumero: form.expedienteNumero.trim() || undefined,
         observaciones: form.observaciones.trim() || undefined,
         cartaNumero: form.cartaNumero.trim() || undefined,
@@ -786,7 +791,7 @@ export default function RegistroExpedienteDrawer({ open, onClose, onSaved }: { o
         memorandoFecha: form.memorandoFecha || undefined,
         formaPago: form.formaPago || undefined,
         banco: form.banco.trim() || undefined,
-        ordenPagoFecha: form.ordenPagoFecha || form.fechaPago || undefined,
+        ordenPagoFecha: fechaDepositoEfectiva,
       };
 
       if (esSucesionIntestada) {
@@ -807,7 +812,9 @@ export default function RegistroExpedienteDrawer({ open, onClose, onSaved }: { o
           observacionSinSucesion: observacionSinSucesion.trim() || undefined,
           numeroPartidaRegistral: numeroPartida || undefined,
           notariaJuzgado: notariaJuzgado || undefined,
-          estado: todosPresentados && sucesionPdf ? 'PAGADA' : 'ENVIADO',
+          estado: docCompletaFinal && sucesionPdf ? 'PAGADA' : 'ENVIADO',
+          documentacionCompleta: docCompletaFinal,
+          documentacionObservacion: obsDocumentacionFinal,
           observaciones: obsFinal || undefined,
           herederos: herederosSucesion.map((h) => ({
             tipoDocumento: h.tipoDocumento,
@@ -1670,8 +1677,24 @@ export default function RegistroExpedienteDrawer({ open, onClose, onSaved }: { o
                     )}
                     <div className="ml-auto flex items-center gap-2">
                       <span className="text-xs text-text-sec">{presentado ? 'Presentado' : 'Pendiente'}</span>
-                      <button type="button" onClick={() => setDocsPresentados((prev) => ({ ...prev, [key]: !prev[key] }))}
-                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${presentado ? 'bg-green-500' : 'bg-gray-300'}`}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nuevoPresentado = !presentado;
+                          setDocsPresentados((prev) => {
+                            const updated = { ...prev, [key]: nuevoPresentado };
+                            const falta = docsRequeridos.some((d) => {
+                              const p = d.key === key ? nuevoPresentado : (updated[d.key] ?? false);
+                              return !p && !docs[d.key];
+                            });
+                            if (falta) {
+                              setForm((f) => ({ ...f, documentacionCompleta: false }));
+                            }
+                            return updated;
+                          });
+                        }}
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${presentado ? 'bg-green-500' : 'bg-gray-300'}`}
+                      >
                         <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${presentado ? 'translate-x-4.5' : 'translate-x-0.5'}`} />
                       </button>
                     </div>
@@ -1701,27 +1724,18 @@ export default function RegistroExpedienteDrawer({ open, onClose, onSaved }: { o
                   {docsRequeridos.filter(({ key }) => !docsPresentados[key] && !docs[key]).length} de {docsRequeridos.length} documentos pendientes de presentar
                 </p>
               </div>
-              <div>
-                <label className="block text-xs font-medium text-text-sec uppercase mb-1">Fecha de Depósito / Pago</label>
-                <input
-                  type="date"
-                  value={form.fechaPago}
-                  onChange={(e) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      fechaPago: e.target.value,
-                      ordenPagoFecha: prev.ordenPagoFecha || e.target.value,
-                    }))
-                  }
-                  className="w-full px-3 py-2 border border-border rounded-lg text-sm"
-                />
-              </div>
               {form.documentacionCompleta === false && (
-                <div className="col-span-2">
-                  <label className="block text-xs font-medium text-red-600 uppercase mb-1">Justificación del incumplimiento * (obligatoria)</label>
-                  <textarea rows={2} value={form.documentacionObservacion} onChange={(e) => setForm({ ...form, documentacionObservacion: e.target.value })}
-                    placeholder="Explique qué documentos no presenta y por qué se autoriza el registro..."
-                    className="w-full px-3 py-2 border border-red-300 rounded-lg text-sm bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-200" />
+                <div className="col-span-full">
+                  <label className="block text-xs font-medium text-red-600 uppercase mb-1">
+                    Justificación del incumplimiento / Observaciones de documentación * (obligatoria)
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={form.documentacionObservacion}
+                    onChange={(e) => setForm({ ...form, documentacionObservacion: e.target.value })}
+                    placeholder="Explique qué documentos no presenta, observaciones y por qué se autoriza el registro..."
+                    className="w-full px-3 py-2 border border-red-300 rounded-lg text-sm bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-200"
+                  />
                 </div>
               )}
               <div>
@@ -1828,7 +1842,7 @@ export default function RegistroExpedienteDrawer({ open, onClose, onSaved }: { o
                     setForm((prev) => ({
                       ...prev,
                       ordenPagoFecha: e.target.value,
-                      fechaPago: prev.fechaPago || e.target.value,
+                      fechaPago: e.target.value,
                     }))
                   }
                   className="w-full px-3 py-2 border border-border rounded-lg text-sm"

@@ -15,6 +15,8 @@ interface FormEstado {
   fechaSolicitud: string;
   fechaPago: string;
   observaciones: string;
+  documentacionCompleta: boolean;
+  documentacionObservacion: string;
   formaPago: string;
   banco: string;
   cartaNumero: string;
@@ -26,7 +28,8 @@ interface FormEstado {
 
 const FORM_VACIO: FormEstado = {
   estado: '', monto: '', fechaSolicitud: '', fechaPago: '',
-  observaciones: '', formaPago: '', banco: '',
+  observaciones: '', documentacionCompleta: true, documentacionObservacion: '',
+  formaPago: '', banco: '',
   cartaNumero: '', cartaFecha: '', memorandoNumero: '', memorandoFecha: '',
   expedienteNumero: '',
 };
@@ -60,6 +63,8 @@ export default function EditarExpedienteModal({
           fechaSolicitud: aFecha(data.fechaSolicitud),
           fechaPago: aFecha(data.fechaPago),
           observaciones: data.observaciones || '',
+          documentacionCompleta: data.documentacionCompleta !== false,
+          documentacionObservacion: data.documentacionObservacion || '',
           formaPago: data.formaPago || '',
           banco: data.banco || '',
           cartaNumero: data.cartaNumero || '',
@@ -88,6 +93,10 @@ export default function EditarExpedienteModal({
         fechaSolicitud: form.fechaSolicitud || undefined,
         fechaPago: form.fechaPago || undefined,
         observaciones: form.observaciones || undefined,
+        documentacionCompleta: form.documentacionCompleta,
+        documentacionObservacion: form.documentacionCompleta === false
+          ? (form.documentacionObservacion.trim() || 'Documentación incompleta / justificada')
+          : (form.documentacionObservacion.trim() || undefined),
         formaPago: form.formaPago || undefined,
         banco: form.banco || undefined,
         cartaNumero: form.cartaNumero || undefined,
@@ -206,8 +215,39 @@ export default function EditarExpedienteModal({
                 </div>
               </div>
 
+              <div className="border-t border-border-main pt-4 space-y-3">
+                <div>
+                  <label className="block text-xs font-medium text-text-sec uppercase mb-1">Documentación del Expediente</label>
+                  <div className="flex items-center gap-4 h-[38px]">
+                    <label className="inline-flex items-center gap-1.5 text-sm cursor-pointer">
+                      <input type="radio" checked={form.documentacionCompleta === true} onChange={() => setForm({ ...form, documentacionCompleta: true })} />
+                      <span className="text-green-700 font-medium">Sí, completa</span>
+                    </label>
+                    <label className="inline-flex items-center gap-1.5 text-sm cursor-pointer">
+                      <input type="radio" checked={form.documentacionCompleta === false} onChange={() => setForm({ ...form, documentacionCompleta: false })} />
+                      <span className="text-red-600 font-medium">⚠️ No cumple / Incompleta</span>
+                    </label>
+                  </div>
+                </div>
+
+                {form.documentacionCompleta === false && (
+                  <div>
+                    <label className="block text-xs font-medium text-red-600 uppercase mb-1">
+                      Justificación / Observaciones de documentación
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={form.documentacionObservacion}
+                      onChange={(e) => setForm({ ...form, documentacionObservacion: e.target.value })}
+                      placeholder="Explique qué documentos faltan o el motivo de la observación..."
+                      className="w-full px-3 py-2 border border-red-300 rounded-lg text-sm bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-200"
+                    />
+                  </div>
+                )}
+              </div>
+
               <div>
-                <label className="block text-xs font-medium text-text-sec uppercase mb-1">Observaciones</label>
+                <label className="block text-xs font-medium text-text-sec uppercase mb-1">Observaciones Generales</label>
                 <textarea value={form.observaciones} onChange={(e) => setForm({ ...form, observaciones: e.target.value })}
                   rows={3} className={INPUT_CLS} />
               </div>

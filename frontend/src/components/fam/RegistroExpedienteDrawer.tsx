@@ -66,7 +66,7 @@ const DOCS_PDF = [
   { key: 'ordenPago', label: 'Orden de Pago' },
   { key: 'declaracionJurada', label: 'Declaración Jurada' },
   { key: 'actaDefuncion', label: 'Acta de Defunción' },
-  { key: 'otrosDocumentos', label: 'Otros / Documentación Completa' },
+  { key: 'otrosDocumentos', label: 'Todo el Documento en PDF (Expediente Completo)' },
 ] as const;
 
 type DocKey = (typeof DOCS_PDF)[number]['key'];
@@ -432,7 +432,7 @@ export default function RegistroExpedienteDrawer({ open, onClose, onSaved }: { o
 
   const tipoSeleccionado = tipos.find((t) => t.id === form.tipoBeneficioConfigId);
   const esFallecimiento = (tipoSeleccionado?.nombre || '').toUpperCase().includes('FALLECIMIENTO');
-  const docsRequeridos = DOCS_PDF.filter(({ key }) => key !== 'otrosDocumentos' && (key !== 'actaDefuncion' || esFallecimiento));
+  const docsRequeridos = DOCS_PDF.filter(({ key }) => (key !== 'actaDefuncion' || esFallecimiento));
 
   const handlePdf = async (key: DocKey, file: File) => {
     const label = DOCS_PDF.find((d) => d.key === key)?.label || 'Documento';
@@ -441,9 +441,22 @@ export default function RegistroExpedienteDrawer({ open, onClose, onSaved }: { o
       const { base64, size, esImagenConvertida } = await procesarArchivoDocumento(file, MAX_PDF_MB);
       setDocs((prev) => ({ ...prev, [key]: { base64, size } }));
       setDocsPresentados((prev) => ({ ...prev, [key]: true }));
+
+      if (key === 'ordenPago' && herederosSucesion.length > 0) {
+        setHerederosSucesion((prev) =>
+          prev.map((h) => ({
+            ...h,
+            ordenPagoPdf: base64,
+            ordenPagoSize: size,
+          }))
+        );
+      }
+
       showConfirmMessage(
         'success',
-        `${label} cargado correctamente`,
+        key === 'ordenPago'
+          ? 'Orden de Pago cargada y unificada'
+          : `${label} cargado correctamente`,
         esImagenConvertida
           ? `Imagen convertida a PDF (${(size / 1024 / 1024).toFixed(2)} MB)`
           : `Tamaño: ${(size / 1024 / 1024).toFixed(2)} MB`,
@@ -1641,9 +1654,45 @@ export default function RegistroExpedienteDrawer({ open, onClose, onSaved }: { o
               {docsRequeridos.map(({ key, label }) => {
                 const doc = docs[key];
                 const presentado = docsPresentados[key] ?? false;
+                const esCompleto = key === 'otrosDocumentos';
+                const esOrdenPago = key === 'ordenPago';
                 return (
-                  <div key={key} className={`flex items-center gap-3 border rounded-lg px-3 py-2 ${presentado ? 'border-border bg-white' : 'border-amber-300 bg-amber-50'}`}>
-                    <span className="text-sm text-text-main w-52">{label}</span>
+                  <div
+                    key={key}
+                    className={`flex items-center gap-3 border rounded-lg px-3 py-2.5 transition-colors ${
+                      esCompleto
+                        ? 'border-blue-300 bg-blue-50/50'
+                        : presentado
+                        ? 'border-border bg-white'
+                        : 'border-amber-300 bg-amber-50'
+                    }`}
+                  >
+                    <div className="w-64 shrink-0">
+                      <span
+                        className={`text-sm ${
+                          esCompleto
+                            ? 'font-semibold text-primary flex items-center gap-1.5'
+                            : 'font-medium text-text-main'
+                        }`}
+                      >
+                        {esCompleto && (
+                          <svg className="w-4 h-4 text-primary shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                        )}
+                        {label}
+                      </span>
+                      {esCompleto && (
+                        <p className="text-[10px] text-text-sec mt-0.5">
+                          Adjunte todo el expediente digitalizado en un solo archivo PDF
+                        </p>
+                      )}
+                      {esOrdenPago && (
+                        <p className="text-[10px] text-primary/80 mt-0.5">
+                          Unificado automáticamente con los beneficiarios
+                        </p>
+                      )}
+                    </div>
                     {key === DNI_KEY && (
                       <label className="inline-flex items-center gap-1.5 text-xs text-text-sec">
                         DNI
@@ -1660,16 +1709,29 @@ export default function RegistroExpedienteDrawer({ open, onClose, onSaved }: { o
                     )}
                     {doc ? (
                       <>
-                        <span className="inline-flex items-center gap-1 text-xs text-green-700 bg-green-50 px-2 py-0.5 rounded-full">
+                        <span className="inline-flex items-center gap-1 text-xs text-green-700 bg-green-50 px-2 py-0.5 rounded-full font-medium">
                           ✓ {(doc.size / 1024 / 1024).toFixed(2)} MB
                         </span>
                         <button type="button" onClick={() => abrirPdfBase64(doc.base64, label)}
-                          className="text-xs text-primary hover:underline">Ver</button>
-                        <button type="button" onClick={() => { setDocs((prev) => ({ ...prev, [key]: null })); setDocsPresentados((prev) => ({ ...prev, [key]: false })); }}
-                          className="text-xs text-red-500 hover:text-red-700">Quitar</button>
+                          className="text-xs text-primary hover:underline font-medium">Ver</button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDocs((prev) => ({ ...prev, [key]: null }));
+                            setDocsPresentados((prev) => ({ ...prev, [key]: false }));
+                            if (key === 'ordenPago') {
+                              setHerederosSucesion((prev) =>
+                                prev.map((h) => ({ ...h, ordenPagoPdf: undefined, ordenPagoSize: undefined }))
+                              );
+                            }
+                          }}
+                          className="text-xs text-red-500 hover:text-red-700"
+                        >
+                          Quitar
+                        </button>
                       </>
                     ) : (
-                      <label className="cursor-pointer inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary-dark">
+                      <label className="cursor-pointer inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:text-primary-dark">
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
                         Subir PDF o Imagen
                         <input type="file" accept="application/pdf,image/png,image/jpeg,image/jpg,image/webp" className="hidden" onChange={(e) => { if (e.target.files?.[0]) handlePdf(key, e.target.files[0]); }} />

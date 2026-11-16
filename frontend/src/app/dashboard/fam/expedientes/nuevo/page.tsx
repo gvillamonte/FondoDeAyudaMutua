@@ -60,7 +60,7 @@ const DOCS_PDF = [
   { key: 'ordenPago', label: 'Orden de Pago' },
   { key: 'declaracionJurada', label: 'Declaración Jurada' },
   { key: 'actaDefuncion', label: 'Acta de Defunción' },
-  { key: 'otrosDocumentos', label: 'Otros / Documentación Completa' },
+  { key: 'otrosDocumentos', label: 'Todo el Documento en PDF (Expediente Completo)' },
 ] as const;
 type DocKey = (typeof DOCS_PDF)[number]['key'];
 const MAX_PDF_MB = 10;
@@ -149,6 +149,10 @@ export default function NuevoExpedientePage() {
       parentesco: b.parentesco || 'Familiar',
       porcentaje: String(b.porcentajeAsignado != null ? Number(b.porcentajeAsignado) : (Number(b.porcentaje) || 0)),
       esManual: true,
+      ...(docs.ordenPago?.base64 && {
+        ordenPago: docs.ordenPago.base64,
+        ordenPagoSize: docs.ordenPago.size,
+      }),
     }));
     setBeneficiariosReg(mapeados);
     if (mapeados.length > 0) {
@@ -350,6 +354,10 @@ export default function NuevoExpedientePage() {
           declaracionJuradaDni: colegiado.DNI,
           parentesco: 'Titular',
           porcentaje: '100',
+          ...(docs.ordenPago?.base64 && {
+            ordenPago: docs.ordenPago.base64,
+            ordenPagoSize: docs.ordenPago.size,
+          }),
         };
         setBeneficiariosReg([titularBene]);
         setSolicitanteKeys([titularBene.key]);
@@ -365,9 +373,8 @@ export default function NuevoExpedientePage() {
   const esFallecimiento = getTipoNombreSeleccionado().includes('FALLECIMIENTO');
   const multiplesBeneficiarios = beneficiariosReg.length > 1;
   const docsRequeridos = DOCS_PDF.filter(({ key }) => {
-    if (key === 'otrosDocumentos') return false;
     if (key === 'actaDefuncion' && !esFallecimiento) return false;
-    if (multiplesBeneficiarios && (key === 'ordenPago' || key === 'declaracionJurada')) return false;
+    if (multiplesBeneficiarios && key === 'declaracionJurada') return false;
     return true;
   });
   const esEnfermedadTerminal = getTipoNombreSeleccionado().includes('ENFERMEDAD') || getTipoNombreSeleccionado().includes('TERMINAL');
@@ -380,9 +387,30 @@ export default function NuevoExpedientePage() {
       const { base64, size, esImagenConvertida } = await procesarArchivoDocumento(file, MAX_PDF_MB);
       setDocs((prev) => ({ ...prev, [key]: { base64, size } }));
       setDocsPresentados((prev) => ({ ...prev, [key]: true }));
+
+      // Sincronización automática de Orden de Pago con todos los beneficiarios y herederos
+      if (key === 'ordenPago') {
+        setBeneficiariosReg((prev) =>
+          prev.map((b) => ({
+            ...b,
+            ordenPago: base64,
+            ordenPagoSize: size,
+          }))
+        );
+        setHerederosSucesion((prev) =>
+          prev.map((h) => ({
+            ...h,
+            ordenPagoPdf: base64,
+            ordenPagoSize: size,
+          }))
+        );
+      }
+
       showConfirmMessage(
         'success',
-        `${label} cargado correctamente`,
+        key === 'ordenPago'
+          ? 'Orden de Pago cargada y unificada con los beneficiarios'
+          : `${label} cargado correctamente`,
         esImagenConvertida
           ? `Imagen convertida a PDF (${(size / 1024 / 1024).toFixed(2)} MB)`
           : `Tamaño: ${(size / 1024 / 1024).toFixed(2)} MB`,
@@ -434,14 +462,21 @@ export default function NuevoExpedientePage() {
   const handleOrdenPagoBeneficiario = async (key: string, file: File) => {
     try {
       const { base64, size, esImagenConvertida } = await procesarArchivoDocumento(file, MAX_PDF_MB);
+      // Sincronizar en todos los beneficiarios
       setBeneficiariosReg((prev) =>
-        prev.map((b) =>
-          b.key === key ? { ...b, ordenPago: base64, ordenPagoSize: size } : b,
-        ),
+        prev.map((b) => ({ ...b, ordenPago: base64, ordenPagoSize: size }))
       );
+      // Sincronizar automáticamente con la sección de Documentos de abajo
+      setDocs((prev) => ({ ...prev, ordenPago: { base64, size } }));
+      setDocsPresentados((prev) => ({ ...prev, ordenPago: true }));
+      // Sincronizar también con herederos si aplica
+      setHerederosSucesion((prev) =>
+        prev.map((h) => ({ ...h, ordenPagoPdf: base64, ordenPagoSize: size }))
+      );
+
       showConfirmMessage(
         'success',
-        'Orden de pago cargada',
+        'Orden de pago cargada y unificada',
         esImagenConvertida
           ? `Imagen convertida a PDF (${(size / 1024 / 1024).toFixed(2)} MB)`
           : `Tamaño: ${(size / 1024 / 1024).toFixed(2)} MB`,
@@ -563,6 +598,10 @@ export default function NuevoExpedientePage() {
       parentesco: 'Hijo(a)',
       porcentaje: '0',
       esManual: true,
+      ...(docs.ordenPago?.base64 && {
+        ordenPago: docs.ordenPago.base64,
+        ordenPagoSize: docs.ordenPago.size,
+      }),
     };
     setBeneficiariosReg((prev) => {
       const list = [...prev, nuevo];
@@ -614,8 +653,8 @@ export default function NuevoExpedientePage() {
         if (dniDecl && !/^\d{8}$/.test(dniDecl)) return `El DNI del declarante de ${b.nombre} debe tener 8 dígitos`;
         if (b.declaracionJurada && !dniDecl) return `Indique el DNI del declarante de ${b.nombre}`;
       }
-      const todosDocs = docsRequeridos.every(({ key }) => docsPresentados[key] === true || docs[key] != null);
-      if (todosDocs) {
+      const todosDocs = Boolean(docs.otrosDocumentos) || docsRequeridos.every(({ key }) => docsPresentados[key] === true || docs[key] != null);
+      if (todosDocs && !docs.otrosDocumentos) {
         const faltantes = beneficiariosReg.filter((b) => !b.declaracionJurada).map((b) => b.nombre);
         if (faltantes.length > 0) return `Falta la declaración jurada de: ${faltantes.join(', ')}`;
       }
@@ -1512,6 +1551,10 @@ export default function NuevoExpedientePage() {
                               declaracionJuradaDni: colegiado.DNI,
                               parentesco: 'Titular',
                               porcentaje: '100',
+                              ...(docs.ordenPago?.base64 && {
+                                ordenPago: docs.ordenPago.base64,
+                                ordenPagoSize: docs.ordenPago.size,
+                              }),
                             };
                             setBeneficiariosReg([titularBene]);
                             setSolicitanteKeys([titularBene.key]);
@@ -1700,6 +1743,25 @@ export default function NuevoExpedientePage() {
                               <input type="file" accept="application/pdf,image/png,image/jpeg,image/jpg,image/webp" className="hidden"
                                 onChange={(e) => { if (e.target.files?.[0]) handleOrdenPagoBeneficiario(f.key, e.target.files[0]); }} />
                             </label>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setBeneficiariosReg((prev) => {
+                                  const updated = prev.map((b) =>
+                                    b.key === f.key ? { ...b, ordenPago: undefined, ordenPagoSize: undefined } : b
+                                  );
+                                  const algunTiene = updated.some((b) => Boolean(b.ordenPago));
+                                  if (!algunTiene) {
+                                    setDocs((d) => ({ ...d, ordenPago: null }));
+                                    setDocsPresentados((dp) => ({ ...dp, ordenPago: false }));
+                                  }
+                                  return updated;
+                                });
+                              }}
+                              className="text-xs text-red-500 hover:text-red-700 ml-1"
+                            >
+                              Quitar
+                            </button>
                           </>
                         ) : (
                           <label className="cursor-pointer inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline">
@@ -1825,9 +1887,45 @@ export default function NuevoExpedientePage() {
               {docsRequeridos.map(({ key, label }) => {
                 const doc = docs[key];
                 const presentado = docsPresentados[key] ?? false;
+                const esCompleto = key === 'otrosDocumentos';
+                const esOrdenPago = key === 'ordenPago';
                 return (
-                  <div key={key} className={`flex items-center gap-3 border rounded-lg px-3 py-2 ${presentado ? 'border-border bg-white' : 'border-amber-300 bg-amber-50'}`}>
-                    <span className="text-sm text-text-main w-52">{label}</span>
+                  <div
+                    key={key}
+                    className={`flex items-center gap-3 border rounded-lg px-3 py-2.5 transition-colors ${
+                      esCompleto
+                        ? 'border-blue-300 bg-blue-50/50'
+                        : presentado
+                        ? 'border-border bg-white'
+                        : 'border-amber-300 bg-amber-50'
+                    }`}
+                  >
+                    <div className="w-64 shrink-0">
+                      <span
+                        className={`text-sm ${
+                          esCompleto
+                            ? 'font-semibold text-primary flex items-center gap-1.5'
+                            : 'font-medium text-text-main'
+                        }`}
+                      >
+                        {esCompleto && (
+                          <svg className="w-4 h-4 text-primary shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                        )}
+                        {label}
+                      </span>
+                      {esCompleto && (
+                        <p className="text-[10px] text-text-sec mt-0.5">
+                          Adjunte todo el expediente digitalizado en un solo archivo PDF
+                        </p>
+                      )}
+                      {esOrdenPago && (
+                        <p className="text-[10px] text-primary/80 mt-0.5">
+                          Unificado automáticamente con los beneficiarios
+                        </p>
+                      )}
+                    </div>
                     {key === DNI_KEY && (
                       <label className="inline-flex items-center gap-1.5 text-xs text-text-sec">
                         DNI
@@ -1842,15 +1940,31 @@ export default function NuevoExpedientePage() {
                     )}
                     {doc ? (
                       <>
-                        <span className="inline-flex items-center gap-1 text-xs text-green-700 bg-green-50 px-2 py-0.5 rounded-full">
+                        <span className="inline-flex items-center gap-1 text-xs text-green-700 bg-green-50 px-2 py-0.5 rounded-full font-medium">
                           ✓ {(doc.size / 1024 / 1024).toFixed(2)} MB
                         </span>
-                        <button type="button" onClick={() => abrirPdfBase64(doc.base64, label)} className="text-xs text-primary hover:underline">Ver</button>
-                        <button type="button" onClick={() => { setDocs((prev) => ({ ...prev, [key]: null })); setDocsPresentados((prev) => ({ ...prev, [key]: false })); }}
-                          className="text-xs text-red-500 hover:text-red-700">Quitar</button>
+                        <button type="button" onClick={() => abrirPdfBase64(doc.base64, label)} className="text-xs text-primary hover:underline font-medium">Ver</button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDocs((prev) => ({ ...prev, [key]: null }));
+                            setDocsPresentados((prev) => ({ ...prev, [key]: false }));
+                            if (key === 'ordenPago') {
+                              setBeneficiariosReg((prev) =>
+                                prev.map((b) => ({ ...b, ordenPago: undefined, ordenPagoSize: undefined }))
+                              );
+                              setHerederosSucesion((prev) =>
+                                prev.map((h) => ({ ...h, ordenPagoPdf: undefined, ordenPagoSize: undefined }))
+                              );
+                            }
+                          }}
+                          className="text-xs text-red-500 hover:text-red-700"
+                        >
+                          Quitar
+                        </button>
                       </>
                     ) : (
-                      <label className="cursor-pointer inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary-dark">
+                      <label className="cursor-pointer inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:text-primary-dark">
                         Subir PDF o Imagen
                         <input type="file" accept="application/pdf,image/png,image/jpeg,image/jpg,image/webp" className="hidden" onChange={(e) => { if (e.target.files?.[0]) handlePdf(key, e.target.files[0]); }} />
                       </label>

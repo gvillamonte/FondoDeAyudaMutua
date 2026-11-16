@@ -869,6 +869,11 @@ export class FamBeneficiosService {
       }
     }
 
+    const ordenPagoGeneral = dto.ordenPago || dto.beneficiarios.find((b) => b.ordenPago)?.ordenPago || null;
+    if (!dto.ordenPago && ordenPagoGeneral) {
+      dto.ordenPago = ordenPagoGeneral;
+    }
+
     const resultado = await this.prisma.$transaction(async (tx) => {
       const idsVinculados: {
         beneficiarioId: string;
@@ -918,7 +923,7 @@ export class FamBeneficiosService {
           dni: b.dni?.trim() || null,
           declaracionJurada: b.declaracionJurada || dto.declaracionJurada || null,
           declaracionJuradaDni: b.declaracionJuradaDni?.trim() || dto.declaracionJuradaDni?.trim() || null,
-          ordenPago: b.ordenPago || (dto.beneficiarios.length === 1 ? dto.ordenPago || null : null),
+          ordenPago: b.ordenPago || dto.ordenPago || ordenPagoGeneral || null,
         });
       }
 

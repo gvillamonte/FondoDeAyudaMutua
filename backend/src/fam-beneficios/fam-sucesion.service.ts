@@ -145,6 +145,7 @@ export class FamSucesionService {
     );
     const montoMinimo = await this.famBeneficiosService.obtenerMontoMinimoFallecimiento();
     const calculo = this.famBeneficiosService.calcularSaldoPendiente(sumaMontos, montoMinimo);
+    const ordenPagoGeneral = dto.ordenPago || dto.herederos?.find((h) => h.ordenPagoPdf)?.ordenPagoPdf || null;
 
     const resultado = await this.prisma.$transaction(async (tx) => {
       // 1. Crear expediente principal
@@ -191,7 +192,7 @@ export class FamSucesionService {
           fichaAdmisibilidad: dto.fichaAdmisibilidad || null,
           cartaRemision: dto.cartaRemision || null,
           memorando: dto.memorando || null,
-          ordenPago: dto.ordenPago || null,
+          ordenPago: ordenPagoGeneral,
           otrosDocumentos: dto.otrosDocumentos || null,
           registradoPor: userId,
         },
@@ -266,7 +267,7 @@ export class FamSucesionService {
             telefono: h.telefono || null,
             email: h.email || null,
             declaracionJuradaPdf: h.declaracionJuradaPdf || null,
-            ordenPagoPdf: h.ordenPagoPdf || null,
+            ordenPagoPdf: h.ordenPagoPdf || ordenPagoGeneral || null,
             orden: i + 1,
           },
         });
@@ -278,7 +279,7 @@ export class FamSucesionService {
             porcentajeAsignado: h.porcentaje,
             declaracionJurada: h.declaracionJuradaPdf || null,
             declaracionJuradaDni: h.numeroDocumento.trim(),
-            ordenPago: h.ordenPagoPdf || null,
+            ordenPago: h.ordenPagoPdf || ordenPagoGeneral || null,
           },
         });
 

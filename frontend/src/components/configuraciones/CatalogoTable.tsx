@@ -16,6 +16,9 @@ export interface CatalogoCampo {
   required?: boolean;
   hideOnCreate?: boolean;
   placeholder?: string;
+  onlyNumbers?: boolean;
+  helperText?: string;
+  maxLength?: number;
 }
 
 export interface CatalogoColumna {
@@ -72,7 +75,12 @@ export default function CatalogoTable({ endpoint, titulo, descripcion, columnas,
       setEditingId(item.id);
       const f: Record<string, any> = {};
       campos.forEach((c) => {
-        f[c.key] = c.type === 'checkbox' ? !!item[c.key] : (item[c.key] ?? '');
+        let val = item[c.key];
+        if (c.onlyNumbers && typeof val === 'string') {
+          const match = val.match(/\d+/);
+          val = match ? match[0] : val.replace(/\D/g, '');
+        }
+        f[c.key] = c.type === 'checkbox' ? !!val : (val ?? '');
       });
       setForm(f);
     } else {
@@ -88,8 +96,13 @@ export default function CatalogoTable({ endpoint, titulo, descripcion, columnas,
   const handleSave = async () => {
     for (const c of campos) {
       if (editingId && c.hideOnCreate) continue;
-      if (c.required && c.type !== 'checkbox' && !String(form[c.key] ?? '').trim()) {
+      const valor = form[c.key];
+      if (c.required && c.type !== 'checkbox' && !String(valor ?? '').trim()) {
         setFormError(`${c.label} es requerido`);
+        return;
+      }
+      if (c.onlyNumbers && valor && !/^\d+$/.test(String(valor).trim())) {
+        setFormError(`${c.label} debe contener únicamente números`);
         return;
       }
     }
@@ -99,7 +112,10 @@ export default function CatalogoTable({ endpoint, titulo, descripcion, columnas,
       const body: Record<string, any> = {};
       campos.forEach((c) => {
         if (!editingId && c.hideOnCreate) return;
-        const v = form[c.key];
+        let v = form[c.key];
+        if (c.onlyNumbers && typeof v === 'string') {
+          v = v.replace(/\D/g, '').trim();
+        }
         if (c.type === 'number') body[c.key] = v === '' ? undefined : Number(v);
         else if (c.type === 'checkbox') body[c.key] = !!v;
         else body[c.key] = v === '' ? undefined : v;
@@ -222,20 +238,42 @@ export default function CatalogoTable({ endpoint, titulo, descripcion, columnas,
                     </div>
                   ) : (
                     <>
-                      <label className="block text-xs font-medium text-text-sec uppercase mb-1">{c.label} {c.required && '*'}</label>
+                      <label className="block text-xs font-medium text-text-sec uppercase mb-1">
+                        {c.label} {c.required && <span className="text-red-500">*</span>}
+                      </label>
                       {c.type === 'select' ? (
-                        <select value={form[c.key] ?? ''} onChange={(e) => setForm({ ...form, [c.key]: e.target.value })}
-                          className="w-full px-3 py-2 border border-border rounded-lg text-sm">
+                        <select
+                          value={form[c.key] ?? ''}
+                          onChange={(e) => setForm({ ...form, [c.key]: e.target.value })}
+                          className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#3258CA]/30 focus:border-[#3258CA]"
+                        >
                           <option value="">-- Seleccione --</option>
                           {(c.options || []).map((o) => (
                             <option key={o.value} value={o.value}>{o.label}</option>
                           ))}
                         </select>
                       ) : (
-                        <input type={c.type === 'date' ? 'date' : c.type === 'number' ? 'number' : 'text'} value={form[c.key] ?? ''}
-                          onChange={(e) => setForm({ ...form, [c.key]: e.target.value })}
-                          className="w-full px-3 py-2 border border-border rounded-lg text-sm"
-                          placeholder={c.placeholder} />
+                        <div>
+                          <input
+                            type={c.type === 'date' ? 'date' : c.type === 'number' ? 'number' : 'text'}
+                            inputMode={c.onlyNumbers ? 'numeric' : undefined}
+                            pattern={c.onlyNumbers ? '[0-9]*' : undefined}
+                            maxLength={c.maxLength}
+                            value={form[c.key] ?? ''}
+                            onChange={(e) => {
+                              let val = e.target.value;
+                              if (c.onlyNumbers) {
+                                val = val.replace(/\D/g, '');
+                              }
+                              setForm({ ...form, [c.key]: val });
+                            }}
+                            className={`w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#3258CA]/30 focus:border-[#3258CA] ${c.onlyNumbers ? 'font-mono' : ''}`}
+                            placeholder={c.placeholder}
+                          />
+                          {c.helperText && (
+                            <p className="text-[11px] text-text-sec mt-1">{c.helperText}</p>
+                          )}
+                        </div>
                       )}
                     </>
                   )}

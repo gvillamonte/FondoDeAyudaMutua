@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import {
@@ -297,20 +297,64 @@ export class CatalogosService {
   }
 
   // ================= MEMORÁNDUMS =================
+  private extraerNumeroMemorando(str: string): number | null {
+    if (!str) return null;
+    const match = str.trim().match(/\d+/);
+    if (!match) return null;
+    const n = parseInt(match[0], 10);
+    return isNaN(n) ? null : n;
+  }
+
   async listarMemorandos(soloActivos: boolean) {
-    return this.prisma.memorando.findMany({
+    const list = await this.prisma.memorando.findMany({
       where: soloActivos ? { activo: true } : {},
-      orderBy: { numero: 'asc' },
+    });
+    return list.sort((a, b) => {
+      const numA = this.extraerNumeroMemorando(a.numero);
+      const numB = this.extraerNumeroMemorando(b.numero);
+      if (numA !== null && numB !== null && numA !== numB) {
+        return numA - numB;
+      }
+      return a.numero.localeCompare(b.numero, undefined, { numeric: true, sensitivity: 'base' });
     });
   }
 
   async crearMemorando(dto: CrearMemorandoDto, userId: string, ip?: string) {
-    const dup = await this.prisma.memorando.findFirst({ where: { numero: dto.numero.trim() } });
-    if (dup) throw new ConflictException(`El memorándum '${dto.numero}' ya existe`);
+    const rawNumero = dto.numero?.trim() || '';
+    const soloDigitos = rawNumero.replace(/\D/g, '');
+    const numClean = soloDigitos || rawNumero;
+
+    if (!numClean) {
+      throw new BadRequestException('El número de memorándum es requerido y debe contener solo números');
+    }
+
+    const numIngresado = this.extraerNumeroMemorando(numClean);
+
+    // Buscar duplicados existentes
+    const todos = await this.prisma.memorando.findMany({
+      select: { id: true, numero: true },
+    });
+
+    const dup = todos.find((m) => {
+      // 1. Coincidencia exacta de texto (case insensitive)
+      if (m.numero.trim().toLowerCase() === numClean.toLowerCase()) return true;
+      // 2. Coincidencia por número extraído (evita 45 vs 045 vs MEM-045)
+      if (numIngresado !== null) {
+        const mNum = this.extraerNumeroMemorando(m.numero);
+        if (mNum !== null && mNum === numIngresado) return true;
+      }
+      return false;
+    });
+
+    if (dup) {
+      throw new ConflictException(
+        `El memorándum con número '${numClean}' ya existe (registrado como: '${dup.numero}')`,
+      );
+    }
 
     const creado = await this.prisma.memorando.create({
       data: {
-        numero: dto.numero.trim(),
+        numero: numClean,
         fecha: dto.fecha ? new Date(dto.fecha) : null,
         asunto: dto.asunto || null,
         activo: dto.activo ?? true,
@@ -323,17 +367,45 @@ export class CatalogosService {
   async actualizarMemorando(id: string, dto: ActualizarMemorandoDto, userId: string, ip?: string) {
     const existing = await this.prisma.memorando.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException(`Memorándum ${id} no encontrado`);
-    if (dto.numero !== undefined && dto.numero.trim() !== existing.numero) {
-      const dup = await this.prisma.memorando.findFirst({
-        where: { numero: dto.numero.trim(), NOT: { id } },
-      });
-      if (dup) throw new ConflictException(`El memorándum '${dto.numero}' ya existe`);
+
+    let numClean: string | undefined;
+    if (dto.numero !== undefined) {
+      const raw = dto.numero.trim();
+      const soloDigitos = raw.replace(/\D/g, '');
+      numClean = soloDigitos || raw;
+
+      if (!numClean) {
+        throw new BadRequestException('El número de memorándum no puede estar vacío');
+      }
+
+      if (numClean !== existing.numero) {
+        const numIngresado = this.extraerNumeroMemorando(numClean);
+        const otros = await this.prisma.memorando.findMany({
+          where: { NOT: { id } },
+          select: { id: true, numero: true },
+        });
+
+        const dup = otros.find((m) => {
+          if (m.numero.trim().toLowerCase() === numClean!.toLowerCase()) return true;
+          if (numIngresado !== null) {
+            const mNum = this.extraerNumeroMemorando(m.numero);
+            if (mNum !== null && mNum === numIngresado) return true;
+          }
+          return false;
+        });
+
+        if (dup) {
+          throw new ConflictException(
+            `El memorándum con número '${numClean}' ya existe (registrado como: '${dup.numero}')`,
+          );
+        }
+      }
     }
 
     const actualizado = await this.prisma.memorando.update({
       where: { id },
       data: {
-        ...(dto.numero !== undefined && { numero: dto.numero.trim() }),
+        ...(numClean !== undefined && { numero: numClean }),
         ...(dto.fecha !== undefined && { fecha: dto.fecha ? new Date(dto.fecha) : null }),
         ...(dto.asunto !== undefined && { asunto: dto.asunto || null }),
         ...(dto.activo !== undefined && { activo: dto.activo }),

@@ -7,9 +7,17 @@ export default function MemorandosPage() {
     <CatalogoTable
       endpoint="memorandos"
       titulo="Memorándums"
-      descripcion="Gestión de memorándums institucionales. Los números aquí creados se usarán en los formularios de Ayuda COVID."
+      descripcion="Gestión de memorándums institucionales. Registre únicamente los números del memorándum (sin prefijos ni letras) para mantener una numeración homogénea y evitar registros duplicados."
       columnas={[
-        { key: 'numero', label: 'N.° Memorándum' },
+        {
+          key: 'numero',
+          label: 'N.° Memorándum',
+          render: (item) => (
+            <span className="font-mono font-semibold text-text-main">
+              {item.numero}
+            </span>
+          ),
+        },
         {
           key: 'fecha',
           label: 'Fecha',
@@ -33,7 +41,15 @@ export default function MemorandosPage() {
         },
       ]}
       campos={[
-        { key: 'numero', label: 'N.° Memorándum', required: true, placeholder: 'MEM-045-2021' },
+        {
+          key: 'numero',
+          label: 'N.° Memorándum (Solo números)',
+          required: true,
+          onlyNumbers: true,
+          maxLength: 10,
+          placeholder: 'Ej. 45 o 045',
+          helperText: 'Ingrese únicamente los números del memorándum (sin prefijos ni letras) para evitar duplicados.',
+        },
         { key: 'fecha', label: 'Fecha', type: 'date' },
         { key: 'asunto', label: 'Asunto', placeholder: 'Asunto o referencia del memorándum' },
         { key: 'activo', label: 'Activo', type: 'checkbox' },

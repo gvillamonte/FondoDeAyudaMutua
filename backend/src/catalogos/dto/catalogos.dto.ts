@@ -8,6 +8,7 @@ import {
   Min,
   MinLength,
   MaxLength,
+  Matches,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -223,10 +224,11 @@ export class ActualizarTipoBeneficioConfigDto {
 
 // ========== MEMORÁNDUMS ==========
 export class CrearMemorandoDto {
-  @ApiProperty({ example: 'MEM-045-2021' })
+  @ApiProperty({ example: '45' })
   @IsString()
-  @MinLength(2)
+  @MinLength(1)
   @MaxLength(50)
+  @Matches(/^\d+$/, { message: 'El número de memorándum debe contener únicamente números' })
   numero: string;
 
   @ApiPropertyOptional({ example: '2021-05-12' })
@@ -250,7 +252,7 @@ export class ActualizarMemorandoDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
-  @MinLength(2)
+  @MinLength(1)
   @MaxLength(50)
   numero?: string;
 

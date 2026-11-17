@@ -27,9 +27,9 @@ export default function ModalNuevoMemorando({ open, onClose, onSuccess }: ModalN
 
   const handleGuardar = async (e: React.FormEvent) => {
     e.preventDefault();
-    const numTrim = numero.trim();
-    if (!numTrim) {
-      setError('El número de memorándum es obligatorio.');
+    const numClean = numero.replace(/\D/g, '').trim();
+    if (!numClean) {
+      setError('El número de memorándum es obligatorio y debe contener únicamente números.');
       return;
     }
 
@@ -37,7 +37,7 @@ export default function ModalNuevoMemorando({ open, onClose, onSuccess }: ModalN
       setGuardando(true);
       setError('');
       const res = await api.post('/memorandos', {
-        numero: numTrim,
+        numero: numClean,
         fecha: fecha || undefined,
         asunto: asunto.trim() || undefined,
         activo: true,
@@ -107,17 +107,22 @@ export default function ModalNuevoMemorando({ open, onClose, onSuccess }: ModalN
 
           <div>
             <label className="block text-xs font-semibold text-text-sec uppercase mb-1">
-              N.° de Memorándum <span className="text-red-500">*</span>
+              N.° de Memorándum (Solo números) <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
               autoFocus
               value={numero}
-              onChange={(e) => setNumero(e.target.value)}
-              placeholder="Ej. MEMO-0045-2026"
+              onChange={(e) => setNumero(e.target.value.replace(/\D/g, ''))}
+              placeholder="Ej. 45 o 045"
               required
-              className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#3258CA]/30 focus:border-[#3258CA]"
+              className="w-full px-3 py-2 border border-border rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#3258CA]/30 focus:border-[#3258CA]"
             />
+            <p className="text-[11px] text-text-sec mt-1">
+              Ingrese únicamente los números del memorándum (sin letras ni prefijos) para evitar duplicados.
+            </p>
           </div>
 
           <div>

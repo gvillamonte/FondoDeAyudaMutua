@@ -513,6 +513,14 @@ export class CrearRegistroFamDto {
   banco?: string;
 
   @IsOptional()
+  @IsString()
+  numeroCuenta?: string;
+
+  @IsOptional()
+  @IsString()
+  cci?: string;
+
+  @IsOptional()
   @IsDateString()
   ordenPagoFecha?: string;
 
@@ -666,6 +674,14 @@ export class CrearFamSolicitudDto {
   @IsOptional()
   @IsString()
   banco?: string;
+
+  @IsOptional()
+  @IsString()
+  numeroCuenta?: string;
+
+  @IsOptional()
+  @IsString()
+  cci?: string;
 
   @IsOptional()
   @IsDateString()
@@ -875,6 +891,14 @@ export class ActualizarFamSolicitudDto {
   @IsOptional()
   @IsString()
   banco?: string;
+
+  @IsOptional()
+  @IsString()
+  numeroCuenta?: string;
+
+  @IsOptional()
+  @IsString()
+  cci?: string;
 
   @IsOptional()
   @IsDateString()

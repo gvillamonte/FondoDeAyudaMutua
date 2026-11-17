@@ -186,6 +186,8 @@ export class FamSucesionService {
           memorandoFecha: dto.memorandoFecha ? new Date(dto.memorandoFecha) : null,
           banco: dto.banco || null,
           formaPago: dto.formaPago || null,
+          numeroCuenta: dto.numeroCuenta?.trim() || null,
+          cci: dto.cci?.trim() || null,
           observaciones: dto.observaciones || null,
           actaDefuncion: dto.actaDefuncion || null,
           solicitudAsignacion: dto.solicitudAsignacion || null,

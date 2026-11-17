@@ -266,6 +266,8 @@ model FamSolicitudBeneficio {
   ordenPago                String?  @map("orden_pago") @db.NVarChar(MAX)
   formaPago                String?  @map("forma_pago") @db.VarChar(30)
   banco                    String?  @db.VarChar(100)
+  numeroCuenta             String?  @map("numero_cuenta") @db.VarChar(50)
+  cci                      String?  @db.VarChar(30)
   ordenPagoFecha           DateTime? @map("orden_pago_fecha")
   modalidadBeneficio       String?  @map("modalidad_beneficio") @db.VarChar(30)
   covidAsignacionId        String?  @map("covid_asignacion_id") @db.NVarChar(36)

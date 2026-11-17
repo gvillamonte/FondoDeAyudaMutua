@@ -19,6 +19,8 @@ interface FormEstado {
   documentacionObservacion: string;
   formaPago: string;
   banco: string;
+  numeroCuenta: string;
+  cci: string;
   cartaNumero: string;
   cartaFecha: string;
   memorandoNumero: string;
@@ -29,7 +31,7 @@ interface FormEstado {
 const FORM_VACIO: FormEstado = {
   estado: '', monto: '', fechaSolicitud: '', fechaPago: '',
   observaciones: '', documentacionCompleta: true, documentacionObservacion: '',
-  formaPago: '', banco: '',
+  formaPago: '', banco: '', numeroCuenta: '', cci: '',
   cartaNumero: '', cartaFecha: '', memorandoNumero: '', memorandoFecha: '',
   expedienteNumero: '',
 };
@@ -67,6 +69,8 @@ export default function EditarExpedienteModal({
           documentacionObservacion: data.documentacionObservacion || '',
           formaPago: data.formaPago || '',
           banco: data.banco || '',
+          numeroCuenta: data.numeroCuenta || '',
+          cci: data.cci || '',
           cartaNumero: data.cartaNumero || '',
           cartaFecha: aFecha(data.cartaFecha),
           memorandoNumero: data.memorandoNumero || '',
@@ -99,6 +103,8 @@ export default function EditarExpedienteModal({
           : (form.documentacionObservacion.trim() || undefined),
         formaPago: form.formaPago || undefined,
         banco: form.banco || undefined,
+        numeroCuenta: form.numeroCuenta?.trim() || undefined,
+        cci: form.cci?.trim() || undefined,
         cartaNumero: form.cartaNumero || undefined,
         cartaFecha: form.cartaFecha || undefined,
         memorandoNumero: form.memorandoNumero || undefined,
@@ -214,6 +220,49 @@ export default function EditarExpedienteModal({
                   <input value={form.banco} onChange={(e) => setForm({ ...form, banco: e.target.value })} className={INPUT_CLS} />
                 </div>
               </div>
+
+              {form.formaPago && (
+                <div className="bg-blue-50/60 border border-blue-200/80 rounded-xl p-3.5 space-y-3">
+                  <div className="flex items-center gap-2 text-xs font-bold text-primary uppercase tracking-wide">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                    </svg>
+                    <span>Apartado de Cuenta Bancaria donde se depositó ({form.formaPago})</span>
+                  </div>
+                  {form.formaPago === 'EFECTIVO' ? (
+                    <p className="text-xs text-text-sec">
+                      ℹ️ Modalidad en efectivo / ventanilla: no requiere número de cuenta bancaria.
+                    </p>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-text-sec mb-1">
+                          Número de Cuenta Bancaria donde se depositó *
+                        </label>
+                        <input
+                          type="text"
+                          value={form.numeroCuenta}
+                          onChange={(e) => setForm({ ...form, numeroCuenta: e.target.value })}
+                          placeholder="Ej. 0011-0123-0100012345"
+                          className={INPUT_CLS}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-text-sec mb-1">
+                          Código de Cuenta Interbancario (CCI)
+                        </label>
+                        <input
+                          type="text"
+                          value={form.cci}
+                          onChange={(e) => setForm({ ...form, cci: e.target.value })}
+                          placeholder="Ej. 002-011-000123456789-01 (Opcional)"
+                          className={INPUT_CLS}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="border-t border-border-main pt-4 space-y-3">
                 <div>

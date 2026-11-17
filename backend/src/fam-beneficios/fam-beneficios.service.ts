@@ -63,7 +63,7 @@ export class FamBeneficiosService {
     private prisma: PrismaService,
     private auditService: AuditService,
     private famService: FamService,
-  ) {}
+  ) { }
 
   private async calcularCovidTotal(colegiadoId: string): Promise<number> {
     let total = 0;
@@ -73,7 +73,7 @@ export class FamBeneficiosService {
         select: { monto: true },
       });
       total += asignaciones.reduce((sum, a) => sum + Number(a.monto), 0);
-    } catch {}
+    } catch { }
     try {
       const expedientes = await this.prisma.famSolicitudBeneficio.findMany({
         where: {
@@ -84,7 +84,7 @@ export class FamBeneficiosService {
         select: { monto: true },
       });
       total += expedientes.reduce((sum, e) => sum + Number(e.monto), 0);
-    } catch {}
+    } catch { }
     return total;
   }
 
@@ -378,7 +378,8 @@ export class FamBeneficiosService {
     });
   }
 
-  private construirEstadoReparto(solicitud: any) {    const vinculos = solicitud.vinculos || [];
+  private construirEstadoReparto(solicitud: any) {
+    const vinculos = solicitud.vinculos || [];
     const depositos = solicitud.depositos || [];
     const porcentajeAsignado = this.sumaPorcentajes(vinculos);
     const beneficiariosFaltantes = vinculos
@@ -427,7 +428,7 @@ export class FamBeneficiosService {
         select: { monto: true },
       });
       if (monto) return Number(monto.monto);
-    } catch {}
+    } catch { }
     return MONTO_BASE_POR_DEFECTO[codigo] ?? 0;
   }
 
@@ -505,7 +506,7 @@ export class FamBeneficiosService {
         });
         if (cfg) return cfg.valor.toLowerCase() === 'true';
       }
-    } catch {}
+    } catch { }
     return true;
   }
 
@@ -865,7 +866,7 @@ export class FamBeneficiosService {
             orderBy: { createdAt: 'desc' },
           });
           if (ultimaCovid) covidAsignacionId = ultimaCovid.id;
-        } catch {}
+        } catch { }
       }
     }
 
@@ -987,6 +988,8 @@ export class FamBeneficiosService {
           memorandoFecha: dto.memorandoFecha ? new Date(dto.memorandoFecha) : null,
           formaPago: dto.formaPago || null,
           banco: dto.banco || null,
+          numeroCuenta: dto.numeroCuenta?.trim() || null,
+          cci: dto.cci?.trim() || null,
           ordenPagoFecha: dto.ordenPagoFecha ? new Date(dto.ordenPagoFecha) : null,
           registradoPor: userId,
           ...this.construirDataExpediente(dto),
@@ -1045,31 +1048,31 @@ export class FamBeneficiosService {
         const otorganteNombreNorm = ((solicitud as any).poderOtorganteNombre || '').trim().toUpperCase();
         const depositos = idsVinculados.length
           ? this.construirMontosDeposito(
-              total,
-              idsVinculados.map((v) => ({
-                beneficiarioId: v.beneficiarioId,
-                nombre: v.nombre,
-                dni: v.dni || undefined,
-                porcentaje: v.porcentajeAsignado,
-              })),
-            )
+            total,
+            idsVinculados.map((v) => ({
+              beneficiarioId: v.beneficiarioId,
+              nombre: v.nombre,
+              dni: v.dni || undefined,
+              porcentaje: v.porcentajeAsignado,
+            })),
+          )
           : [
-              {
-                beneficiarioId: undefined,
-                nombre:
-                  (solicitud as any).poderOtorganteNombre ||
-                  solicitud.solicitanteNombre ||
-                  solicitud.apoderadoNombre ||
-                  undefined,
-                dni:
-                  (solicitud as any).poderOtorganteDni ||
-                  solicitud.solicitanteDni ||
-                  solicitud.apoderadoDni ||
-                  undefined,
-                porcentaje: 100,
-                monto: total,
-              },
-            ];
+            {
+              beneficiarioId: undefined,
+              nombre:
+                (solicitud as any).poderOtorganteNombre ||
+                solicitud.solicitanteNombre ||
+                solicitud.apoderadoNombre ||
+                undefined,
+              dni:
+                (solicitud as any).poderOtorganteDni ||
+                solicitud.solicitanteDni ||
+                solicitud.apoderadoDni ||
+                undefined,
+              porcentaje: 100,
+              monto: total,
+            },
+          ];
 
         for (const d of depositos) {
           const aplicaPoderADeposito =
@@ -1087,7 +1090,8 @@ export class FamBeneficiosService {
               porcentaje: d.porcentaje,
               monto: d.monto,
               banco: dto.banco || null,
-              numeroCuenta: aplicaPoderADeposito ? ((solicitud as any).poderChequeNumero || null) : null,
+              numeroCuenta: aplicaPoderADeposito ? ((solicitud as any).poderChequeNumero || null) : (dto.numeroCuenta?.trim() || null),
+              cci: dto.cci?.trim() || null,
               conCartaPoder: aplicaPoderADeposito,
               apoderadoNombre: aplicaPoderADeposito ? (solicitud.apoderadoNombre || null) : null,
               apoderadoDni: aplicaPoderADeposito ? (solicitud.apoderadoDni || null) : null,
@@ -1482,7 +1486,7 @@ export class FamBeneficiosService {
                 ((s as any).poderOtorganteDni && (s as any).poderOtorganteDni === dniBen) ||
                 ((s as any).poderOtorganteNombre &&
                   v.beneficiario?.nombre?.trim().toUpperCase() ===
-                    (s as any).poderOtorganteNombre.trim().toUpperCase()));
+                  (s as any).poderOtorganteNombre.trim().toUpperCase()));
             return {
               beneficiarioId: v.beneficiario?.id || null,
               nombre: v.beneficiario?.nombre || 'Sin registro',
@@ -1642,9 +1646,9 @@ export class FamBeneficiosService {
       this.obtenerMontoMinimoFallecimiento(),
       this.prisma.expedienteBeneficiarioAudit?.findMany
         ? this.prisma.expedienteBeneficiarioAudit.findMany({
-            where: { expedienteId: id },
-            orderBy: { fecha: 'desc' },
-          }).catch(() => [])
+          where: { expedienteId: id },
+          orderBy: { fecha: 'desc' },
+        }).catch(() => [])
         : Promise.resolve([]),
     ]);
     const colegiado = mapaColegiados.get(solicitud.colegiadoId);
@@ -1669,7 +1673,7 @@ export class FamBeneficiosService {
         select: { monto: true },
       });
       covidMontoTotal += covidAsignaciones.reduce((sum, a) => sum + Number(a.monto), 0);
-    } catch {}
+    } catch { }
     try {
       const covidExpedientes = await this.prisma.famSolicitudBeneficio.findMany({
         where: {
@@ -1680,7 +1684,7 @@ export class FamBeneficiosService {
         select: { monto: true },
       });
       covidMontoTotal += covidExpedientes.reduce((sum, e) => sum + Number(e.monto), 0);
-    } catch {}
+    } catch { }
 
     // Historial de beneficios pagados del colegiado (incluye el actual)
     let historialBruto: any[] = [];
@@ -1771,6 +1775,8 @@ export class FamBeneficiosService {
       poderFecha: (resto as any).poderFecha ? new Date((resto as any).poderFecha).toISOString() : null,
       poderMotivo: (resto as any).poderMotivo || (solicitud.depositos || []).find((d: any) => d.poderMotivo)?.poderMotivo || null,
       poderChequeNumero: (resto as any).poderChequeNumero || null,
+      numeroCuenta: (resto as any).numeroCuenta || (solicitud.depositos || []).find((d: any) => d.numeroCuenta)?.numeroCuenta || null,
+      cci: (resto as any).cci || (solicitud.depositos || []).find((d: any) => d.cci)?.cci || null,
       declaracionJuradaDni: resto.declaracionJuradaDni || null,
       documentosDisponibles: CAMPOS_DOCUMENTO.reduce((acc, campo: CampoDocumento) => {
         if (campo === 'cartaPoder') {
@@ -1801,51 +1807,51 @@ export class FamBeneficiosService {
       }),
       sucesionIntestadaDetalle: (solicitud as any).sucesionIntestadaDetalle
         ? {
-            id: (solicitud as any).sucesionIntestadaDetalle.id,
-            solicitudId: (solicitud as any).sucesionIntestadaDetalle.solicitudId,
-            colegiadoId: (solicitud as any).sucesionIntestadaDetalle.colegiadoId,
-            numeroPartidaRegistral: (solicitud as any).sucesionIntestadaDetalle.numeroPartidaRegistral,
-            notariaJuzgado: (solicitud as any).sucesionIntestadaDetalle.notariaJuzgado,
-            fechaEmisionDocumento: (solicitud as any).sucesionIntestadaDetalle.fechaEmisionDocumento,
-            montoTotal: Number((solicitud as any).sucesionIntestadaDetalle.montoTotal),
-            estadoTramite: (solicitud as any).sucesionIntestadaDetalle.estadoTramite,
-            versionActual: (solicitud as any).sucesionIntestadaDetalle.versionActual,
-            observaciones: (solicitud as any).sucesionIntestadaDetalle.observaciones,
-            tieneSustento: Boolean((solicitud as any).sucesionIntestadaDetalle.sustentoPdf),
-            herederos: ((solicitud as any).sucesionIntestadaDetalle.herederos || []).map((h: any) => ({
-              id: h.id,
-              sucesionId: h.sucesionId,
-              beneficiarioId: h.beneficiarioId,
-              tipoDocumento: h.tipoDocumento,
-              numeroDocumento: h.numeroDocumento,
-              nombres: h.nombres,
-              apellidos: h.apellidos,
-              nombreCompleto: `${h.nombres} ${h.apellidos}`.trim(),
-              parentesco: h.parentesco,
-              porcentaje: Number(h.porcentaje),
-              monto: Number(h.monto),
-              telefono: h.telefono,
-              email: h.email,
-              tieneDeclaracionJurada: Boolean(h.declaracionJuradaPdf),
-              tieneOrdenPago: Boolean(h.ordenPagoPdf),
-              orden: h.orden,
-            })),
-            versiones: ((solicitud as any).sucesionIntestadaDetalle.versiones || []).map((ver: any) => ({
-              id: ver.id,
-              numeroVersion: ver.numeroVersion,
-              motivoModificacion: ver.motivoModificacion,
-              modificadoPor: ver.modificadoPor,
-              ipAddress: ver.ipAddress,
-              createdAt: ver.createdAt,
-              snapshotDistribucion: (() => {
-                try {
-                  return JSON.parse(ver.snapshotDistribucionJson);
-                } catch {
-                  return [];
-                }
-              })(),
-            })),
-          }
+          id: (solicitud as any).sucesionIntestadaDetalle.id,
+          solicitudId: (solicitud as any).sucesionIntestadaDetalle.solicitudId,
+          colegiadoId: (solicitud as any).sucesionIntestadaDetalle.colegiadoId,
+          numeroPartidaRegistral: (solicitud as any).sucesionIntestadaDetalle.numeroPartidaRegistral,
+          notariaJuzgado: (solicitud as any).sucesionIntestadaDetalle.notariaJuzgado,
+          fechaEmisionDocumento: (solicitud as any).sucesionIntestadaDetalle.fechaEmisionDocumento,
+          montoTotal: Number((solicitud as any).sucesionIntestadaDetalle.montoTotal),
+          estadoTramite: (solicitud as any).sucesionIntestadaDetalle.estadoTramite,
+          versionActual: (solicitud as any).sucesionIntestadaDetalle.versionActual,
+          observaciones: (solicitud as any).sucesionIntestadaDetalle.observaciones,
+          tieneSustento: Boolean((solicitud as any).sucesionIntestadaDetalle.sustentoPdf),
+          herederos: ((solicitud as any).sucesionIntestadaDetalle.herederos || []).map((h: any) => ({
+            id: h.id,
+            sucesionId: h.sucesionId,
+            beneficiarioId: h.beneficiarioId,
+            tipoDocumento: h.tipoDocumento,
+            numeroDocumento: h.numeroDocumento,
+            nombres: h.nombres,
+            apellidos: h.apellidos,
+            nombreCompleto: `${h.nombres} ${h.apellidos}`.trim(),
+            parentesco: h.parentesco,
+            porcentaje: Number(h.porcentaje),
+            monto: Number(h.monto),
+            telefono: h.telefono,
+            email: h.email,
+            tieneDeclaracionJurada: Boolean(h.declaracionJuradaPdf),
+            tieneOrdenPago: Boolean(h.ordenPagoPdf),
+            orden: h.orden,
+          })),
+          versiones: ((solicitud as any).sucesionIntestadaDetalle.versiones || []).map((ver: any) => ({
+            id: ver.id,
+            numeroVersion: ver.numeroVersion,
+            motivoModificacion: ver.motivoModificacion,
+            modificadoPor: ver.modificadoPor,
+            ipAddress: ver.ipAddress,
+            createdAt: ver.createdAt,
+            snapshotDistribucion: (() => {
+              try {
+                return JSON.parse(ver.snapshotDistribucionJson);
+              } catch {
+                return [];
+              }
+            })(),
+          })),
+        }
         : null,
       depositos: (solicitud.depositos || []).map((d) => ({
         id: d.id,
@@ -2133,9 +2139,9 @@ export class FamBeneficiosService {
     const userIds = Array.from(new Set(logs.map((l) => l.userId).filter(Boolean)));
     const usuarios = userIds.length
       ? await this.prisma.usuario.findMany({
-          where: { id: { in: userIds } },
-          select: { id: true, nombreCompleto: true, username: true },
-        })
+        where: { id: { in: userIds } },
+        select: { id: true, nombreCompleto: true, username: true },
+      })
       : [];
     const nombresUsuarios = new Map(
       usuarios.map((u) => [u.id, u.nombreCompleto || u.username]),
@@ -2370,15 +2376,15 @@ export class FamBeneficiosService {
         titulo: primerPendiente ? 'Completar documentación' : 'Documentación cargada',
         descripcion: primerPendiente
           ? solicitud.documentacionObservacion ||
-            'Carga los documentos pendientes para que el expediente pueda pasar a revisión.'
+          'Carga los documentos pendientes para que el expediente pueda pasar a revisión.'
           : 'Todos los documentos disponibles están cargados. La documentación figura como incompleta; revisa la pestaña Documentos o solicita su validación.',
         accion:
           puedeSubir && primerPendiente
             ? {
-                tipo: 'SUBIR',
-                etiqueta: `Subir ${primerPendiente.nombre}`,
-                documentoId: primerPendiente.id,
-              }
+              tipo: 'SUBIR',
+              etiqueta: `Subir ${primerPendiente.nombre}`,
+              documentoId: primerPendiente.id,
+            }
             : null,
       };
     } else if (!aprobada) {
@@ -3113,7 +3119,7 @@ export class FamBeneficiosService {
         const depUsaPoder = Boolean(
           cuenta.conCartaPoder !== undefined
             ? cuenta.conCartaPoder
-            : usaApoderado && (! (existing as any).poderOtorganteDni || (existing as any).poderOtorganteDni === item.dni || montos.length === 1),
+            : usaApoderado && (!(existing as any).poderOtorganteDni || (existing as any).poderOtorganteDni === item.dni || montos.length === 1),
         );
         const depApoderadoNombre = cuenta.apoderadoNombre?.trim() || (depUsaPoder ? (existing as any).apoderadoNombre : null) || null;
         const depApoderadoDni = cuenta.apoderadoDni?.trim() || (depUsaPoder ? (existing as any).apoderadoDni : null) || null;
@@ -3175,18 +3181,18 @@ export class FamBeneficiosService {
           ...(bancoResumen ? { banco: bancoResumen } : {}),
           ...(primerDepositoConPoder
             ? {
-                conCartaPoder: true,
-                apoderadoNombre: primerDepositoConPoder.apoderadoNombre,
-                apoderadoDni: primerDepositoConPoder.apoderadoDni,
-                apoderadoParentesco: primerDepositoConPoder.apoderadoParentesco,
-                poderOtorganteNombre: (existing as any).poderOtorganteNombre || itemDePrimerPoder?.nombre || null,
-                poderOtorganteDni: (existing as any).poderOtorganteDni || itemDePrimerPoder?.dni || null,
-                poderOtorganteParentesco: (existing as any).poderOtorganteParentesco || (itemDePrimerPoder as any)?.parentesco || null,
-                poderFecha: (existing as any).poderFecha || fechaPago,
-                poderMotivo: primerDepositoConPoder.poderMotivo || (existing as any).poderMotivo || null,
-                poderChequeNumero: primerDepositoConPoder.numeroCuenta || (existing as any).poderChequeNumero || null,
-                ...(primerDepositoConPoder.cartaPoderPdf ? { cartaPoder: primerDepositoConPoder.cartaPoderPdf } : {}),
-              }
+              conCartaPoder: true,
+              apoderadoNombre: primerDepositoConPoder.apoderadoNombre,
+              apoderadoDni: primerDepositoConPoder.apoderadoDni,
+              apoderadoParentesco: primerDepositoConPoder.apoderadoParentesco,
+              poderOtorganteNombre: (existing as any).poderOtorganteNombre || itemDePrimerPoder?.nombre || null,
+              poderOtorganteDni: (existing as any).poderOtorganteDni || itemDePrimerPoder?.dni || null,
+              poderOtorganteParentesco: (existing as any).poderOtorganteParentesco || (itemDePrimerPoder as any)?.parentesco || null,
+              poderFecha: (existing as any).poderFecha || fechaPago,
+              poderMotivo: primerDepositoConPoder.poderMotivo || (existing as any).poderMotivo || null,
+              poderChequeNumero: primerDepositoConPoder.numeroCuenta || (existing as any).poderChequeNumero || null,
+              ...(primerDepositoConPoder.cartaPoderPdf ? { cartaPoder: primerDepositoConPoder.cartaPoderPdf } : {}),
+            }
             : {}),
         },
       });
@@ -3541,7 +3547,7 @@ export class FamBeneficiosService {
               keysExistentes.add(k);
             }
           }
-        } catch {}
+        } catch { }
 
         try {
           const bensLeg = await this.famService.getBeneficiariosByColegiado(colegiadoId);
@@ -3565,7 +3571,7 @@ export class FamBeneficiosService {
               keysExistentes.add(k);
             }
           }
-        } catch {}
+        } catch { }
 
         const depositosPrevios = ((fallecimiento as any).depositos || []).map((d: any) => ({
           id: d.id,
@@ -3742,7 +3748,7 @@ export class FamBeneficiosService {
           depositos: [],
         };
       }
-    } catch {}
+    } catch { }
 
     if (!tipoBeneficioId && !tipoBeneficioConfigId) {
       return null;
@@ -3860,6 +3866,8 @@ export class FamBeneficiosService {
       ...(dto.memorandoFecha !== undefined && { memorandoFecha: dto.memorandoFecha ? new Date(dto.memorandoFecha) : null }),
       ...(dto.formaPago !== undefined && { formaPago: dto.formaPago }),
       ...(dto.banco !== undefined && { banco: dto.banco }),
+      ...(dto.numeroCuenta !== undefined && { numeroCuenta: dto.numeroCuenta ? dto.numeroCuenta.trim() : null }),
+      ...(dto.cci !== undefined && { cci: dto.cci ? dto.cci.trim() : null }),
       ...(dto.ordenPagoFecha !== undefined && { ordenPagoFecha: dto.ordenPagoFecha ? new Date(dto.ordenPagoFecha) : null }),
     };
 

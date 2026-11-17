@@ -113,6 +113,8 @@ interface DetalleExpediente {
   memorandoFecha: string | null;
   formaPago: string | null;
   banco: string | null;
+  numeroCuenta?: string | null;
+  cci?: string | null;
   ordenPagoFecha: string | null;
   observaciones: string | null;
   descuentoCovid: number | null;
@@ -221,6 +223,7 @@ export default function DetalleExpedientePage() {
   const [formAdmin, setFormAdmin] = useState({
     estado: '', monto: '', fechaSolicitud: '', fechaPago: '',
     observaciones: '', formaPago: '', banco: '',
+    numeroCuenta: '', cci: '',
     cartaNumero: '', cartaFecha: '', memorandoNumero: '', memorandoFecha: '',
     expedienteNumero: '',
   });
@@ -249,6 +252,8 @@ export default function DetalleExpedientePage() {
           observaciones: data.observaciones || '',
           formaPago: data.formaPago || '',
           banco: data.banco || '',
+          numeroCuenta: data.numeroCuenta || '',
+          cci: data.cci || '',
           cartaNumero: data.cartaNumero || '',
           cartaFecha: data.cartaFecha ? new Date(data.cartaFecha).toISOString().slice(0, 10) : '',
           memorandoNumero: data.memorandoNumero || '',
@@ -567,6 +572,8 @@ export default function DetalleExpedientePage() {
         observaciones: formAdmin.observaciones || undefined,
         formaPago: formAdmin.formaPago || undefined,
         banco: formAdmin.banco || undefined,
+        numeroCuenta: formAdmin.numeroCuenta?.trim() || undefined,
+        cci: formAdmin.cci?.trim() || undefined,
         cartaNumero: formAdmin.cartaNumero || undefined,
         cartaFecha: formAdmin.cartaFecha || undefined,
         memorandoNumero: formAdmin.memorandoNumero || undefined,
@@ -1008,6 +1015,30 @@ export default function DetalleExpedientePage() {
                 <span className="text-amber-800 font-medium"><strong>Obs. Docs:</strong> {detalle.documentacionObservacion}</span>
               </>
             )}
+            {detalle.formaPago && (
+              <>
+                <span className="text-slate-300">•</span>
+                <span><strong>Forma Pago:</strong> {detalle.formaPago}</span>
+              </>
+            )}
+            {detalle.banco && (
+              <>
+                <span className="text-slate-300">•</span>
+                <span><strong>Banco:</strong> {detalle.banco}</span>
+              </>
+            )}
+            {detalle.numeroCuenta && (
+              <>
+                <span className="text-slate-300">•</span>
+                <span><strong>N.° Cuenta:</strong> <span className="font-mono font-semibold text-slate-700">{detalle.numeroCuenta}</span></span>
+              </>
+            )}
+            {detalle.cci && (
+              <>
+                <span className="text-slate-300">•</span>
+                <span><strong>CCI:</strong> <span className="font-mono font-semibold text-slate-700">{detalle.cci}</span></span>
+              </>
+            )}
             {detalle.observaciones && (
               <>
                 <span className="text-slate-300">•</span>
@@ -1335,10 +1366,10 @@ export default function DetalleExpedientePage() {
                         </div>
                         <p className="text-[11px] sm:text-xs text-slate-500 mt-1 flex items-center gap-2 sm:gap-3 flex-wrap">
                           <span>Banco: <strong className="text-slate-700 font-semibold">{dep?.banco || detalle.banco || 'CMAC'}</strong></span>
-                          {dep?.numeroCuenta && (
+                          {(dep?.numeroCuenta || detalle.numeroCuenta) && (
                             <>
                               <span>•</span>
-                              <span>Cheque/Cta: <strong className="text-slate-700 font-mono font-semibold">{dep.numeroCuenta}</strong></span>
+                              <span>Cheque/Cta: <strong className="text-slate-700 font-mono font-semibold">{dep?.numeroCuenta || detalle.numeroCuenta}</strong></span>
                             </>
                           )}
                           <span>•</span>
@@ -2014,6 +2045,20 @@ export default function DetalleExpedientePage() {
                   />
                 </div>
                 <div>
+                  <label className="block text-xs font-semibold text-slate-500 mb-1">Forma de Pago</label>
+                  <select
+                    value={formAdmin.formaPago}
+                    onChange={(e) => setFormAdmin({ ...formAdmin, formaPago: e.target.value })}
+                    className="w-full text-xs rounded-lg border-slate-300 py-2"
+                  >
+                    <option value="">-- Seleccionar --</option>
+                    <option value="TRANSFERENCIA">TRANSFERENCIA</option>
+                    <option value="DEPOSITO">DEPÓSITO</option>
+                    <option value="CHEQUE">CHEQUE</option>
+                    <option value="EFECTIVO">EFECTIVO</option>
+                  </select>
+                </div>
+                <div>
                   <label className="block text-xs font-semibold text-slate-500 mb-1">Banco</label>
                   <input
                     type="text"
@@ -2022,6 +2067,72 @@ export default function DetalleExpedientePage() {
                     className="w-full text-xs rounded-lg border-slate-300 py-2"
                   />
                 </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 mb-1">N.° Cuenta Bancaria donde se depositó</label>
+                  <input
+                    type="text"
+                    value={formAdmin.numeroCuenta}
+                    onChange={(e) => setFormAdmin({ ...formAdmin, numeroCuenta: e.target.value })}
+                    placeholder="Ej. 0011-0123-0100012345"
+                    className="w-full text-xs rounded-lg border-slate-300 py-2 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 mb-1">CCI (Interbancario)</label>
+                  <input
+                    type="text"
+                    value={formAdmin.cci}
+                    onChange={(e) => setFormAdmin({ ...formAdmin, cci: e.target.value })}
+                    placeholder="Ej. 002-011-000123456789-01"
+                    className="w-full text-xs rounded-lg border-slate-300 py-2 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 mb-1">N.° Carta</label>
+                  <input
+                    type="text"
+                    value={formAdmin.cartaNumero}
+                    onChange={(e) => setFormAdmin({ ...formAdmin, cartaNumero: e.target.value })}
+                    className="w-full text-xs rounded-lg border-slate-300 py-2"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 mb-1">Fecha de Carta</label>
+                  <input
+                    type="date"
+                    value={formAdmin.cartaFecha}
+                    onChange={(e) => setFormAdmin({ ...formAdmin, cartaFecha: e.target.value })}
+                    className="w-full text-xs rounded-lg border-slate-300 py-2"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 mb-1">N.° Memorándum</label>
+                  <input
+                    type="text"
+                    value={formAdmin.memorandoNumero}
+                    onChange={(e) => setFormAdmin({ ...formAdmin, memorandoNumero: e.target.value })}
+                    className="w-full text-xs rounded-lg border-slate-300 py-2"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 mb-1">Fecha de Memorándum</label>
+                  <input
+                    type="date"
+                    value={formAdmin.memorandoFecha}
+                    onChange={(e) => setFormAdmin({ ...formAdmin, memorandoFecha: e.target.value })}
+                    className="w-full text-xs rounded-lg border-slate-300 py-2"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1">Observaciones</label>
+                <textarea
+                  rows={3}
+                  value={formAdmin.observaciones}
+                  onChange={(e) => setFormAdmin({ ...formAdmin, observaciones: e.target.value })}
+                  className="w-full text-xs rounded-lg border-slate-300 p-2"
+                />
               </div>
 
               <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-3 pt-4 border-t border-slate-200">

@@ -198,6 +198,14 @@ export class RegistrarSucesionIntestadaDto {
 
   @IsOptional()
   @IsString()
+  numeroCuenta?: string;
+
+  @IsOptional()
+  @IsString()
+  cci?: string;
+
+  @IsOptional()
+  @IsString()
   formaPago?: string;
 }
 

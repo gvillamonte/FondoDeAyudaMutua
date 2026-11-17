@@ -117,7 +117,7 @@ export default function NuevoExpedientePage() {
     fechaSolicitud: new Date().toISOString().slice(0, 10),
     observaciones: '', cartaNumero: '', cartaFecha: '',
     memorandoNumero: '', memorandoFecha: '', formaPago: '',
-    banco: '', ordenPagoFecha: '',
+    banco: '', numeroCuenta: '', cci: '', ordenPagoFecha: '',
     declaracionJuradaDni: '',
     documentacionCompleta: true, documentacionObservacion: '',
     fechaPago: '',
@@ -801,6 +801,8 @@ export default function NuevoExpedientePage() {
         memorandoFecha: form.memorandoFecha || undefined,
         formaPago: form.formaPago || undefined,
         banco: form.banco.trim() || undefined,
+        numeroCuenta: form.numeroCuenta.trim() || undefined,
+        cci: form.cci.trim() || undefined,
         ordenPagoFecha: fechaDepositoEfectiva,
         ...(conCartaPoder && {
           conCartaPoder: true,
@@ -870,6 +872,8 @@ export default function NuevoExpedientePage() {
           memorandoFecha: form.memorandoFecha || undefined,
           banco: form.banco.trim() || undefined,
           formaPago: form.formaPago || undefined,
+          numeroCuenta: form.numeroCuenta.trim() || undefined,
+          cci: form.cci.trim() || undefined,
           ...(esFallecimiento && { fechaDefuncion: form.fechaDefuncion || undefined, causaFallecimiento: form.causaFallecimiento || undefined }),
         };
         await api.post('/fam-sucesion', payloadSucesion);
@@ -2125,7 +2129,7 @@ export default function NuevoExpedientePage() {
               </div>
               <div>
                 <label className="block text-xs font-medium text-text-sec uppercase mb-1">Banco</label>
-                <input type="text" value={form.banco} onChange={(e) => setForm({ ...form, banco: e.target.value })}
+                <input type="text" placeholder="Ej. BCP, BBVA, Banco de la Nación" value={form.banco} onChange={(e) => setForm({ ...form, banco: e.target.value })}
                   className="w-full px-3 py-2 border border-border rounded-lg text-sm" />
               </div>
               <div>
@@ -2143,6 +2147,56 @@ export default function NuevoExpedientePage() {
                   className="w-full px-3 py-2 border border-border rounded-lg text-sm"
                 />
               </div>
+
+              {/* Apartado dinámico: Número de Cuenta que se le depositó */}
+              {Boolean(form.formaPago) && (
+                <div className="col-span-full bg-blue-50/70 border border-blue-200 rounded-lg p-3.5 space-y-2.5 transition-all">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-[#3258CA] uppercase tracking-wider flex items-center gap-1.5">
+                      <svg className="w-4 h-4 text-[#3258CA] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                      </svg>
+                      Información de la Cuenta / Depósito Realizado ({form.formaPago})
+                    </span>
+                    <span className="text-[11px] text-text-sec">
+                      {form.formaPago === 'EFECTIVO' ? 'Pago en ventanilla' : 'Datos para comprobante / orden'}
+                    </span>
+                  </div>
+                  {form.formaPago === 'EFECTIVO' ? (
+                    <p className="text-xs text-text-sec italic bg-white/80 p-2 rounded border border-border">
+                      Forma de pago en efectivo/ventanilla seleccionada. No requiere número de cuenta bancaria.
+                    </p>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-semibold text-text-sec uppercase mb-1">
+                          {form.formaPago === 'CHEQUE' ? 'N.° de Cheque / Referencia' : 'Número de Cuenta que se le depositó *'}
+                        </label>
+                        <input
+                          type="text"
+                          value={form.numeroCuenta}
+                          onChange={(e) => setForm({ ...form, numeroCuenta: e.target.value })}
+                          placeholder={form.formaPago === 'CHEQUE' ? 'Ej. CHQ-0012485' : 'Ej. 191-12345678-0-12'}
+                          className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-white font-mono text-text-main focus:outline-none focus:ring-2 focus:ring-[#3258CA]/30"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-semibold text-text-sec uppercase mb-1">
+                          Código de Cuenta Interbancario (CCI) (Opcional)
+                        </label>
+                        <input
+                          type="text"
+                          maxLength={30}
+                          value={form.cci}
+                          onChange={(e) => setForm({ ...form, cci: e.target.value })}
+                          placeholder="Ej. 002-191-001234567801-23"
+                          className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-white font-mono text-text-main focus:outline-none focus:ring-2 focus:ring-[#3258CA]/30"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </section>
         </div>
@@ -2175,6 +2229,20 @@ export default function NuevoExpedientePage() {
                   {docsRequeridos.filter(({ key }) => docsPresentados[key] || docs[key]).length}/{docsRequeridos.length}
                 </span>
               </div>
+              {form.formaPago && (
+                <div className="flex justify-between">
+                  <span className="text-text-sec">Forma Pago</span>
+                  <span className="font-medium text-right">{form.formaPago}</span>
+                </div>
+              )}
+              {form.numeroCuenta && (
+                <div className="flex justify-between">
+                  <span className="text-text-sec">N.° Cuenta</span>
+                  <span className="font-mono text-xs text-right truncate max-w-[140px] text-primary font-semibold" title={form.numeroCuenta}>
+                    {form.numeroCuenta}
+                  </span>
+                </div>
+              )}
             </div>
             {covidDescuento && (
               <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-700">

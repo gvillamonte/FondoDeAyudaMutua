@@ -269,7 +269,7 @@ export default function ExpedientesPage() {
       .catch(() => setTipos([]));
     api.get('/expediente-sla/dashboard')
       .then(({ data }) => setDashboard(data))
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   const aplicarFiltroTarjeta = useCallback((tipo: TipoTarjetaKpi) => {
@@ -589,17 +589,17 @@ export default function ExpedientesPage() {
         const bens = Array.isArray(r.beneficiarios) && r.beneficiarios.length > 0
           ? r.beneficiarios
           : [{
-              nombre: r.solicitanteNombre || r.NOMBRE_COLEGIADO || 'Sin registro',
-              dni: r.solicitanteDni || r.DNI || '',
-              parentesco: r.solicitanteDni && r.solicitanteDni === r.DNI ? 'Colegiado / Titular' : 'Solicitante',
-              porcentaje: 100,
-              monto: obtenerMontoDadoExp(r),
-              banco: r.banco || '',
-              numeroCuenta: '',
-              cci: '',
-              fechaPago: r.fechaPago || null,
-              estado: r.estado,
-            }];
+            nombre: r.solicitanteNombre || r.NOMBRE_COLEGIADO || 'Sin registro',
+            dni: r.solicitanteDni || r.DNI || '',
+            parentesco: r.solicitanteDni && r.solicitanteDni === r.DNI ? 'Colegiado / Titular' : 'Solicitante',
+            porcentaje: 100,
+            monto: obtenerMontoDadoExp(r),
+            banco: r.banco || '',
+            numeroCuenta: '',
+            cci: '',
+            fechaPago: r.fechaPago || null,
+            estado: r.estado,
+          }];
 
         for (const b of bens) {
           filasDetalle.push({
@@ -806,11 +806,10 @@ export default function ExpedientesPage() {
                 <div
                   key={card.key}
                   onClick={() => setTarjetaModalKey(card.key)}
-                  className={`bg-white border rounded-xl p-3.5 sm:p-4 shadow-sm transition-all duration-200 cursor-pointer relative group flex flex-col justify-between select-none ${
-                    estaActivo
+                  className={`bg-white border rounded-xl p-3.5 sm:p-4 shadow-sm transition-all duration-200 cursor-pointer relative group flex flex-col justify-between select-none ${estaActivo
                       ? 'border-[#3258CA] ring-2 ring-[#3258CA]/30 bg-blue-50/20 shadow-md'
                       : 'border-border-main hover:border-[#3258CA]/60 hover:shadow-md'
-                  }`}
+                    }`}
                   title={`${card.label}: ${card.desc} — Clic para ver qué contiene`}
                 >
                   <div>
@@ -862,11 +861,10 @@ export default function ExpedientesPage() {
                           aplicarFiltroTarjeta(card.key);
                         }
                       }}
-                      className={`px-2 py-0.5 rounded text-[10px] font-semibold border transition-colors flex-shrink-0 ${
-                        estaActivo
+                      className={`px-2 py-0.5 rounded text-[10px] font-semibold border transition-colors flex-shrink-0 ${estaActivo
                           ? 'bg-primary text-white border-primary'
                           : 'bg-gray-50 text-text-sec border-border-main hover:bg-gray-100'
-                      }`}
+                        }`}
                       title={estaActivo ? 'Quitar filtro de esta tarjeta' : 'Filtrar la tabla por esta tarjeta'}
                     >
                       {estaActivo ? '✕ Quitar' : 'Filtrar'}
@@ -910,11 +908,10 @@ export default function ExpedientesPage() {
                         key={item.formaPago}
                         type="button"
                         onClick={() => setFormaPagoFiltro(activo ? '' : item.formaPago)}
-                        className={`text-left p-2.5 rounded-lg border transition-colors ${
-                          activo
+                        className={`text-left p-2.5 rounded-lg border transition-colors ${activo
                             ? 'border-primary bg-primary/5 ring-1 ring-primary'
                             : 'border-border-main bg-slate-50/60 hover:bg-slate-100/70'
-                        }`}
+                          }`}
                       >
                         <div className="flex items-center justify-between gap-1">
                           <span className={`inline-flex px-1.5 py-0.5 text-[10px] font-bold rounded border ${FORMA_PAGO_BADGE[item.formaPago] || 'bg-slate-100 text-slate-700 border-slate-200'}`}>
@@ -964,11 +961,10 @@ export default function ExpedientesPage() {
                         key={item.banco}
                         type="button"
                         onClick={() => setBancoFiltro(activo ? '' : item.banco)}
-                        className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-left transition-colors ${
-                          activo
+                        className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-left transition-colors ${activo
                             ? 'border-primary bg-primary/5 ring-1 ring-primary'
                             : 'border-border-main bg-slate-50/60 hover:bg-slate-100/70'
-                        }`}
+                          }`}
                       >
                         <div>
                           <div className="flex items-center gap-1.5">
@@ -1350,32 +1346,32 @@ export default function ExpedientesPage() {
                               <div className="flex items-center gap-1 justify-center">
                                 {soloUno ? (
                                   <>
-                                  <button onClick={() => router.push(`/dashboard/fam/expedientes/${grupo.expedientes[0].id}`)}
-                                    className="p-1.5 rounded-lg hover:bg-primary/10 text-primary transition-colors" title="Ver detalle del expediente"
-                                    aria-label="Ver detalle del expediente">
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                                  </button>
-                                  {grupo.expedientes[0].tieneSaldoPendiente && puedeCrear && (
-                                    <button onClick={() => setRegularizarTarget(grupo.expedientes[0])}
-                                      className="p-1.5 rounded-lg hover:bg-amber-100 text-amber-700 transition-colors" title="Regularizar saldo pendiente"
-                                      aria-label="Regularizar saldo pendiente">
-                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
+                                    <button onClick={() => router.push(`/dashboard/fam/expedientes/${grupo.expedientes[0].id}`)}
+                                      className="p-1.5 rounded-lg hover:bg-primary/10 text-primary transition-colors" title="Ver detalle del expediente"
+                                      aria-label="Ver detalle del expediente">
+                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                                     </button>
-                                  )}
-                                  {esAdmin && (
-                                    <button onClick={() => setEditarExpId(grupo.expedientes[0].id)}
-                                      className="p-1.5 rounded-lg hover:bg-blue-50 text-[#3258CA] transition-colors" title="Editar expediente (Administrador)"
-                                      aria-label="Editar expediente">
-                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                                    </button>
-                                  )}
-                                  {esAdmin && (
-                                    <button onClick={() => setEliminarTarget(grupo.expedientes[0])}
-                                      className="p-1.5 rounded-lg hover:bg-red-50 text-red-500 transition-colors" title="Eliminar expediente"
-                                      aria-label="Eliminar expediente">
-                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                    </button>
-                                  )}
+                                    {grupo.expedientes[0].tieneSaldoPendiente && puedeCrear && (
+                                      <button onClick={() => setRegularizarTarget(grupo.expedientes[0])}
+                                        className="p-1.5 rounded-lg hover:bg-amber-100 text-amber-700 transition-colors" title="Regularizar saldo pendiente"
+                                        aria-label="Regularizar saldo pendiente">
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
+                                      </button>
+                                    )}
+                                    {esAdmin && (
+                                      <button onClick={() => setEditarExpId(grupo.expedientes[0].id)}
+                                        className="p-1.5 rounded-lg hover:bg-blue-50 text-[#3258CA] transition-colors" title="Editar expediente (Administrador)"
+                                        aria-label="Editar expediente">
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                                      </button>
+                                    )}
+                                    {esAdmin && (
+                                      <button onClick={() => setEliminarTarget(grupo.expedientes[0])}
+                                        className="p-1.5 rounded-lg hover:bg-red-50 text-red-500 transition-colors" title="Eliminar expediente"
+                                        aria-label="Eliminar expediente">
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                      </button>
+                                    )}
                                   </>
                                 ) : (
                                   <>
@@ -1594,7 +1590,7 @@ export default function ExpedientesPage() {
           onSuccess={() => {
             setRegularizarTarget(null);
             fetchExpedientes();
-            api.get('/expediente-sla/dashboard').then(({ data }) => setDashboard(data)).catch(() => {});
+            api.get('/expediente-sla/dashboard').then(({ data }) => setDashboard(data)).catch(() => { });
           }}
           expedienteId={regularizarTarget.id}
           expedienteNumero={regularizarTarget.expedienteNumero}

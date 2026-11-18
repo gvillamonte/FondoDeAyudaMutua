@@ -1226,6 +1226,7 @@ export class FamBeneficiosService {
     conSaldoPendiente?: string; // 'SI' | 'NO'
     formaPago?: string;
     banco?: string;
+    ids?: string;
     ordenarPor?: string; // 'ingreso' | 'solicitud' | 'pago'
     page?: number;
     limit?: number;
@@ -1241,6 +1242,7 @@ export class FamBeneficiosService {
       conSaldoPendiente,
       formaPago,
       banco,
+      ids,
       ordenarPor,
       page = 1,
       limit = 25,
@@ -1252,7 +1254,17 @@ export class FamBeneficiosService {
     const where: any = {};
     const andConditions: any[] = [];
     if (colegiadoId) where.colegiadoId = colegiadoId;
-    if (estado) where.estado = estado;
+    if (estado === 'ACTIVOS') {
+      where.estado = { in: ['PENDIENTE', 'EN_REVISION', 'APROBADA'] };
+    } else if (estado) {
+      where.estado = estado;
+    }
+    if (ids && ids.trim()) {
+      const listaIds = ids.split(',').map((i) => i.trim()).filter(Boolean);
+      if (listaIds.length > 0) {
+        where.id = { in: listaIds };
+      }
+    }
     if (tipoBeneficioId) where.tipoBeneficioId = tipoBeneficioId;
     if (documentacionCompleta === 'SI') where.documentacionCompleta = true;
     else if (documentacionCompleta === 'NO') where.documentacionCompleta = false;

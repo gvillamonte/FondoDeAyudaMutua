@@ -10,6 +10,7 @@ import DuplicadosPanel from '@/components/fam/DuplicadosPanel';
 import EliminarExpedienteModal from '@/components/fam/EliminarExpedienteModal';
 import ModalRegularizarSaldo from '@/components/fam/ModalRegularizarSaldo';
 import EditarExpedienteModal from '@/components/fam/EditarExpedienteModal';
+import { ModalDetalleTarjetaKpi, TipoTarjetaKpi } from '@/components/fam/ModalDetalleTarjetaKpi';
 
 interface Expediente {
   id: string;
@@ -244,6 +245,13 @@ export default function ExpedientesPage() {
   const [bancoFiltro, setBancoFiltro] = useState('');
   const [fechaDesde, setFechaDesde] = useState('');
   const [fechaHasta, setFechaHasta] = useState('');
+  const [idsFiltro, setIdsFiltro] = useState('');
+  const [tarjetaModalKey, setTarjetaModalKey] = useState<TipoTarjetaKpi | null>(null);
+  const [tarjetaFiltroActiva, setTarjetaFiltroActiva] = useState<{
+    tipo: TipoTarjetaKpi;
+    etiqueta: string;
+    count?: number;
+  } | null>(null);
   const [regularizarTarget, setRegularizarTarget] = useState<Expediente | null>(null);
   const [editarExpId, setEditarExpId] = useState<string | null>(null);
 
@@ -264,6 +272,62 @@ export default function ExpedientesPage() {
       .catch(() => {});
   }, []);
 
+  const aplicarFiltroTarjeta = useCallback((tipo: TipoTarjetaKpi) => {
+    setPage(1);
+    if (tipo === 'montodado') {
+      setEstadoFiltro('PAGADA');
+      setIdsFiltro('');
+      setSaldoFiltro('');
+      setTarjetaFiltroActiva({
+        tipo: 'montodado',
+        etiqueta: 'Monto Total Dado (Expedientes Pagados)',
+        count: dashboard?.pagadosCount || 0,
+      });
+    } else if (tipo === 'pendientes') {
+      setEstadoFiltro('ACTIVOS');
+      setIdsFiltro('');
+      setSaldoFiltro('');
+      setTarjetaFiltroActiva({
+        tipo: 'pendientes',
+        etiqueta: 'Mis Pendientes (En trámite)',
+        count: dashboard?.misTendientes || 0,
+      });
+    } else if (tipo === 'vencer') {
+      const lista = (dashboard?.vencidosList || []) as any[];
+      const ids = lista.map((v) => v.id).join(',');
+      setIdsFiltro(ids || 'ninguno');
+      setEstadoFiltro('');
+      setSaldoFiltro('');
+      setTarjetaFiltroActiva({
+        tipo: 'vencer',
+        etiqueta: 'Próximos a Vencer y Vencidos',
+        count: dashboard?.vencidos || 0,
+      });
+    } else if (tipo === 'saldopendiente') {
+      setSaldoFiltro('SI');
+      setIdsFiltro('');
+      setEstadoFiltro('');
+      setTarjetaFiltroActiva({
+        tipo: 'saldopendiente',
+        etiqueta: 'Saldo Pendiente por Liquidar',
+        count: dashboard?.conSaldoPendienteCount || 0,
+      });
+    } else if (tipo === 'total') {
+      setEstadoFiltro('');
+      setIdsFiltro('');
+      setSaldoFiltro('');
+      setTarjetaFiltroActiva(null);
+    }
+  }, [dashboard]);
+
+  const limpiarFiltroTarjeta = useCallback(() => {
+    setTarjetaFiltroActiva(null);
+    setIdsFiltro('');
+    setEstadoFiltro('');
+    setSaldoFiltro('');
+    setPage(1);
+  }, []);
+
   const fetchExpedientes = useCallback(async () => {
     if (tab === 'reporte' || tab === 'duplicados') { setLoading(false); return; }
     setLoading(true);
@@ -279,6 +343,7 @@ export default function ExpedientesPage() {
       if (bancoFiltro) params.banco = bancoFiltro;
       if (fechaDesde) params.fechaDesde = fechaDesde;
       if (fechaHasta) params.fechaHasta = fechaHasta;
+      if (idsFiltro) params.ids = idsFiltro;
 
       const { data } = await api.get('/fam-beneficios', { params });
       setExpedientes(Array.isArray(data?.data) ? data.data : []);
@@ -289,10 +354,10 @@ export default function ExpedientesPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, limit, tab, search, tipoFiltro, estadoFiltro, docsFiltro, saldoFiltro, formaPagoFiltro, bancoFiltro, fechaDesde, fechaHasta]);
+  }, [page, limit, tab, search, tipoFiltro, estadoFiltro, docsFiltro, saldoFiltro, formaPagoFiltro, bancoFiltro, fechaDesde, fechaHasta, idsFiltro]);
 
   useEffect(() => { fetchExpedientes(); }, [fetchExpedientes]);
-  useEffect(() => { setPage(1); setExpandidos(new Set()); }, [tab, search, tipoFiltro, estadoFiltro, docsFiltro, saldoFiltro, formaPagoFiltro, bancoFiltro, fechaDesde, fechaHasta, limit]);
+  useEffect(() => { setPage(1); setExpandidos(new Set()); }, [tab, search, tipoFiltro, estadoFiltro, docsFiltro, saldoFiltro, formaPagoFiltro, bancoFiltro, fechaDesde, fechaHasta, idsFiltro, limit]);
 
   // Debounce para búsqueda reactiva al tipear en el buscador
   useEffect(() => {
@@ -619,9 +684,36 @@ export default function ExpedientesPage() {
   };
 
   const totalPages = Math.ceil(total / limit) || 1;
-  const filtrosActivos = search || tipoFiltro || estadoFiltro || docsFiltro || saldoFiltro || formaPagoFiltro || bancoFiltro || fechaDesde || fechaHasta;
+  const filtrosActivos =
+    Boolean(search) ||
+    Boolean(tipoFiltro) ||
+    Boolean(estadoFiltro) ||
+    Boolean(docsFiltro) ||
+    Boolean(saldoFiltro) ||
+    Boolean(formaPagoFiltro) ||
+    Boolean(bancoFiltro) ||
+    Boolean(fechaDesde) ||
+    Boolean(fechaHasta) ||
+    Boolean(idsFiltro) ||
+    Boolean(tarjetaFiltroActiva);
   const desde = total > 0 ? (page - 1) * limit + 1 : 0;
   const hasta = Math.min(page * limit, total);
+
+  const limpiarTodosFiltros = () => {
+    setSearchInput('');
+    setSearch('');
+    setTipoFiltro('');
+    setEstadoFiltro('');
+    setDocsFiltro('');
+    setSaldoFiltro('');
+    setFormaPagoFiltro('');
+    setBancoFiltro('');
+    setFechaDesde('');
+    setFechaHasta('');
+    setIdsFiltro('');
+    setTarjetaFiltroActiva(null);
+    setPage(1);
+  };
 
   const TABS = [
     { key: 'historial' as const, label: 'Historial de Entregas', desc: 'Todo lo registrado' },
@@ -631,11 +723,51 @@ export default function ExpedientesPage() {
   ];
 
   const kpis = dashboard ? [
-    { key: 'montodado', label: 'Monto Total Dado', value: fmtMonto(resumenFinanciero.montoTotalEntregado), sub: `${dashboard.pagadosCount || total || 0} entrega(s) registrada(s)`, icon: ICONS.dinero, tone: 'text-emerald-700 bg-emerald-50' },
-    { key: 'pendientes', label: 'Mis Pendientes', value: dashboard.misTendientes || 0, sub: 'asignados a mi', icon: ICONS.reloj, tone: 'text-amber-600 bg-amber-50' },
-    { key: 'vencer', label: 'Próximos a Vencer', value: dashboard.proximosAVencer || 0, sub: `${dashboard.vencidos || 0} vencido${(dashboard.vencidos || 0) === 1 ? '' : 's'}`, icon: ICONS.alerta, tone: (dashboard.vencidos || 0) > 0 ? 'text-red-600 bg-red-50' : 'text-amber-600 bg-amber-50' },
-    { key: 'saldopendiente', label: 'Saldo Pendiente', value: dashboard.conSaldoPendienteCount || 0, sub: `S/ ${(dashboard.saldoPendienteTotal || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })} faltante`, icon: ICONS.alerta, tone: (dashboard.conSaldoPendienteCount || 0) > 0 ? 'text-amber-700 bg-amber-50' : 'text-slate-500 bg-slate-50' },
-    { key: 'total', label: 'Total Expedientes', value: total, sub: 'registrados', icon: ICONS.documento, tone: 'text-primary bg-primary/10' },
+    {
+      key: 'montodado' as TipoTarjetaKpi,
+      label: 'Monto Total Dado',
+      value: fmtMonto(resumenFinanciero.montoTotalEntregado),
+      sub: `${dashboard.pagadosCount || total || 0} entrega(s) registrada(s)`,
+      desc: 'Suma de montos entregados en expedientes pagados o con depósitos registrados.',
+      icon: ICONS.dinero,
+      tone: 'text-emerald-700 bg-emerald-50',
+    },
+    {
+      key: 'pendientes' as TipoTarjetaKpi,
+      label: 'Mis Pendientes',
+      value: dashboard.misTendientes || 0,
+      sub: 'asignados a mi',
+      desc: 'Expedientes activos en trámite administrativo (Pendiente, En Revisión, Aprobada).',
+      icon: ICONS.reloj,
+      tone: 'text-amber-600 bg-amber-50',
+    },
+    {
+      key: 'vencer' as TipoTarjetaKpi,
+      label: 'Próximos a Vencer',
+      value: dashboard.proximosAVencer || 0,
+      sub: `${dashboard.vencidos || 0} vencido${(dashboard.vencidos || 0) === 1 ? '' : 's'}`,
+      desc: 'Expedientes con SLA superado (72h) o con menos de 12 horas por vencer.',
+      icon: ICONS.alerta,
+      tone: (dashboard.vencidos || 0) > 0 ? 'text-red-600 bg-red-50' : 'text-amber-600 bg-amber-50',
+    },
+    {
+      key: 'saldopendiente' as TipoTarjetaKpi,
+      label: 'Saldo Pendiente',
+      value: dashboard.conSaldoPendienteCount || 0,
+      sub: `S/ ${(dashboard.saldoPendienteTotal || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })} faltante`,
+      desc: 'Expedientes con saldo retenido o pendiente por liquidar a beneficiarios.',
+      icon: ICONS.alerta,
+      tone: (dashboard.conSaldoPendienteCount || 0) > 0 ? 'text-amber-700 bg-amber-50' : 'text-slate-500 bg-slate-50',
+    },
+    {
+      key: 'total' as TipoTarjetaKpi,
+      label: 'Total Expedientes',
+      value: dashboard.totalExpedientes || total,
+      sub: 'registrados',
+      desc: 'Padrón histórico total de expedientes registrados en el sistema.',
+      icon: ICONS.documento,
+      tone: 'text-primary bg-primary/10',
+    },
   ] : [];
 
   return (
@@ -668,20 +800,81 @@ export default function ExpedientesPage() {
       {dashboard && tab !== 'reporte' && tab !== 'duplicados' && (
         <div className="space-y-3">
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-            {kpis.map((card) => (
-              <div key={card.key} className="bg-white border border-border-main rounded-xl p-4 shadow-sm">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-semibold text-text-sec uppercase tracking-wider">{card.label}</p>
-                    <p className="text-xl sm:text-2xl font-bold mt-1 text-text-main truncate" title={String(card.value)}>{card.value}</p>
-                    <p className="text-[11px] text-text-sec mt-0.5 truncate">{card.sub}</p>
+            {kpis.map((card) => {
+              const estaActivo = tarjetaFiltroActiva?.tipo === card.key;
+              return (
+                <div
+                  key={card.key}
+                  onClick={() => setTarjetaModalKey(card.key)}
+                  className={`bg-white border rounded-xl p-3.5 sm:p-4 shadow-sm transition-all duration-200 cursor-pointer relative group flex flex-col justify-between select-none ${
+                    estaActivo
+                      ? 'border-[#3258CA] ring-2 ring-[#3258CA]/30 bg-blue-50/20 shadow-md'
+                      : 'border-border-main hover:border-[#3258CA]/60 hover:shadow-md'
+                  }`}
+                  title={`${card.label}: ${card.desc} — Clic para ver qué contiene`}
+                >
+                  <div>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-[10px] font-semibold text-text-sec uppercase tracking-wider truncate">
+                            {card.label}
+                          </p>
+                          {estaActivo && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0 animate-ping" />
+                          )}
+                        </div>
+                        <p className="text-xl sm:text-2xl font-bold mt-1 text-text-main truncate" title={String(card.value)}>
+                          {card.value}
+                        </p>
+                        <p className="text-[11px] text-text-sec mt-0.5 truncate">{card.sub}</p>
+                      </div>
+                      <span className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${card.tone}`}>
+                        {card.icon}
+                      </span>
+                    </div>
                   </div>
-                  <span className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${card.tone}`}>
-                    {card.icon}
-                  </span>
+
+                  <div className="mt-3 pt-2.5 border-t border-border-main/60 flex items-center justify-between text-[11px] gap-2">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setTarjetaModalKey(card.key);
+                      }}
+                      className="font-medium text-[#3258CA] hover:text-[#254299] inline-flex items-center gap-1 group-hover:underline text-left min-w-0 truncate"
+                      title="Abrir desglose y lista de expedientes"
+                    >
+                      <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                      <span className="truncate">Ver qué contiene</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (estaActivo) {
+                          limpiarFiltroTarjeta();
+                        } else {
+                          aplicarFiltroTarjeta(card.key);
+                        }
+                      }}
+                      className={`px-2 py-0.5 rounded text-[10px] font-semibold border transition-colors flex-shrink-0 ${
+                        estaActivo
+                          ? 'bg-primary text-white border-primary'
+                          : 'bg-gray-50 text-text-sec border-border-main hover:bg-gray-100'
+                      }`}
+                      title={estaActivo ? 'Quitar filtro de esta tarjeta' : 'Filtrar la tabla por esta tarjeta'}
+                    >
+                      {estaActivo ? '✕ Quitar' : 'Filtrar'}
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Resumen de Montos Dados por Tipo de Pago (Depósito / Cheque) y Bancos */}
@@ -835,6 +1028,30 @@ export default function ExpedientesPage() {
         <DuplicadosPanel puedeEditar={puedeCrear} />
       ) : (
         <div className="bg-white border border-border-main rounded-xl overflow-hidden shadow-sm">
+          {tarjetaFiltroActiva && (
+            <div className="mx-3 sm:mx-4 mt-3 p-3 bg-blue-50/90 border border-blue-200 rounded-lg flex items-center justify-between gap-3 text-xs shadow-xs">
+              <div className="flex items-center gap-2 text-slate-800 flex-wrap">
+                <span className="w-2 h-2 rounded-full bg-[#3258CA]" />
+                <span className="font-semibold text-[#3258CA]">Filtro de tarjeta activo:</span>
+                <span className="font-medium text-slate-900">{tarjetaFiltroActiva.etiqueta}</span>
+                {tarjetaFiltroActiva.count !== undefined && (
+                  <span className="bg-white border border-blue-200 text-[#3258CA] px-2 py-0.5 rounded-full text-[11px] font-bold">
+                    {tarjetaFiltroActiva.count} expediente(s)
+                  </span>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={limpiarFiltroTarjeta}
+                className="px-2.5 py-1 text-xs font-semibold text-[#3258CA] bg-white border border-blue-200 rounded-md hover:bg-blue-100/50 transition-colors inline-flex items-center gap-1 flex-shrink-0"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+                Quitar filtro
+              </button>
+            </div>
+          )}
           {/* Search & Filters */}
           <div className="p-3 sm:p-4 border-b border-border-main bg-gray-50/50">
             <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2.5">
@@ -895,7 +1112,7 @@ export default function ExpedientesPage() {
                   Buscar
                 </button>
                 {filtrosActivos && (
-                  <button onClick={() => { setSearchInput(''); setSearch(''); setTipoFiltro(''); setEstadoFiltro(''); setDocsFiltro(''); setSaldoFiltro(''); setFormaPagoFiltro(''); setBancoFiltro(''); setFechaDesde(''); setFechaHasta(''); }}
+                  <button onClick={limpiarTodosFiltros}
                     className="flex-1 sm:flex-none px-3 py-2 text-sm text-text-sec bg-white border border-border-main rounded-lg hover:bg-gray-50 transition-colors">
                     Limpiar
                   </button>
@@ -1385,6 +1602,16 @@ export default function ExpedientesPage() {
           montoTotalAsignado={Number(regularizarTarget.montoTotalAsignado ?? regularizarTarget.monto)}
           saldoPendiente={Number(regularizarTarget.saldoPendiente || 0)}
           montoMinimoNormativo={3000}
+        />
+      )}
+
+      {tarjetaModalKey && dashboard && (
+        <ModalDetalleTarjetaKpi
+          isOpen={Boolean(tarjetaModalKey)}
+          onClose={() => setTarjetaModalKey(null)}
+          tipoTarjeta={tarjetaModalKey}
+          dashboard={dashboard}
+          onAplicarFiltroTabla={(tipo) => aplicarFiltroTarjeta(tipo)}
         />
       )}
     </div>

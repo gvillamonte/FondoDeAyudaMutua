@@ -1,9 +1,15 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { FamService } from '../fam/fam.service';
 
 @Injectable()
 export class ExpedienteSlaService {
-  constructor(private prisma: PrismaService) {}
+  private readonly logger = new Logger(ExpedienteSlaService.name);
+
+  constructor(
+    private prisma: PrismaService,
+    private famService: FamService,
+  ) {}
 
   async listar(activos?: boolean) {
     return this.prisma.expedienteSlaConfig.findMany({
@@ -58,7 +64,18 @@ export class ExpedienteSlaService {
   async getResumenDashboard(userId: string, userRol: string) {
     const ahora = new Date();
 
-    const [total, porEstado, porTipo, sinAsignar, conSaldoPendienteCount, saldoPendienteAgg, expedientesFinancieros] = await Promise.all([
+    const [
+      total,
+      porEstado,
+      porTipo,
+      sinAsignar,
+      conSaldoPendienteCount,
+      saldoPendienteAgg,
+      expedientesFinancieros,
+      saldosExp,
+      pagadosExp,
+      todosEstados,
+    ] = await Promise.all([
       this.prisma.famSolicitudBeneficio.count({ where: { estado: { notIn: ['PAGADA', 'RECHAZADA'] } } }),
       this.prisma.famSolicitudBeneficio.groupBy({ by: ['estado'], _count: true, where: { estado: { notIn: ['PAGADA', 'RECHAZADA'] } } }),
       this.prisma.famSolicitudBeneficio.groupBy({ by: ['tipoBeneficioId'], _count: true }),
@@ -86,6 +103,21 @@ export class ExpedienteSlaService {
           },
         },
       }),
+      this.prisma.famSolicitudBeneficio.findMany({
+        where: { tieneSaldoPendiente: true },
+        include: { tipoBeneficio: true },
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.famSolicitudBeneficio.findMany({
+        where: { estado: 'PAGADA' },
+        include: { tipoBeneficio: true },
+        orderBy: { fechaPago: 'desc' },
+        take: 100,
+      }),
+      this.prisma.famSolicitudBeneficio.groupBy({
+        by: ['estado'],
+        _count: true,
+      }),
     ]);
 
     const configSla = await this.prisma.expedienteSlaConfig.findMany({ where: { activo: true } });
@@ -99,13 +131,45 @@ export class ExpedienteSlaService {
 
     let vencidos = 0;
     let porVencer = 0;
+    const itemsVencer: any[] = [];
     proximosAVencer.forEach((exp) => {
       const horasLimite = mapaSla.get(exp.estado) || 72;
       if (horasLimite <= 0) return;
       const horasTranscurridas = (ahora.getTime() - new Date(exp.createdAt).getTime()) / (1000 * 60 * 60);
       const horasRestantes = horasLimite - horasTranscurridas;
-      if (horasRestantes <= 0) vencidos++;
-      else if (horasRestantes <= 12) porVencer++;
+      if (horasRestantes <= 0) {
+        vencidos++;
+        itemsVencer.push({
+          id: exp.id,
+          expedienteNumero: exp.expedienteNumero,
+          colegiadoId: exp.colegiadoId,
+          monto: Number(exp.monto),
+          estado: exp.estado,
+          tipoBeneficio: exp.tipoBeneficio?.nombre || 'Beneficio FAM',
+          createdAt: exp.createdAt,
+          horasLimite,
+          horasTranscurridas: Math.round(horasTranscurridas * 10) / 10,
+          horasRestantes: Math.round(horasRestantes * 10) / 10,
+          condicion: 'VENCIDO',
+          diasRetraso: Math.max(1, Math.ceil(Math.abs(horasRestantes) / 24)),
+        });
+      } else if (horasRestantes <= 12) {
+        porVencer++;
+        itemsVencer.push({
+          id: exp.id,
+          expedienteNumero: exp.expedienteNumero,
+          colegiadoId: exp.colegiadoId,
+          monto: Number(exp.monto),
+          estado: exp.estado,
+          tipoBeneficio: exp.tipoBeneficio?.nombre || 'Beneficio FAM',
+          createdAt: exp.createdAt,
+          horasLimite,
+          horasTranscurridas: Math.round(horasTranscurridas * 10) / 10,
+          horasRestantes: Math.round(horasRestantes * 10) / 10,
+          condicion: 'POR_VENCER',
+          horasParaVencer: Math.max(1, Math.round(horasRestantes)),
+        });
+      }
     });
 
     const mapaTipos = new Map<string, { nombre: string; count: number }>();
@@ -185,6 +249,92 @@ export class ExpedienteSlaService {
       }
     }
 
+    const saldoPendienteList = saldosExp.map((exp) => ({
+      id: exp.id,
+      expedienteNumero: exp.expedienteNumero,
+      colegiadoId: exp.colegiadoId,
+      monto: Number(exp.monto),
+      saldoPendiente: Number(exp.saldoPendiente || 0),
+      montoAprobadoTotal: Number(exp.montoTotalAsignado || exp.montoFinal || exp.monto || 0),
+      estado: exp.estado,
+      tipoBeneficio: exp.tipoBeneficio?.nombre || 'Beneficio FAM',
+      motivoSaldoPendiente: exp.observaciones || 'Saldo retenido / pendiente',
+      createdAt: exp.createdAt,
+    }));
+
+    const pendientesList = proximosAVencer.map((exp) => {
+      const horasLimite = mapaSla.get(exp.estado) || 72;
+      const horasTranscurridas = (ahora.getTime() - new Date(exp.createdAt).getTime()) / (1000 * 60 * 60);
+      const horasRestantes = horasLimite - horasTranscurridas;
+      return {
+        id: exp.id,
+        expedienteNumero: exp.expedienteNumero,
+        colegiadoId: exp.colegiadoId,
+        monto: Number(exp.monto),
+        estado: exp.estado,
+        tipoBeneficio: exp.tipoBeneficio?.nombre || 'Beneficio FAM',
+        createdAt: exp.createdAt,
+        diasEspera: Math.max(0, Math.floor(horasTranscurridas / 24)),
+        horasRestantes: Math.round(horasRestantes * 10) / 10,
+        condicionSla: horasRestantes <= 0 ? 'VENCIDO' : horasRestantes <= 12 ? 'POR_VENCER' : 'EN_PLAZO',
+      };
+    });
+
+    const ultimosPagadosList = pagadosExp.map((exp) => {
+      const montoTotal =
+        exp.montoTotalAsignado != null && Number(exp.montoTotalAsignado) > 0
+          ? Number(exp.montoTotalAsignado)
+          : exp.montoFinal != null
+            ? Number(exp.montoFinal)
+            : Number(exp.monto) || 0;
+      return {
+        id: exp.id,
+        expedienteNumero: exp.expedienteNumero,
+        colegiadoId: exp.colegiadoId,
+        monto: montoTotal,
+        estado: exp.estado,
+        tipoBeneficio: exp.tipoBeneficio?.nombre || 'Beneficio FAM',
+        fechaPago: exp.fechaPago || exp.updatedAt,
+        formaPago: exp.formaPago || 'DEPOSITO',
+        banco: exp.banco || null,
+        numeroCuenta: exp.numeroCuenta || null,
+      };
+    });
+
+    const todosColegiadoIds = [
+      ...new Set([
+        ...itemsVencer.map((i) => i.colegiadoId),
+        ...saldoPendienteList.map((i) => i.colegiadoId),
+        ...pendientesList.map((i) => i.colegiadoId),
+        ...ultimosPagadosList.map((i) => i.colegiadoId),
+      ].filter(Boolean)),
+    ];
+
+    let mapaColegiados = new Map<string, any>();
+    if (this.famService && todosColegiadoIds.length > 0) {
+      try {
+        mapaColegiados = await this.famService.buscarColegiadosPorIds(todosColegiadoIds);
+      } catch (err: any) {
+        this.logger.warn(`Error al buscar colegiados para dashboard SLA: ${err.message}`);
+      }
+    }
+
+    const enriquecer = (item: any) => {
+      const col = mapaColegiados.get(item.colegiadoId);
+      return {
+        ...item,
+        nombreColegiado: col?.NOMBRE_COLEGIADO || 'Colegiado N/A',
+        numColegiatura: col?.NUM_COLEGIATURA || '-',
+        dni: col?.DNI || '-',
+      };
+    };
+
+    const totalExpedientesRegistrados = todosEstados.reduce((acc, curr) => acc + curr._count, 0);
+    const porEstadoTotal = todosEstados.map((e) => ({
+      estado: e.estado,
+      count: e._count,
+    }));
+
     return {
       misTendientes: userRol === 'ADMINISTRADOR' ? total : porEstado.reduce((s, e) => s + e._count, 0),
       sinAsignar,
@@ -198,6 +348,12 @@ export class ExpedienteSlaService {
       pagadosCount,
       porFormaPago: Array.from(mapaFormaPago.values()).sort((a, b) => b.monto - a.monto),
       porBanco: Array.from(mapaBanco.values()).sort((a, b) => b.monto - a.monto),
+      totalExpedientes: totalExpedientesRegistrados,
+      porEstadoTotal,
+      vencidosList: itemsVencer.map(enriquecer),
+      saldoPendienteList: saldoPendienteList.map(enriquecer),
+      pendientesList: pendientesList.map(enriquecer),
+      ultimosPagadosList: ultimosPagadosList.map(enriquecer),
     };
   }
 

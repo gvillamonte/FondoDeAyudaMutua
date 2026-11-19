@@ -24,6 +24,7 @@ const crearPrismaMock = () => ({
   },
   famSolicitudBeneficiario: {
     findUnique: jest.fn(),
+    findMany: jest.fn(),
     create: jest.fn(),
     update: jest.fn(),
     deleteMany: jest.fn(),
@@ -33,6 +34,7 @@ const crearPrismaMock = () => ({
     count: jest.fn(),
     create: jest.fn(),
     update: jest.fn(),
+    updateMany: jest.fn(),
     deleteMany: jest.fn(),
   },
   famBeneficiario: {

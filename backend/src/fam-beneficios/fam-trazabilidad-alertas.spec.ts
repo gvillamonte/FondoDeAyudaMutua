@@ -448,4 +448,64 @@ describe('Pruebas de Trazabilidad, Transiciones y Panel de Alertas (Regresión R
       });
     });
   });
+
+  describe('5. Actualizar documentación a completa activa automáticamente el Paso 4 (PAGADA)', () => {
+    it('debe transicionar a PAGADA y generar depósitos automáticamente si no existían', async () => {
+      const expId = 'exp-doc-completa-999';
+      const mockExpediente = {
+        id: expId,
+        colegiadoId: 'COL-999',
+        tipoBeneficioId: 'TB-01',
+        tipoBeneficio: { id: 'TB-01', codigo: 'FALLECIMIENTO', nombre: 'Fallecimiento' },
+        monto: 3000,
+        estado: 'PENDIENTE',
+        fechaSolicitud: new Date(),
+        fechaPago: null,
+        documentacionCompleta: false,
+        documentacionObservacion: 'Faltan documentos',
+        solicitanteNombre: 'Juan Pérez',
+        solicitanteDni: '12345678',
+      };
+
+      prismaMock.famSolicitudBeneficio.findUnique.mockResolvedValue(mockExpediente);
+      prismaMock.tipoBeneficio.findUnique.mockResolvedValue(mockExpediente.tipoBeneficio);
+      prismaMock.famDepositoBeneficiario.count.mockResolvedValue(0);
+      prismaMock.famSolicitudBeneficiario.findMany = jest.fn().mockResolvedValue([
+        {
+          beneficiarioId: 'ben-1',
+          porcentajeAsignado: 100,
+          beneficiario: { id: 'ben-1', nombre: 'Juan Pérez', dni: '12345678' },
+        },
+      ]);
+      prismaMock.famDepositoBeneficiario.create = jest.fn().mockResolvedValue({});
+      prismaMock.famDepositoBeneficiario.updateMany = jest.fn().mockResolvedValue({ count: 1 });
+      prismaMock.famSolicitudBeneficio.update.mockResolvedValue({
+        ...mockExpediente,
+        estado: 'PAGADA',
+        documentacionCompleta: true,
+        documentacionObservacion: null,
+        fechaPago: new Date(),
+      });
+
+      const res = await famBeneficiosService.actualizar(
+        expId,
+        { documentacionCompleta: true } as any,
+        'ADMINISTRADOR',
+        'usr-operador-1',
+        '192.168.20.125',
+      );
+
+      expect(res).toBeDefined();
+      expect(prismaMock.famSolicitudBeneficio.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: expId },
+          data: expect.objectContaining({
+            estado: 'PAGADA',
+            documentacionCompleta: true,
+          }),
+        }),
+      );
+      expect(prismaMock.famDepositoBeneficiario.create).toHaveBeenCalled();
+    });
+  });
 });

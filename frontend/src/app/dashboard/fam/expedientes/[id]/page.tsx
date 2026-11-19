@@ -424,6 +424,9 @@ export default function DetalleExpedientePage() {
           : (expedienteId === id ? detalle?.expedienteNumero || '' : docsOtros[expedienteId]?.expediente || ''),
       );
       await refrescarDocs(expedienteId);
+      if (expedienteId === id) {
+        await recargar();
+      }
     } catch (err: any) {
       showConfirmMessage('error', 'No se pudo subir el documento', err?.response?.data?.message || 'Intente nuevamente');
     } finally {
@@ -564,11 +567,13 @@ export default function DetalleExpedientePage() {
   const guardarAdmin = async () => {
     setGuardandoAdmin(true);
     try {
+      const esPagada = formAdmin.estado === 'PAGADA';
       await api.put(`/fam-beneficios/${id}`, {
         estado: formAdmin.estado || undefined,
+        ...(esPagada ? { documentacionCompleta: true } : {}),
         monto: formAdmin.monto ? parseFloat(formAdmin.monto) : undefined,
         fechaSolicitud: formAdmin.fechaSolicitud || undefined,
-        fechaPago: formAdmin.fechaPago || undefined,
+        fechaPago: formAdmin.fechaPago || (esPagada ? (formAdmin.memorandoFecha || formAdmin.cartaFecha || new Date().toISOString().split('T')[0]) : undefined),
         observaciones: formAdmin.observaciones || undefined,
         formaPago: formAdmin.formaPago || undefined,
         banco: formAdmin.banco || undefined,
@@ -770,9 +775,10 @@ export default function DetalleExpedientePage() {
   const puedeOperar = isAdmin || userRole === 'OPERADOR_PAGOS';
 
   const ESTADOS_FLUJO = ['PENDIENTE', 'EN_REVISION', 'APROBADA', 'PAGADA'];
-  const idxActual = ESTADOS_FLUJO.indexOf(detalle.estado);
+  const estadoEfectivo = (detalle.documentacionCompleta && detalle.estado !== 'RECHAZADA') ? 'PAGADA' : detalle.estado;
+  const idxActual = ESTADOS_FLUJO.indexOf(estadoEfectivo);
   const horasTranscurridas = (Date.now() - new Date(detalle.fechaSolicitud || detalle.id).getTime()) / (1000 * 60 * 60);
-  const configActual = slaConfig.find((c) => c.estado === detalle.estado);
+  const configActual = slaConfig.find((c) => c.estado === estadoEfectivo);
   const horasLimite = configActual?.horasLimite || 0;
   const horasRestantes = horasLimite > 0 ? horasLimite - horasTranscurridas : null;
 
@@ -1281,9 +1287,9 @@ export default function DetalleExpedientePage() {
       <section className="w-full bg-white rounded-xl border border-slate-200 shadow-xs p-4 sm:p-5" data-purpose="workflow-stepper">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">Flujo del Expediente</h2>
-          {detalle.estado === 'PAGADA' ? (
+          {estadoEfectivo === 'PAGADA' ? (
             <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-              Proceso Completado
+              Proceso Completado (Paso 4 Pagado)
             </span>
           ) : detalle.estado === 'RECHAZADA' ? (
             <span className="text-xs font-semibold text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
@@ -1308,7 +1314,7 @@ export default function DetalleExpedientePage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
           {ESTADOS_FLUJO.map((estado, idx) => {
             const completado = idxActual >= 0 && idx < idxActual;
-            const actual = estado === detalle.estado;
+            const actual = estado === estadoEfectivo;
             const labelPaso = `Paso ${idx + 1}${actual ? ' (Actual)' : ''}`;
             const nombreVisible = slaConfig.find((c) => c.estado === estado)?.nombreVisible || estado.replace('_', ' ');
 
@@ -1911,26 +1917,62 @@ export default function DetalleExpedientePage() {
                   )}
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => verExpedienteCompletoPdf(id)}
-                  disabled={uniendoDocs}
-                  className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-white bg-[#3258CA] hover:bg-[#2846a3] disabled:opacity-50 rounded-lg shadow-xs transition-colors shrink-0 self-start sm:self-auto"
-                >
-                  {uniendoDocs ? (
-                    <>
-                      <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Consolidando todos los documentos...
-                    </>
-                  ) : (
-                    <>
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                <div className="flex flex-wrap items-center gap-2">
+                  {(!detalle.documentacionCompleta || detalle.estado !== 'PAGADA') && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await api.put(`/fam-beneficios/${id}`, {
+                            documentacionCompleta: true,
+                            estado: 'PAGADA',
+                            fechaPago: detalle.fechaPago || new Date().toISOString().split('T')[0],
+                          });
+                          showConfirmMessage(
+                            'success',
+                            'Documentación completada',
+                            'Se actualizó la documentación a completa y se activó el Paso 4 (PAGADA).'
+                          );
+                          await recargar();
+                        } catch (err: any) {
+                          showConfirmMessage(
+                            'error',
+                            'Error al actualizar',
+                            err?.response?.data?.message || 'No se pudo actualizar la documentación'
+                          );
+                        }
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-lg shadow-xs transition-colors shrink-0"
+                      title="Marcar documentación completa y activar Paso 4 (PAGADA)"
+                    >
+                      <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                       </svg>
-                      Ver todos los documentos en un solo PDF
-                    </>
+                      Completar Documentación y Activar Paso 4 (PAGADA)
+                    </button>
                   )}
-                </button>
+
+                  <button
+                    type="button"
+                    onClick={() => verExpedienteCompletoPdf(id)}
+                    disabled={uniendoDocs}
+                    className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-white bg-[#3258CA] hover:bg-[#2846a3] disabled:opacity-50 rounded-lg shadow-xs transition-colors shrink-0 self-start sm:self-auto"
+                  >
+                    {uniendoDocs ? (
+                      <>
+                        <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        Consolidando todos los documentos...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        Ver todos los documentos en un solo PDF
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
 
               {!docsCargados ? (
@@ -1974,6 +2016,13 @@ export default function DetalleExpedientePage() {
                           </span>
                         </div>
                       )}
+                      <div className="mb-3 text-xs text-slate-500">
+                        {isAdmin ? (
+                          <span>Como ADMINISTRADOR puede subir y reemplazar documentos.</span>
+                        ) : (
+                          <span>Solo el ADMINISTRADOR puede subir documentos.</span>
+                        )}
+                      </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 sm:gap-3">
                         {Object.entries(DOCS_LABELS)
                           .filter(([campo]) => {
@@ -1987,10 +2036,15 @@ export default function DetalleExpedientePage() {
                             const disponible = Boolean(docsDeExpediente(reg.id)[campo]);
                             const loadKey = `${reg.id}:${campo}`;
                             return (
-                              <div key={campo} className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 sm:p-3 bg-white rounded-lg border border-slate-200 gap-2">
+                              <div key={campo} className="flex flex-col sm:flex-row items-center justify-between p-2.5 sm:p-3 bg-white rounded-lg border border-slate-200 gap-2">
                                 <div className="flex items-center gap-2 min-w-0">
                                   <span className={`w-2 h-2 rounded-full shrink-0 ${disponible ? 'bg-emerald-500' : 'bg-slate-300'}`} />
                                   <span className="text-xs font-semibold text-slate-800 truncate">{label}</span>
+                                  {campo === 'declaracionJurada' && (reg.id === id ? detalle?.declaracionJuradaDni : docsOtros[reg.id]?.dniDJ) && (
+                                    <span className="text-[10px] text-slate-500 font-mono font-normal">
+                                      (DNI {reg.id === id ? detalle?.declaracionJuradaDni : docsOtros[reg.id]?.dniDJ})
+                                    </span>
+                                  )}
                                 </div>
                                 <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
                                   {disponible && (
@@ -2003,16 +2057,18 @@ export default function DetalleExpedientePage() {
                                       {pdfLoadingKey === loadKey ? 'Abriendo...' : 'Ver PDF'}
                                     </button>
                                   )}
-                                  {isAdmin && (
+                                  {isAdmin ? (
                                     <button
                                       onClick={() => pedirDocumento(reg.id, campo)}
                                       disabled={subiendoDoc === loadKey}
                                       className={`text-xs font-medium hover:underline disabled:opacity-50 ${disponible ? 'text-slate-500' : 'text-[#3258CA]'}`}
                                       type="button"
                                     >
-                                      {subiendoDoc === loadKey ? 'Subiendo...' : disponible ? 'Reemplazar' : 'Subir PDF o Imagen'}
+                                      {subiendoDoc === loadKey ? 'Subiendo...' : disponible ? 'Reemplazar' : 'Subir PDF'}
                                     </button>
-                                  )}
+                                  ) : !disponible ? (
+                                    <span className="text-xs text-slate-400">No cargado</span>
+                                  ) : null}
                                 </div>
                               </div>
                             );

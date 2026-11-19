@@ -91,16 +91,24 @@ export default function EditarExpedienteModal({
     setGuardando(true);
     setError('');
     try {
+      const estadoFinal = form.documentacionCompleta === true
+        ? (form.estado === 'RECHAZADA' ? 'RECHAZADA' : 'PAGADA')
+        : (form.estado || undefined);
+
+      const fechaPagoFinal = (estadoFinal === 'PAGADA' && !form.fechaPago)
+        ? (form.memorandoFecha || form.cartaFecha || new Date().toISOString().split('T')[0])
+        : (form.fechaPago || undefined);
+
       await api.put(`/fam-beneficios/${expedienteId}`, {
-        estado: form.estado || undefined,
+        estado: estadoFinal,
         monto: form.monto ? parseFloat(form.monto) : undefined,
         fechaSolicitud: form.fechaSolicitud || undefined,
-        fechaPago: form.fechaPago || undefined,
+        fechaPago: fechaPagoFinal,
         observaciones: form.observaciones || undefined,
         documentacionCompleta: form.documentacionCompleta,
         documentacionObservacion: form.documentacionCompleta === false
           ? (form.documentacionObservacion.trim() || 'Documentación incompleta / justificada')
-          : (form.documentacionObservacion.trim() || undefined),
+          : undefined,
         formaPago: form.formaPago || undefined,
         banco: form.banco || undefined,
         numeroCuenta: form.numeroCuenta?.trim() || undefined,
@@ -162,7 +170,24 @@ export default function EditarExpedienteModal({
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-text-sec uppercase mb-1">Estado</label>
-                  <select value={form.estado} onChange={(e) => setForm({ ...form, estado: e.target.value })} className={INPUT_CLS}>
+                  <select
+                    value={form.estado}
+                    onChange={(e) => {
+                      const nuevoEst = e.target.value;
+                      setForm((prev) => ({
+                        ...prev,
+                        estado: nuevoEst,
+                        ...(nuevoEst === 'PAGADA'
+                          ? {
+                              documentacionCompleta: true,
+                              fechaPago: prev.fechaPago || prev.memorandoFecha || prev.cartaFecha || new Date().toISOString().split('T')[0],
+                              documentacionObservacion: '',
+                            }
+                          : {}),
+                      }));
+                    }}
+                    className={INPUT_CLS}
+                  >
                     {ESTADOS.map((e) => <option key={e} value={e}>{e === 'EN_REVISION' ? 'EN REVISIÓN' : e}</option>)}
                   </select>
                 </div>
@@ -269,15 +294,46 @@ export default function EditarExpedienteModal({
                   <label className="block text-xs font-medium text-text-sec uppercase mb-1">Documentación del Expediente</label>
                   <div className="flex items-center gap-4 h-[38px]">
                     <label className="inline-flex items-center gap-1.5 text-sm cursor-pointer">
-                      <input type="radio" checked={form.documentacionCompleta === true} onChange={() => setForm({ ...form, documentacionCompleta: true })} />
+                      <input
+                        type="radio"
+                        checked={form.documentacionCompleta === true}
+                        onChange={() => {
+                          setForm((prev) => ({
+                            ...prev,
+                            documentacionCompleta: true,
+                            estado: prev.estado === 'RECHAZADA' ? 'RECHAZADA' : 'PAGADA',
+                            fechaPago: prev.fechaPago || prev.memorandoFecha || prev.cartaFecha || new Date().toISOString().split('T')[0],
+                            documentacionObservacion: '',
+                          }));
+                        }}
+                      />
                       <span className="text-green-700 font-medium">Sí, completa</span>
                     </label>
                     <label className="inline-flex items-center gap-1.5 text-sm cursor-pointer">
-                      <input type="radio" checked={form.documentacionCompleta === false} onChange={() => setForm({ ...form, documentacionCompleta: false })} />
+                      <input
+                        type="radio"
+                        checked={form.documentacionCompleta === false}
+                        onChange={() => {
+                          setForm((prev) => ({
+                            ...prev,
+                            documentacionCompleta: false,
+                            estado: prev.estado === 'PAGADA' ? 'EN_REVISION' : prev.estado,
+                          }));
+                        }}
+                      />
                       <span className="text-red-600 font-medium">⚠️ No cumple / Incompleta</span>
                     </label>
                   </div>
                 </div>
+
+                {form.documentacionCompleta === true && (
+                  <div className="text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 flex items-center gap-2">
+                    <svg className="w-4 h-4 text-emerald-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span><strong>Documentación completa:</strong> Al guardar se actualizará el expediente y se activará el <strong>Paso 4 (PAGADA)</strong>.</span>
+                  </div>
+                )}
 
                 {form.documentacionCompleta === false && (
                   <div>

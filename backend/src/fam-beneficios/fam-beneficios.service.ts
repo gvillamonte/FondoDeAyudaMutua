@@ -1702,7 +1702,10 @@ export class FamBeneficiosService {
     const tieneOrdenPagoSol = Boolean(solicitud.ordenPago) || Boolean((solicitud as any).vinculos?.some((v: any) => v.ordenPago) || (solicitud as any).beneficiarios?.some((b: any) => b.ordenPago));
     const tieneMemorandoSol = Boolean(solicitud.memorando);
     const tieneCartaSol = Boolean(solicitud.cartaRemision);
-    const procesoFinalizadoSol = solicitud.estado === 'PAGADA' || (tieneOrdenPagoSol && tieneMemorandoSol && tieneCartaSol);
+    const procesoFinalizadoSol =
+      solicitud.estado === 'PAGADA' ||
+      Boolean(solicitud.documentacionCompleta && solicitud.estado !== 'RECHAZADA') ||
+      (tieneOrdenPagoSol && tieneMemorandoSol && tieneCartaSol);
 
     if (procesoFinalizadoSol && solicitud.estado !== 'PAGADA') {
       const fechaPagoRes = solicitud.fechaPago || new Date();
@@ -2214,7 +2217,10 @@ export class FamBeneficiosService {
     const tieneOrdenPago = Boolean(solicitud.ordenPago) || Boolean(vinculos.some((v: any) => v.ordenPago));
     const tieneMemorando = Boolean(solicitud.memorando);
     const tieneCarta = Boolean(solicitud.cartaRemision);
-    const procesoFinalizado = solicitud.estado === 'PAGADA' || (tieneOrdenPago && tieneMemorando && tieneCarta);
+    const procesoFinalizado =
+      solicitud.estado === 'PAGADA' ||
+      Boolean(solicitud.documentacionCompleta && solicitud.estado !== 'RECHAZADA') ||
+      (tieneOrdenPago && tieneMemorando && tieneCarta);
 
     if (procesoFinalizado && solicitud.estado !== 'PAGADA') {
       const fechaPagoRes = solicitud.fechaPago || new Date();
@@ -4209,6 +4215,20 @@ export class FamBeneficiosService {
       ...(dto.ordenPagoFecha !== undefined && { ordenPagoFecha: dto.ordenPagoFecha ? new Date(dto.ordenPagoFecha) : null }),
     };
 
+    // Al cambiar la documentación a completa, activar automáticamente el paso 4 (PAGADA)
+    if (dto.documentacionCompleta === true) {
+      dataUpdate.documentacionCompleta = true;
+      if (!dto.documentacionObservacion?.trim()) {
+        dataUpdate.documentacionObservacion = null;
+      }
+      if (dto.estado !== 'RECHAZADA') {
+        dataUpdate.estado = 'PAGADA';
+        if (!dataUpdate.fechaPago && !existing.fechaPago) {
+          dataUpdate.fechaPago = dto.ordenPagoFecha ? new Date(dto.ordenPagoFecha) : new Date();
+        }
+      }
+    }
+
     if (dto.monto !== undefined && nuevoTipo?.codigo === 'FALLECIMIENTO') {
       const minNorm = await this.obtenerMontoMinimoFallecimiento();
       const calc = this.calcularSaldoPendiente(Number(dto.monto), minNorm);
@@ -4218,7 +4238,7 @@ export class FamBeneficiosService {
     }
 
     if (
-      dto.estado === 'PAGADA' &&
+      (dataUpdate.estado === 'PAGADA' || dto.estado === 'PAGADA') &&
       existing.estado !== 'PAGADA' &&
       nuevoTipo &&
       TIPOS_BOLSA.includes(nuevoTipo.codigo)
@@ -4227,9 +4247,60 @@ export class FamBeneficiosService {
         where: { solicitudId: id },
       });
       if (depositos === 0) {
-        throw new BadRequestException(
-          'Para marcar el expediente como PAGADA use la acción "Registrar pago", que genera un depósito por beneficiario.',
-        );
+        if (dto.documentacionCompleta === true) {
+          // Generar automáticamente los depósitos por beneficiario para activar el Paso 4 (PAGADA)
+          const vinculos = typeof this.prisma.famSolicitudBeneficiario?.findMany === 'function'
+            ? await this.prisma.famSolicitudBeneficiario.findMany({
+                where: { solicitudId: id },
+                include: { beneficiario: true },
+              })
+            : [];
+          const totalMonto = Number(montoFinal);
+          const fPago = dataUpdate.fechaPago || existing.fechaPago || new Date();
+          if (vinculos.length > 0) {
+            for (const v of vinculos) {
+              const pct = Number(v.porcentajeAsignado || 100);
+              const montoBenef = Math.round(((totalMonto * pct) / 100) * 100) / 100;
+              await this.prisma.famDepositoBeneficiario.create({
+                data: {
+                  solicitudId: id,
+                  beneficiarioId: v.beneficiarioId,
+                  nombreBeneficiario: v.beneficiario?.nombre || existing.solicitanteNombre || 'Beneficiario',
+                  dniBeneficiario: v.beneficiario?.dni || existing.solicitanteDni || null,
+                  porcentaje: pct,
+                  monto: montoBenef,
+                  banco: dto.banco || existing.banco || null,
+                  numeroCuenta: dto.numeroCuenta || existing.numeroCuenta || null,
+                  cci: dto.cci || existing.cci || null,
+                  fechaPago: fPago,
+                  estado: 'PAGADO',
+                  registradoPor: userId || 'Sistema',
+                },
+              });
+            }
+          } else {
+            await this.prisma.famDepositoBeneficiario.create({
+              data: {
+                solicitudId: id,
+                beneficiarioId: null,
+                nombreBeneficiario: existing.solicitanteNombre || 'Colegiado Titular',
+                dniBeneficiario: existing.solicitanteDni || null,
+                porcentaje: 100,
+                monto: totalMonto,
+                banco: dto.banco || existing.banco || null,
+                numeroCuenta: dto.numeroCuenta || existing.numeroCuenta || null,
+                cci: dto.cci || existing.cci || null,
+                fechaPago: fPago,
+                estado: 'PAGADO',
+                registradoPor: userId || 'Sistema',
+              },
+            });
+          }
+        } else {
+          throw new BadRequestException(
+            'Para marcar el expediente como PAGADA use la acción "Registrar pago", que genera un depósito por beneficiario.',
+          );
+        }
       }
     }
 
@@ -4242,9 +4313,11 @@ export class FamBeneficiosService {
         ? dto.fechaPago
           ? new Date(dto.fechaPago)
           : null
-        : dto.ordenPagoFecha !== undefined && dto.ordenPagoFecha
-          ? new Date(dto.ordenPagoFecha)
-          : undefined;
+        : dataUpdate.fechaPago !== undefined
+          ? dataUpdate.fechaPago
+          : dto.ordenPagoFecha !== undefined && dto.ordenPagoFecha
+            ? new Date(dto.ordenPagoFecha)
+            : undefined;
 
     if (
       dto.ordenPagoFecha !== undefined &&
@@ -4261,7 +4334,7 @@ export class FamBeneficiosService {
       include: { tipoBeneficio: true },
     });
 
-    if (fechaDepositoSync !== undefined) {
+    if (fechaDepositoSync !== undefined && typeof this.prisma.famDepositoBeneficiario?.updateMany === 'function') {
       await this.prisma.famDepositoBeneficiario.updateMany({
         where: { solicitudId: id },
         data: { fechaPago: fechaDepositoSync },
@@ -4269,7 +4342,8 @@ export class FamBeneficiosService {
     }
 
     // Registrar auditoría detallada de la transición o modificación
-    const cambioEstado = dto.estado !== undefined && dto.estado !== existing.estado;
+    const nuevoEstadoAudit = updated.estado;
+    const cambioEstado = nuevoEstadoAudit !== existing.estado;
     await this.auditService.log({
       userId: userId || 'Sistema',
       action: 'UPDATE',
@@ -4304,7 +4378,7 @@ export class FamBeneficiosService {
                   estadoNuevo: updated.estado,
                   marcaTiempoExacta: new Date().toISOString(),
                   usuarioId: userId || 'Sistema',
-                  observaciones: dto.observaciones || dto.documentacionObservacion || updated.observaciones || null,
+                  observaciones: dto.observaciones || dto.documentacionObservacion || (dto.documentacionCompleta ? 'Documentación completa - Paso 4 PAGADA activado' : null) || updated.observaciones || null,
                 },
               },
             }

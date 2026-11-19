@@ -269,7 +269,7 @@ export class FamBeneficiosController {
   @Roles('ADMINISTRADOR')
   @ApiOperation({ summary: 'Actualizar solicitud de beneficio FAM (solo ADMINISTRADOR)' })
   async actualizar(@Param('id') id: string, @Body() dto: ActualizarFamSolicitudDto, @Req() req: any) {
-    return this.famBeneficiosService.actualizar(id, dto, req.user?.rol);
+    return this.famBeneficiosService.actualizar(id, dto, req.user?.rol, req.user?.sub, req.ip);
   }
 
   @Delete(':id')

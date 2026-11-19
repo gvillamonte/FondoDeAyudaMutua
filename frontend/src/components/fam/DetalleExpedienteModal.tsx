@@ -413,14 +413,55 @@ export default function DetalleExpedienteModal({ id, onClose, onDelete }: { id: 
     const tipoActual = detalle.tipoBeneficio?.codigo || '';
     const covidTotal = detalle.covidMontoTotal || 0;
 
+    // Asegurar que el expediente actual esté reflejado si está pagado o con orden de pago / documentos
+    const listaHistorial = [...(detalle.historialBeneficios || [])];
+    const tieneOrdenPagoActual = Boolean(
+      detalle.documentosDisponibles?.ordenPago ||
+      detalle.beneficiariosVinculados?.some((b: any) => b.tieneOrdenPago) ||
+      (detalle as any).depositos?.some((d: any) => d.tieneComprobante || d.fechaPago)
+    );
+    const tieneMemorandoActual = Boolean(detalle.documentosDisponibles?.memorando);
+    const tieneCartaActual = Boolean(detalle.documentosDisponibles?.cartaRemision);
+    const procesoFinalizado = detalle.estado === 'PAGADA' || tieneOrdenPagoActual || (tieneOrdenPagoActual && tieneMemorandoActual && tieneCartaActual);
+
+    const montoActual = Number(detalle.montoFinal ?? detalle.monto) || 0;
+    const idxActual = listaHistorial.findIndex((h) => h.id === detalle.id);
+
+    if (idxActual >= 0) {
+      listaHistorial[idxActual] = {
+        ...listaHistorial[idxActual],
+        monto: montoActual,
+        montoFinal: montoActual,
+        estado: procesoFinalizado ? 'PAGADA' : listaHistorial[idxActual].estado,
+      };
+    } else if (procesoFinalizado || detalle.estado === 'APROBADA') {
+      listaHistorial.push({
+        id: detalle.id,
+        tipo: tipoActual,
+        tipoNombre: detalle.tipoBeneficio?.nombre || tipoActual,
+        monto: montoActual,
+        descuentoCovid: Number(detalle.descuentoCovid || 0),
+        montoFinal: montoActual,
+        fecha: detalle.fechaSolicitud,
+        fechaPago: detalle.fechaPago || new Date().toISOString(),
+        expediente: detalle.expedienteNumero || '',
+        solicitanteNombre: detalle.solicitanteNombre,
+        solicitanteDni: detalle.solicitanteDni,
+        estado: procesoFinalizado ? 'PAGADA' : detalle.estado,
+        esActual: true,
+      });
+    }
+
     const filas = Object.entries(MONTOS_BASE).map(([codigo, base]) => {
-      const historiales = (detalle.historialBeneficios || []).filter((h) => h.tipo === codigo);
-      const recibidoBruto = historiales.reduce((sum, h) => sum + h.monto, 0);
+      const historiales = listaHistorial.filter(
+        (h) => h.tipo === codigo && (h.estado === 'PAGADA' || h.estado === 'APROBADA' || (h.id === detalle.id && procesoFinalizado))
+      );
+      const recibidoBruto = historiales.reduce((sum, h) => sum + (Number(h.montoFinal ?? h.monto) || 0), 0);
       const descuento = codigo === 'ENF_TERMINAL' ? covidTotal : 0;
       const baseNeto = base - descuento;
       const recibido = Math.min(recibidoBruto, Math.max(0, baseNeto));
       const porRecibir = Math.max(0, baseNeto - recibido);
-      const esActual = historiales.some((h) => h.esActual);
+      const esActual = historiales.some((h) => h.esActual || h.id === detalle.id);
       return {
         codigo,
         label: MONTOS_LABEL[codigo] || codigo,
@@ -447,8 +488,8 @@ export default function DetalleExpedienteModal({ id, onClose, onDelete }: { id: 
       baseNeto: 0,
       porRecibir: 0,
       esActual: tipoActual === 'COVID_19',
-      historial: (detalle.historialBeneficios || []).filter((h) => h.tipo === 'COVID_19'),
-      expedientes: (detalle.historialBeneficios || []).filter((h) => h.tipo === 'COVID_19').map((h) => h.expediente).filter(Boolean),
+      historial: listaHistorial.filter((h) => h.tipo === 'COVID_19'),
+      expedientes: listaHistorial.filter((h) => h.tipo === 'COVID_19').map((h) => h.expediente).filter(Boolean),
       estado: covidTotal > 0 ? 'RECIBIDO' : 'SIN_REGISTRO',
     });
 

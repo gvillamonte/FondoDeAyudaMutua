@@ -11,6 +11,7 @@ import EliminarExpedienteModal from '@/components/fam/EliminarExpedienteModal';
 import ModalRegularizarSaldo from '@/components/fam/ModalRegularizarSaldo';
 import EditarExpedienteModal from '@/components/fam/EditarExpedienteModal';
 import { ModalDetalleTarjetaKpi, TipoTarjetaKpi } from '@/components/fam/ModalDetalleTarjetaKpi';
+import PanelAlertasPendientes from '@/components/fam/PanelAlertasPendientes';
 
 interface Expediente {
   id: string;
@@ -985,6 +986,19 @@ export default function ExpedientesPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Panel de Alertas para Pendientes */}
+      {dashboard?.alertasPendientes && tab !== 'reporte' && tab !== 'duplicados' && (
+        <PanelAlertasPendientes
+          alertas={dashboard.alertasPendientes}
+          onFiltrarEnTabla={(tipo, ids) => {
+            if (ids) {
+              setIdsFiltro(ids);
+              setPage(1);
+            }
+          }}
+        />
       )}
 
       {/* Tabs */}

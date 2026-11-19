@@ -105,13 +105,13 @@ describe('FamBeneficiosController - control de acceso por rol', () => {
 describe('FamBeneficiosController - delegacion al service', () => {
   beforeEach(() => jest.clearAllMocks());
 
-  it('actualizar pasa el rol del usuario al service', async () => {
+  it('actualizar pasa el rol del usuario, sub e ip al service', async () => {
     service.actualizar.mockResolvedValue({ ok: true });
     const dto = { memorando: 'abc' } as any;
 
-    await controller.actualizar('exp-1', dto, { user: { rol: 'ADMINISTRADOR' } } as any);
+    await controller.actualizar('exp-1', dto, { user: { rol: 'ADMINISTRADOR', sub: 'u-1' }, ip: '192.168.1.1' } as any);
 
-    expect(service.actualizar).toHaveBeenCalledWith('exp-1', dto, 'ADMINISTRADOR');
+    expect(service.actualizar).toHaveBeenCalledWith('exp-1', dto, 'ADMINISTRADOR', 'u-1', '192.168.1.1');
   });
 
   it('eliminar delega usuario e ip', async () => {

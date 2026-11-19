@@ -23,12 +23,26 @@ interface DocumentoHistorial {
   origen?: 'beneficiario' | 'expediente' | null;
 }
 
+interface TransicionHistorial {
+  id: string;
+  estadoAnterior: string | null;
+  estadoNuevo: string;
+  marcaTiempoExacta: string;
+  fechaHoraFormateada: string;
+  usuarioResponsable: string;
+  usuarioId: string;
+  observaciones: string | null;
+  documentosAsociados: DocumentoHistorial[];
+  accion: string;
+}
+
 interface EtapaHistorial {
   key: string;
   nombre: string;
   estado: 'completado' | 'actual' | 'pendiente';
   fecha: string | null;
   detalle: string;
+  documentosAsociados?: DocumentoHistorial[];
 }
 
 interface ActividadHistorial {
@@ -81,6 +95,7 @@ interface HistorialData {
     depositos: number;
   };
   actividad: ActividadHistorial[];
+  transiciones?: TransicionHistorial[];
   permisos: { puedeSubirDocumentos: boolean };
 }
 
@@ -322,8 +337,15 @@ export default function HistorialExpediente({ expedienteId, onUpdated }: Props) 
           </p>
         </div>
         <div className="text-left sm:text-right flex-shrink-0">
-          <p className="text-[10px] uppercase tracking-wider text-text-sec">Monto del beneficio</p>
-          <p className="text-base font-semibold text-text-main">{fmtMonto(monto)}</p>
+          <p className="text-[10px] uppercase tracking-wider text-text-sec">
+            {expediente.estado === 'PAGADA' ? 'Importe Recibido / Entregado' : 'Monto del beneficio'}
+          </p>
+          <p className={`text-base font-bold ${expediente.estado === 'PAGADA' ? 'text-success' : 'text-text-main'}`}>
+            {fmtMonto(monto)}
+          </p>
+          {expediente.fechaPago && (
+            <p className="text-[10px] text-text-sec mt-0.5">Pagado: {fmtFecha(expediente.fechaPago)}</p>
+          )}
         </div>
       </div>
 
@@ -365,6 +387,38 @@ export default function HistorialExpediente({ expedienteId, onUpdated }: Props) 
                   <p className="text-[10px] text-text-sec mt-0.5 leading-snug sm:px-1">
                     {etapa.detalle}
                   </p>
+                  {etapa.documentosAsociados && etapa.documentosAsociados.length > 0 && (
+                    <div className="mt-2 flex flex-col gap-1 w-full text-left sm:items-center">
+                      {etapa.documentosAsociados.map((doc) => (
+                        <div
+                          key={doc.id}
+                          className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-slate-50 border border-border-main"
+                        >
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full ${
+                              doc.cargado ? 'bg-success' : 'bg-warning'
+                            }`}
+                          />
+                          <span className="truncate max-w-[90px]" title={doc.nombre}>
+                            {doc.nombre}
+                          </span>
+                          {doc.cargado && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                verDocumento(doc);
+                              }}
+                              className="text-[#3258CA] font-medium hover:underline text-[9px] ml-0.5"
+                              title="Ver documento en PDF"
+                            >
+                              PDF
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -537,6 +591,142 @@ export default function HistorialExpediente({ expedienteId, onUpdated }: Props) 
               </div>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* Transiciones de Estado y Trazabilidad */}
+      <section className="border border-border-main rounded-xl overflow-hidden bg-white">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between px-4 py-3 border-b border-border-main bg-slate-50/70">
+          <div>
+            <h4 className="text-sm font-semibold text-text-main flex items-center gap-2">
+              <svg className="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Transiciones de Estado y Trazabilidad
+            </h4>
+            <p className="text-[11px] text-text-sec">
+              Detalle cronológico de cambios de estado, marca de tiempo exacta, responsable y documentos asociados.
+            </p>
+          </div>
+          <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+            {(data.transiciones || []).length} {((data.transiciones || []).length === 1) ? 'transición' : 'transiciones'}
+          </span>
+        </div>
+
+        <div className="p-4">
+          {(!data.transiciones || data.transiciones.length === 0) ? (
+            <p className="text-xs text-text-sec text-center py-4">
+              Sin transiciones de estado registradas en auditoría.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {data.transiciones.map((t, idx) => {
+                const anteriorLabel = t.estadoAnterior ? (ESTADO_LABEL[t.estadoAnterior] || t.estadoAnterior) : 'Registro Inicial';
+                const nuevoLabel = ESTADO_LABEL[t.estadoNuevo] || t.estadoNuevo;
+                return (
+                  <div
+                    key={t.id || idx}
+                    className="p-3.5 border border-border-main rounded-lg bg-white hover:bg-slate-50/50 transition-colors space-y-2.5"
+                  >
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      {/* Transición de estados con badges */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                          {anteriorLabel}
+                        </span>
+                        <svg className="w-4 h-4 text-text-sec flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                        </svg>
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-primary/10 text-primary border border-primary/20">
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full ${
+                              ESTADO_DOT[t.estadoNuevo] || 'bg-primary'
+                            }`}
+                          />
+                          {nuevoLabel}
+                        </span>
+                      </div>
+
+                      {/* Marca de tiempo exacta y responsable */}
+                      <div className="flex items-center gap-3 text-right text-[11px] text-text-sec flex-wrap">
+                        <span className="inline-flex items-center gap-1 font-mono text-slate-600 bg-slate-50 px-2 py-0.5 rounded border border-border-main" title={`Timestamp ISO: ${t.marcaTiempoExacta}`}>
+                          <svg className="w-3.5 h-3.5 text-text-sec" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                          {t.fechaHoraFormateada || t.marcaTiempoExacta}
+                        </span>
+                        <span className="inline-flex items-center gap-1 font-medium text-slate-800">
+                          <svg className="w-3.5 h-3.5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                          </svg>
+                          {t.usuarioResponsable}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Observaciones registradas */}
+                    {t.observaciones ? (
+                      <div className="p-2.5 rounded-md bg-amber-50/60 border border-amber-200/80 text-xs text-amber-900 leading-relaxed">
+                        <span className="font-semibold text-amber-800">Observaciones registradas: </span>
+                        {t.observaciones}
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-text-sec italic">
+                        Sin observaciones registradas en este cambio de estado.
+                      </p>
+                    )}
+
+                    {/* Documentos asociados en esta transición/etapa */}
+                    {t.documentosAsociados && t.documentosAsociados.length > 0 && (
+                      <div className="pt-2 border-t border-border-main/60">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-text-sec mb-1.5">
+                          Documentos asociados a esta etapa:
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {t.documentosAsociados.map((doc) => (
+                            <div
+                              key={doc.id}
+                              className="flex items-center justify-between gap-2 p-2 rounded-lg bg-slate-50 border border-border-main text-xs"
+                            >
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <span
+                                  className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                                    doc.cargado ? 'bg-success' : 'bg-warning'
+                                  }`}
+                                />
+                                <span className="truncate text-text-main text-[11px] font-medium" title={doc.nombre}>
+                                  {doc.nombre}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1.5 flex-shrink-0">
+                                <span
+                                  className={`text-[10px] font-medium ${
+                                    doc.cargado ? 'text-success' : 'text-warning'
+                                  }`}
+                                >
+                                  {doc.cargado ? 'Cargado' : 'Pendiente'}
+                                </span>
+                                {doc.cargado && (
+                                  <button
+                                    type="button"
+                                    onClick={() => verDocumento(doc)}
+                                    disabled={pdfLoadingId === doc.id}
+                                    className="px-2 py-0.5 text-[10px] font-medium text-primary border border-primary/30 rounded hover:bg-primary/5 disabled:opacity-50"
+                                  >
+                                    {pdfLoadingId === doc.id ? 'Abriendo...' : 'Ver PDF'}
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </section>
 

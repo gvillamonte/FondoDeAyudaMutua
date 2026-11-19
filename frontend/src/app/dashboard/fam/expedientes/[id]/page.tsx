@@ -599,14 +599,55 @@ export default function DetalleExpedientePage() {
     const tipoActual = detalle.tipoBeneficio?.codigo || '';
     const covidTotal = detalle.covidMontoTotal || 0;
 
+    // Asegurar que el expediente actual esté reflejado si está pagado o con orden de pago / documentos
+    const listaHistorial = [...(detalle.historialBeneficios || [])];
+    const tieneOrdenPagoActual = Boolean(
+      detalle.documentosDisponibles?.ordenPago ||
+      detalle.beneficiariosVinculados?.some((b) => b.tieneOrdenPago) ||
+      detalle.depositos?.some((d) => d.tieneComprobante || d.fechaPago)
+    );
+    const tieneMemorandoActual = Boolean(detalle.documentosDisponibles?.memorando);
+    const tieneCartaActual = Boolean(detalle.documentosDisponibles?.cartaRemision);
+    const procesoFinalizado = detalle.estado === 'PAGADA' || tieneOrdenPagoActual || (tieneOrdenPagoActual && tieneMemorandoActual && tieneCartaActual);
+
+    const montoActual = Number(detalle.montoFinal ?? detalle.monto) || 0;
+    const idxActual = listaHistorial.findIndex((h) => h.id === id);
+
+    if (idxActual >= 0) {
+      listaHistorial[idxActual] = {
+        ...listaHistorial[idxActual],
+        monto: montoActual,
+        montoFinal: montoActual,
+        estado: procesoFinalizado ? 'PAGADA' : listaHistorial[idxActual].estado,
+      };
+    } else if (procesoFinalizado || detalle.estado === 'APROBADA') {
+      listaHistorial.push({
+        id,
+        tipo: tipoActual,
+        tipoNombre: detalle.tipoBeneficio?.nombre || tipoActual,
+        monto: montoActual,
+        descuentoCovid: Number(detalle.descuentoCovid || 0),
+        montoFinal: montoActual,
+        fecha: detalle.fechaSolicitud,
+        fechaPago: detalle.fechaPago || new Date().toISOString(),
+        expediente: detalle.expedienteNumero || '',
+        solicitanteNombre: detalle.solicitanteNombre,
+        solicitanteDni: detalle.solicitanteDni,
+        estado: procesoFinalizado ? 'PAGADA' : detalle.estado,
+        esActual: true,
+      });
+    }
+
     const filas = Object.entries(MONTOS_BASE).map(([codigo, base]) => {
-      const historiales = (detalle.historialBeneficios || []).filter((h) => h.tipo === codigo);
-      const recibidoBruto = historiales.reduce((sum, h) => sum + h.monto, 0);
+      const historiales = listaHistorial.filter(
+        (h) => h.tipo === codigo && (h.estado === 'PAGADA' || h.estado === 'APROBADA' || (h.id === id && procesoFinalizado))
+      );
+      const recibidoBruto = historiales.reduce((sum, h) => sum + (Number(h.montoFinal ?? h.monto) || 0), 0);
       const descuento = codigo === 'ENF_TERMINAL' ? covidTotal : 0;
       const baseNeto = base - descuento;
       const recibido = Math.min(recibidoBruto, Math.max(0, baseNeto));
       const porRecibir = Math.max(0, baseNeto - recibido);
-      const esActual = historiales.some((h) => h.esActual);
+      const esActual = historiales.some((h) => h.esActual || h.id === id);
       return {
         codigo, label: MONTOS_LABEL[codigo] || codigo, base, recibidoBruto,
         recibido, descuento, baseNeto, porRecibir, esActual,
@@ -621,8 +662,8 @@ export default function DetalleExpedientePage() {
       base: 0, recibidoBruto: covidTotal, recibido: covidTotal,
       descuento: 0, baseNeto: 0, porRecibir: 0,
       esActual: tipoActual === 'COVID_19',
-      historial: (detalle.historialBeneficios || []).filter((h) => h.tipo === 'COVID_19'),
-      expedientes: (detalle.historialBeneficios || []).filter((h) => h.tipo === 'COVID_19').map((h) => h.expediente).filter(Boolean),
+      historial: listaHistorial.filter((h) => h.tipo === 'COVID_19'),
+      expedientes: listaHistorial.filter((h) => h.tipo === 'COVID_19').map((h) => h.expediente).filter(Boolean),
       estado: covidTotal > 0 ? 'RECIBIDO' : 'SIN_REGISTRO',
     });
 
@@ -799,6 +840,77 @@ export default function DetalleExpedientePage() {
               Regularizar Saldo
             </button>
           )}
+        </div>
+      )}
+
+      {/* Alerta de SLA Vencido o Próximo a Vencer */}
+      {horasRestantes !== null && (detalle.estado === 'PENDIENTE' || detalle.estado === 'EN_REVISION') && (
+        horasRestantes <= 0 ? (
+          <div className="w-full p-4 bg-red-50 border border-red-200 rounded-xl shadow-2xs flex items-center justify-between gap-3 text-red-900">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-red-100 text-red-700 rounded-lg shrink-0">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-bold text-sm text-red-800">Alerta de SLA Superado / Plazo Vencido</h3>
+                  <span className="px-2 py-0.5 text-[10px] font-bold bg-red-600 text-white rounded-full">
+                    {Math.abs(Math.floor(horasRestantes))}h excedidas
+                  </span>
+                </div>
+                <p className="text-xs text-red-700 mt-0.5">
+                  Este expediente ha excedido el plazo límite normativo ({horasLimite}h) para la etapa de {detalle.estado}. Requiere atención prioritaria.
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : horasRestantes <= 12 ? (
+          <div className="w-full p-4 bg-amber-50 border border-amber-200 rounded-xl shadow-2xs flex items-center justify-between gap-3 text-amber-900">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-amber-100 text-amber-700 rounded-lg shrink-0">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-bold text-sm text-amber-800">Próximo a Vencer el Plazo de SLA</h3>
+                  <span className="px-2 py-0.5 text-[10px] font-bold bg-amber-600 text-white rounded-full">
+                    Restan {Math.max(1, Math.floor(horasRestantes))}h
+                  </span>
+                </div>
+                <p className="text-xs text-amber-700 mt-0.5">
+                  El plazo límite normativo ({horasLimite}h) para resolver la etapa de {detalle.estado} vence en menos de 12 horas.
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : null
+      )}
+
+      {/* Alerta de Documentación Incompleta */}
+      {!detalle.documentacionCompleta && detalle.estado !== 'PAGADA' && detalle.estado !== 'RECHAZADA' && (
+        <div className="w-full p-4 bg-blue-50 border border-blue-200 rounded-xl shadow-2xs flex items-center justify-between gap-3 text-slate-800">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-blue-100 text-[#3258CA] rounded-lg shrink-0">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-sm text-[#3258CA]">Requisitos y Documentación Incompleta</h3>
+                <span className="px-2 py-0.5 text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200 rounded-full">
+                  Pendiente de carga
+                </span>
+              </div>
+              <p className="text-xs text-slate-600 mt-0.5">
+                {detalle.documentacionObservacion || 'El expediente aún cuenta con documentos obligatorios sin cargar. Revise la pestaña de Historial y Documentos para regularizarlos.'}
+              </p>
+            </div>
+          </div>
         </div>
       )}
 

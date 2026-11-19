@@ -1698,13 +1698,41 @@ export class FamBeneficiosService {
       covidMontoTotal += covidExpedientes.reduce((sum, e) => sum + Number(e.monto), 0);
     } catch { }
 
-    // Historial de beneficios pagados del colegiado (incluye el actual)
+    // Verificar si el expediente actual cuenta con Orden de Pago, Memorando y Carta de Remisión para considerarse finalizado/pagado
+    const tieneOrdenPagoSol = Boolean(solicitud.ordenPago) || Boolean((solicitud as any).vinculos?.some((v: any) => v.ordenPago) || (solicitud as any).beneficiarios?.some((b: any) => b.ordenPago));
+    const tieneMemorandoSol = Boolean(solicitud.memorando);
+    const tieneCartaSol = Boolean(solicitud.cartaRemision);
+    const procesoFinalizadoSol = solicitud.estado === 'PAGADA' || (tieneOrdenPagoSol && tieneMemorandoSol && tieneCartaSol);
+
+    if (procesoFinalizadoSol && solicitud.estado !== 'PAGADA') {
+      const fechaPagoRes = solicitud.fechaPago || new Date();
+      await this.prisma.famSolicitudBeneficio.update({
+        where: { id },
+        data: {
+          estado: 'PAGADA',
+          fechaPago: fechaPagoRes,
+          documentacionCompleta: true,
+        },
+      });
+      solicitud.estado = 'PAGADA';
+      solicitud.fechaPago = fechaPagoRes;
+      solicitud.documentacionCompleta = true;
+      resto.estado = 'PAGADA';
+      resto.fechaPago = fechaPagoRes;
+      resto.documentacionCompleta = true;
+    }
+
+    // Historial de beneficios pagados del colegiado (incluye el actual si está finalizado o pagado)
     let historialBruto: any[] = [];
     try {
       historialBruto = await this.prisma.famSolicitudBeneficio.findMany({
         where: {
           colegiadoId: solicitud.colegiadoId,
-          estado: { in: ['PAGADA', 'APROBADA'] },
+          OR: [
+            { estado: { in: ['PAGADA', 'APROBADA'] } },
+            { ordenPago: { not: null } },
+            { id: solicitud.id },
+          ],
         },
         include: { tipoBeneficio: { select: { codigo: true, nombre: true } } },
         orderBy: { fechaSolicitud: 'asc' },
@@ -1713,21 +1741,27 @@ export class FamBeneficiosService {
       historialBruto = [];
     }
 
-    const historialBeneficios = historialBruto.map((h) => ({
-      id: h.id,
-      tipo: h.tipoBeneficio?.codigo || '',
-      tipoNombre: h.tipoBeneficio?.nombre || '',
-      monto: Number(h.monto),
-      descuentoCovid: Number(h.descuentoCovid || 0),
-      montoFinal: h.montoFinal ? Number(h.montoFinal) : Number(h.monto),
-      fecha: h.fechaSolicitud?.toISOString() || h.createdAt.toISOString(),
-      fechaPago: h.fechaPago?.toISOString() || null,
-      expediente: h.expedienteNumero || '',
-      solicitanteNombre: h.solicitanteNombre || null,
-      solicitanteDni: h.solicitanteDni || null,
-      estado: h.estado,
-      esActual: h.id === id,
-    }));
+    const historialBeneficios = historialBruto.map((h) => {
+      const esActual = h.id === id;
+      const tieneOP = Boolean(h.ordenPago);
+      const estaPagado = h.estado === 'PAGADA' || (esActual && procesoFinalizadoSol) || tieneOP;
+      const montoNeto = h.montoFinal != null ? Number(h.montoFinal) : Number(h.monto);
+      return {
+        id: h.id,
+        tipo: h.tipoBeneficio?.codigo || '',
+        tipoNombre: h.tipoBeneficio?.nombre || '',
+        monto: montoNeto,
+        descuentoCovid: Number(h.descuentoCovid || 0),
+        montoFinal: montoNeto,
+        fecha: h.fechaSolicitud?.toISOString() || h.createdAt.toISOString(),
+        fechaPago: h.fechaPago?.toISOString() || (estaPagado ? new Date().toISOString() : null),
+        expediente: h.expedienteNumero || '',
+        solicitanteNombre: h.solicitanteNombre || null,
+        solicitanteDni: h.solicitanteDni || null,
+        estado: estaPagado ? 'PAGADA' : h.estado,
+        esActual,
+      };
+    });
 
     const estadoReparto = this.construirEstadoReparto(solicitud);
     const tipoCodigo = solicitud.tipoBeneficio?.codigo || '';
@@ -1995,7 +2029,8 @@ export class FamBeneficiosService {
     return true;
   }
 
-  private parseCambios(log: { changesJson?: string | null }) {
+  private parseCambios(log: { changesJson?: string | null; changes?: any }) {
+    if (log.changes && typeof log.changes === 'object') return log.changes;
     if (!log.changesJson) return null;
     try {
       return JSON.parse(log.changesJson);
@@ -2173,13 +2208,34 @@ export class FamBeneficiosService {
     }
 
     const tipoCodigo = solicitud.tipoBeneficio?.codigo || '';
-    const estado = solicitud.estado;
-    const pagada = estado === 'PAGADA';
-    const aprobada = estado === 'APROBADA' || pagada;
-    const documentacionCompleta = Boolean(solicitud.documentacionCompleta);
-    const puedeSubir = this.puedeSubirDocumentos(estado, userRole);
     const vinculos = solicitud.vinculos || [];
     const tieneBeneficiarios = vinculos.length > 0;
+
+    const tieneOrdenPago = Boolean(solicitud.ordenPago) || Boolean(vinculos.some((v: any) => v.ordenPago));
+    const tieneMemorando = Boolean(solicitud.memorando);
+    const tieneCarta = Boolean(solicitud.cartaRemision);
+    const procesoFinalizado = solicitud.estado === 'PAGADA' || (tieneOrdenPago && tieneMemorando && tieneCarta);
+
+    if (procesoFinalizado && solicitud.estado !== 'PAGADA') {
+      const fechaPagoRes = solicitud.fechaPago || new Date();
+      await this.prisma.famSolicitudBeneficio.update({
+        where: { id },
+        data: {
+          estado: 'PAGADA',
+          fechaPago: fechaPagoRes,
+          documentacionCompleta: true,
+        },
+      });
+      solicitud.estado = 'PAGADA';
+      solicitud.fechaPago = fechaPagoRes;
+      solicitud.documentacionCompleta = true;
+    }
+
+    const estado = solicitud.estado;
+    const pagada = estado === 'PAGADA' || procesoFinalizado;
+    const aprobada = estado === 'APROBADA' || pagada;
+    const documentacionCompleta = procesoFinalizado || Boolean(solicitud.documentacionCompleta);
+    const puedeSubir = this.puedeSubirDocumentos(estado, userRole);
 
     const documentos: any[] = [];
     const agregarDocumento = (doc: any) => {
@@ -2195,8 +2251,8 @@ export class FamBeneficiosService {
       'solicitudAsignacion',
       'cartaRemision',
       'memorando',
+      'ordenPago',
     ];
-    if (!tieneBeneficiarios) camposExpediente.push('ordenPago');
     if (!tieneBeneficiarios || solicitud.sucesionIntestada) {
       camposExpediente.push('sucesionIntestada');
     }
@@ -2306,6 +2362,26 @@ export class FamBeneficiosService {
     const documentosPendientes = documentos.filter((d) => !d.cargado).length;
     const depositosCargados = (solicitud.depositos || []).length;
 
+    const mapaDocumentosPorEtapa: Record<string, any[]> = {
+      registro: documentos.filter(
+        (d) =>
+          ['fichaAdmisibilidad', 'solicitudAsignacion', 'actaDefuncion'].includes(d.campo) ||
+          d.tipo === 'declaracionJurada',
+      ),
+      documentos: documentos.filter(
+        (d) =>
+          ['cartaRemision', 'memorando', 'cartaPoder', 'sucesionIntestada'].includes(d.campo) ||
+          d.tipo === 'expediente',
+      ),
+      revision: documentos.filter(
+        (d) =>
+          ['cartaRemision', 'memorando', 'cartaPoder'].includes(d.campo) ||
+          d.tipo === 'ordenPago',
+      ),
+      aprobado: documentos.filter((d) => d.tipo === 'ordenPago' || d.campo === 'ordenPago'),
+      pagado: documentos.filter((d) => d.tipo === 'comprobante'),
+    };
+
     const etapas: any[] = [
       {
         key: 'registro',
@@ -2313,51 +2389,192 @@ export class FamBeneficiosService {
         estado: 'completado',
         fecha: fechaRegistro,
         detalle: solicitud.tipoBeneficio?.nombre || '',
+        documentosAsociados: mapaDocumentosPorEtapa['registro'] || [],
       },
       {
         key: 'documentos',
         nombre: 'Documentos',
-        estado: documentacionCompleta ? 'completado' : 'pendiente',
+        estado: (documentacionCompleta || procesoFinalizado) ? 'completado' : 'pendiente',
         fecha: null,
-        detalle: documentacionCompleta
+        detalle: (documentacionCompleta || procesoFinalizado)
           ? `${documentosCargados} documento(s) cargado(s)`
           : solicitud.documentacionObservacion || 'Documentación pendiente',
+        documentosAsociados: mapaDocumentosPorEtapa['documentos'] || [],
       },
       {
         key: 'revision',
         nombre: 'Revisión',
-        estado: documentacionCompleta
-          ? aprobada
-            ? 'completado'
-            : 'pendiente'
-          : 'pendiente',
+        estado: (aprobada || procesoFinalizado) ? 'completado' : 'pendiente',
         fecha: null,
         detalle:
           estado === 'RECHAZADA'
             ? 'Expediente rechazado'
-            : documentacionCompleta
-              ? aprobada
-                ? 'Documentación revisada'
-                : 'Documentación lista para revisión'
-              : 'Pendiente de completar documentos',
+            : (aprobada || procesoFinalizado)
+              ? 'Documentación revisada y conforme'
+              : documentacionCompleta
+                ? 'Documentación lista para revisión'
+                : 'Pendiente de completar documentos',
+        documentosAsociados: mapaDocumentosPorEtapa['revision'] || [],
       },
       {
         key: 'aprobado',
         nombre: 'Aprobado',
-        estado: aprobada ? 'completado' : 'pendiente',
+        estado: (aprobada || procesoFinalizado) ? 'completado' : 'pendiente',
         fecha: null,
-        detalle: aprobada ? `Estado: ${estado}` : 'Pendiente de revisión',
+        detalle: (aprobada || procesoFinalizado) ? `Estado: ${estado}` : 'Pendiente de revisión',
+        documentosAsociados: mapaDocumentosPorEtapa['aprobado'] || [],
       },
       {
         key: 'pagado',
         nombre: 'Pagado',
-        estado: pagada ? 'completado' : 'pendiente',
+        estado: (pagada || procesoFinalizado) ? 'completado' : 'pendiente',
         fecha: fechaPagoEfectivaIso,
-        detalle: pagada
-          ? `${depositosCargados} depósito(s) registrado(s)`
+        detalle: (pagada || procesoFinalizado)
+          ? 'Desembolso y entrega finalizados'
           : 'Pendiente de pago',
+        documentosAsociados: mapaDocumentosPorEtapa['pagado'] || [],
       },
     ];
+
+    // Construir lista estructurada y cronológica de transiciones de estado
+    const transiciones: Array<{
+      id: string;
+      estadoAnterior: string | null;
+      estadoNuevo: string;
+      marcaTiempoExacta: string;
+      fechaHoraFormateada: string;
+      usuarioResponsable: string;
+      usuarioId: string;
+      observaciones: string | null;
+      documentosAsociados: any[];
+      accion: string;
+    }> = [];
+
+    const logsOrdenados = [...logs].sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+    );
+
+    for (const log of logsOrdenados) {
+      const cambios = this.parseCambios(log);
+      const userName = nombresUsuarios.get(log.userId) || log.userId || 'Sistema';
+
+      if (log.action === 'CREATE' && (log.entity === 'fam_registro' || log.entity === 'fam_solicitudes_beneficio')) {
+        const est = cambios?.registro?.new?.estado || cambios?.estado?.new || solicitud.estado || 'PENDIENTE';
+        transiciones.push({
+          id: `trans:${log.id}`,
+          estadoAnterior: null,
+          estadoNuevo: est,
+          marcaTiempoExacta: new Date(log.createdAt).toISOString(),
+          fechaHoraFormateada: new Date(log.createdAt).toLocaleString('es-PE', {
+            day: '2-digit', month: '2-digit', year: 'numeric',
+            hour: '2-digit', minute: '2-digit', second: '2-digit',
+          }),
+          usuarioResponsable: userName,
+          usuarioId: log.userId,
+          observaciones: solicitud.observaciones || cambios?.registro?.new?.documentacionObservacion || 'Registro inicial del expediente',
+          documentosAsociados: mapaDocumentosPorEtapa['registro'] || [],
+          accion: 'CREACION',
+        });
+      } else if (cambios?.transicion) {
+        const t = cambios.transicion;
+        const estNuevo = t.new?.estadoNuevo || t.new?.estado || t.estadoNuevo || solicitud.estado;
+        const estAnterior = t.old?.estado || t.estadoAnterior || null;
+        const obs = t.new?.observaciones || t.observaciones || cambios.observaciones || null;
+        const etapaClave = estNuevo === 'PAGADA' ? 'pagado' : estNuevo === 'APROBADA' ? 'aprobado' : estNuevo === 'EN_REVISION' ? 'revision' : 'registro';
+        transiciones.push({
+          id: `trans:${log.id}`,
+          estadoAnterior: estAnterior,
+          estadoNuevo: estNuevo,
+          marcaTiempoExacta: t.new?.marcaTiempoExacta || new Date(log.createdAt).toISOString(),
+          fechaHoraFormateada: new Date(log.createdAt).toLocaleString('es-PE', {
+            day: '2-digit', month: '2-digit', year: 'numeric',
+            hour: '2-digit', minute: '2-digit', second: '2-digit',
+          }),
+          usuarioResponsable: userName,
+          usuarioId: log.userId,
+          observaciones: obs,
+          documentosAsociados: mapaDocumentosPorEtapa[etapaClave] || [],
+          accion: 'CAMBIO_ESTADO',
+        });
+      } else if (cambios?.pago?.new?.estado === 'PAGADA') {
+        transiciones.push({
+          id: `trans:${log.id}`,
+          estadoAnterior: cambios.pago.old?.estado || 'APROBADA',
+          estadoNuevo: 'PAGADA',
+          marcaTiempoExacta: new Date(log.createdAt).toISOString(),
+          fechaHoraFormateada: new Date(log.createdAt).toLocaleString('es-PE', {
+            day: '2-digit', month: '2-digit', year: 'numeric',
+            hour: '2-digit', minute: '2-digit', second: '2-digit',
+          }),
+          usuarioResponsable: userName,
+          usuarioId: log.userId,
+          observaciones: cambios.pago.observaciones || 'Desembolso liquidado con depósitos bancarios',
+          documentosAsociados: mapaDocumentosPorEtapa['pagado'] || [],
+          accion: 'PAGO',
+        });
+      } else if (cambios?.registro?.old?.estado && cambios?.registro?.new?.estado && cambios.registro.old.estado !== cambios.registro.new.estado) {
+        const estNuevo = cambios.registro.new.estado;
+        const etapaClave = estNuevo === 'PAGADA' ? 'pagado' : estNuevo === 'APROBADA' ? 'aprobado' : estNuevo === 'EN_REVISION' ? 'revision' : 'registro';
+        transiciones.push({
+          id: `trans:${log.id}`,
+          estadoAnterior: cambios.registro.old.estado,
+          estadoNuevo: estNuevo,
+          marcaTiempoExacta: new Date(log.createdAt).toISOString(),
+          fechaHoraFormateada: new Date(log.createdAt).toLocaleString('es-PE', {
+            day: '2-digit', month: '2-digit', year: 'numeric',
+            hour: '2-digit', minute: '2-digit', second: '2-digit',
+          }),
+          usuarioResponsable: userName,
+          usuarioId: log.userId,
+          observaciones: cambios.registro.new.observaciones || cambios.observaciones || null,
+          documentosAsociados: mapaDocumentosPorEtapa[etapaClave] || [],
+          accion: 'CAMBIO_ESTADO',
+        });
+      }
+    }
+
+    // Si no hay transición inicial explícita, asegurar el registro inicial
+    if (!transiciones.some((t) => t.accion === 'CREACION')) {
+      const creadorNombre = (solicitud.registradoPor && nombresUsuarios.get(solicitud.registradoPor)) || 'Sistema';
+      const fechaCreacion = solicitud.createdAt ? new Date(solicitud.createdAt) : new Date();
+      transiciones.unshift({
+        id: `trans:creacion:${id}`,
+        estadoAnterior: null,
+        estadoNuevo: 'PENDIENTE',
+        marcaTiempoExacta: fechaCreacion.toISOString(),
+        fechaHoraFormateada: fechaCreacion.toLocaleString('es-PE', {
+          day: '2-digit', month: '2-digit', year: 'numeric',
+          hour: '2-digit', minute: '2-digit', second: '2-digit',
+        }),
+        usuarioResponsable: creadorNombre,
+        usuarioId: solicitud.registradoPor || 'Sistema',
+        observaciones: solicitud.observaciones || 'Ingreso y registro inicial del expediente en el FAM',
+        documentosAsociados: mapaDocumentosPorEtapa['registro'] || [],
+        accion: 'CREACION',
+      });
+    }
+
+    // Asegurar que el estado actual figure si no hubo log intermedio
+    const ultimoEstado = transiciones[transiciones.length - 1]?.estadoNuevo;
+    if (ultimoEstado !== solicitud.estado) {
+      const etapaClave = solicitud.estado === 'PAGADA' ? 'pagado' : solicitud.estado === 'APROBADA' ? 'aprobado' : solicitud.estado === 'EN_REVISION' ? 'revision' : 'registro';
+      const fechaTrans = solicitud.fechaPago || solicitud.fechaResolucion || solicitud.updatedAt || new Date();
+      transiciones.push({
+        id: `trans:actual:${id}`,
+        estadoAnterior: ultimoEstado || 'PENDIENTE',
+        estadoNuevo: solicitud.estado,
+        marcaTiempoExacta: new Date(fechaTrans).toISOString(),
+        fechaHoraFormateada: new Date(fechaTrans).toLocaleString('es-PE', {
+          day: '2-digit', month: '2-digit', year: 'numeric',
+          hour: '2-digit', minute: '2-digit', second: '2-digit',
+        }),
+        usuarioResponsable: (solicitud.registradoPor && nombresUsuarios.get(solicitud.registradoPor)) || 'Sistema',
+        usuarioId: solicitud.registradoPor || 'Sistema',
+        observaciones: solicitud.observaciones || solicitud.documentacionObservacion || `Transición de estado a ${solicitud.estado}`,
+        documentosAsociados: mapaDocumentosPorEtapa[etapaClave] || [],
+        accion: 'CAMBIO_ESTADO',
+      });
+    }
 
     if (!pagada) {
       const siguiente = etapas.find((e) => e.estado === 'pendiente');
@@ -2372,13 +2589,16 @@ export class FamBeneficiosService {
         descripcion: 'El expediente fue rechazado. Revisa las observaciones registradas.',
         accion: null,
       };
-    } else if (pagada) {
+    } else if (pagada || procesoFinalizado) {
+      const tieneTrilogia = tieneOrdenPago && tieneMemorando && tieneCarta;
       siguientePaso = {
         etapa: 'pagado',
-        titulo: 'Pago registrado',
-        descripcion: depositosCargados
-          ? `Se registraron ${depositosCargados} depósito(s). Puedes consultar los comprobantes en la lista de documentos.`
-          : 'El expediente figura como pagado. No hay depósitos registrados.',
+        titulo: tieneTrilogia && !depositosCargados ? 'Proceso finalizado' : 'Pago registrado',
+        descripcion: tieneTrilogia
+          ? 'El expediente cuenta con Orden de Pago, Memorando y Carta de Remisión registrados. El proceso de beneficio FAM ha finalizado con éxito.'
+          : depositosCargados
+            ? `Se registraron ${depositosCargados} depósito(s). Puedes consultar los comprobantes en la lista de documentos.`
+            : 'El expediente figura como pagado. No hay depósitos registrados.',
         accion: null,
       };
     } else if (!documentacionCompleta) {
@@ -2450,6 +2670,7 @@ export class FamBeneficiosService {
         depositos: depositosCargados,
       },
       actividad,
+      transiciones,
       permisos: { puedeSubirDocumentos: puedeSubir },
     };
   }
@@ -2467,7 +2688,16 @@ export class FamBeneficiosService {
     }
     const solicitud: any = await this.prisma.famSolicitudBeneficio.findUnique({
       where: { id },
-      select: { id: true, estado: true, [campo]: true } as any,
+      select: {
+        id: true,
+        estado: true,
+        fechaPago: true,
+        ordenPago: true,
+        memorando: true,
+        cartaRemision: true,
+        beneficiarios: { select: { beneficiarioId: true, ordenPago: true } },
+        [campo]: true,
+      } as any,
     });
     if (!solicitud) throw new NotFoundException('Solicitud de beneficio no encontrada');
     if (!this.puedeSubirDocumentos(solicitud.estado, userRole)) {
@@ -2482,6 +2712,51 @@ export class FamBeneficiosService {
       where: { id },
       data: { [campo]: contenido } as any,
     });
+
+    // Si se sube la orden de pago del expediente, sincronizar a los beneficiarios que no la tengan
+    if (campo === 'ordenPago') {
+      await this.prisma.famSolicitudBeneficiario.updateMany({
+        where: { solicitudId: id, ordenPago: null },
+        data: { ordenPago: contenido },
+      });
+    }
+
+    // Verificar si ahora cuenta con Orden de Pago, Memorando y Carta de Remisión para finalizar el proceso
+    const tieneOP = campo === 'ordenPago' || Boolean(solicitud.ordenPago) || Boolean(solicitud.beneficiarios?.some((b: any) => b.ordenPago));
+    const tieneMemo = campo === 'memorando' || Boolean(solicitud.memorando);
+    const tieneCarta = campo === 'cartaRemision' || Boolean(solicitud.cartaRemision);
+
+    if (tieneOP && tieneMemo && tieneCarta && solicitud.estado !== 'PAGADA') {
+      const fechaPagoFinal = solicitud.fechaPago || new Date();
+      await this.prisma.famSolicitudBeneficio.update({
+        where: { id },
+        data: {
+          estado: 'PAGADA',
+          fechaPago: fechaPagoFinal,
+          documentacionCompleta: true,
+        },
+      });
+
+      await this.auditService.log({
+        userId,
+        action: 'UPDATE',
+        entity: 'fam_registro',
+        entityId: id,
+        changes: {
+          transicion: {
+            old: { estado: solicitud.estado, estadoAnterior: solicitud.estado },
+            new: {
+              estado: 'PAGADA',
+              estadoNuevo: 'PAGADA',
+              marcaTiempoExacta: new Date().toISOString(),
+              usuarioId: userId,
+              observaciones: 'Proceso finalizado al registrar Orden de Pago, Memorando y Carta de Remisión.',
+            },
+          },
+        },
+        ipAddress: ip,
+      });
+    }
 
     const nombre = NOMBRES_DOCUMENTO[campo as CampoDocumento];
     await this.auditService.log({
@@ -2548,6 +2823,57 @@ export class FamBeneficiosService {
       where: { solicitudId_beneficiarioId: { solicitudId: id, beneficiarioId } },
       data,
     });
+
+    if (tipo === 'ordenPago') {
+      const sol = await this.prisma.famSolicitudBeneficio.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          estado: true,
+          fechaPago: true,
+          ordenPago: true,
+          memorando: true,
+          cartaRemision: true,
+        },
+      });
+      if (sol && !sol.ordenPago) {
+        await this.prisma.famSolicitudBeneficio.update({
+          where: { id },
+          data: { ordenPago: dto.contenido },
+        });
+      }
+      if (sol && sol.memorando && sol.cartaRemision && sol.estado !== 'PAGADA') {
+        const fechaPagoFinal = sol.fechaPago || new Date();
+        await this.prisma.famSolicitudBeneficio.update({
+          where: { id },
+          data: {
+            estado: 'PAGADA',
+            fechaPago: fechaPagoFinal,
+            documentacionCompleta: true,
+          },
+        });
+
+        await this.auditService.log({
+          userId,
+          action: 'UPDATE',
+          entity: 'fam_registro',
+          entityId: id,
+          changes: {
+            transicion: {
+              old: { estado: sol.estado, estadoAnterior: sol.estado },
+              new: {
+                estado: 'PAGADA',
+                estadoNuevo: 'PAGADA',
+                marcaTiempoExacta: new Date().toISOString(),
+                usuarioId: userId,
+                observaciones: 'Proceso finalizado al registrar Orden de Pago de beneficiario, Memorando y Carta de Remisión.',
+              },
+            },
+          },
+          ipAddress: ip,
+        });
+      }
+    }
 
     const nombre = tipo === 'declaracionJurada' ? 'Declaración jurada' : 'Orden de pago';
     await this.auditService.log({
@@ -3793,7 +4119,7 @@ export class FamBeneficiosService {
     };
   }
 
-  async actualizar(id: string, dto: ActualizarFamSolicitudDto, userRole?: string) {
+  async actualizar(id: string, dto: ActualizarFamSolicitudDto, userRole?: string, userId?: string, ip?: string) {
     const existing = await this.prisma.famSolicitudBeneficio.findUnique({ where: { id } });
     if (!existing) {
       throw new NotFoundException('Solicitud de beneficio no encontrada');
@@ -3941,6 +4267,51 @@ export class FamBeneficiosService {
         data: { fechaPago: fechaDepositoSync },
       });
     }
+
+    // Registrar auditoría detallada de la transición o modificación
+    const cambioEstado = dto.estado !== undefined && dto.estado !== existing.estado;
+    await this.auditService.log({
+      userId: userId || 'Sistema',
+      action: 'UPDATE',
+      entity: 'fam_registro',
+      entityId: id,
+      changes: {
+        registro: {
+          old: {
+            estado: existing.estado,
+            monto: Number(existing.monto),
+            observaciones: existing.observaciones,
+            documentacionCompleta: existing.documentacionCompleta,
+            documentacionObservacion: existing.documentacionObservacion,
+          },
+          new: {
+            estado: updated.estado,
+            monto: Number(updated.monto),
+            observaciones: updated.observaciones,
+            documentacionCompleta: updated.documentacionCompleta,
+            documentacionObservacion: updated.documentacionObservacion,
+          },
+        },
+        ...(cambioEstado
+          ? {
+              transicion: {
+                old: {
+                  estado: existing.estado,
+                  estadoAnterior: existing.estado,
+                },
+                new: {
+                  estado: updated.estado,
+                  estadoNuevo: updated.estado,
+                  marcaTiempoExacta: new Date().toISOString(),
+                  usuarioId: userId || 'Sistema',
+                  observaciones: dto.observaciones || dto.documentacionObservacion || updated.observaciones || null,
+                },
+              },
+            }
+          : {}),
+      },
+      ipAddress: ip,
+    });
 
     return updated;
   }

@@ -75,6 +75,7 @@ export class ExpedienteSlaService {
       saldosExp,
       pagadosExp,
       todosEstados,
+      docsIncompletosExp,
     ] = await Promise.all([
       this.prisma.famSolicitudBeneficio.count({ where: { estado: { notIn: ['PAGADA', 'RECHAZADA'] } } }),
       this.prisma.famSolicitudBeneficio.groupBy({ by: ['estado'], _count: true, where: { estado: { notIn: ['PAGADA', 'RECHAZADA'] } } }),
@@ -117,6 +118,14 @@ export class ExpedienteSlaService {
       this.prisma.famSolicitudBeneficio.groupBy({
         by: ['estado'],
         _count: true,
+      }),
+      this.prisma.famSolicitudBeneficio.findMany({
+        where: {
+          documentacionCompleta: false,
+          estado: { notIn: ['PAGADA', 'RECHAZADA'] },
+        },
+        include: { tipoBeneficio: true },
+        orderBy: { createdAt: 'desc' },
       }),
     ]);
 
@@ -301,12 +310,24 @@ export class ExpedienteSlaService {
       };
     });
 
+    const docsIncompletosList = docsIncompletosExp.map((exp) => ({
+      id: exp.id,
+      expedienteNumero: exp.expedienteNumero,
+      colegiadoId: exp.colegiadoId,
+      monto: Number(exp.monto),
+      estado: exp.estado,
+      tipoBeneficio: exp.tipoBeneficio?.nombre || 'Beneficio FAM',
+      documentacionObservacion: exp.documentacionObservacion || 'Documentos obligatorios pendientes de carga',
+      createdAt: exp.createdAt,
+    }));
+
     const todosColegiadoIds = [
       ...new Set([
         ...itemsVencer.map((i) => i.colegiadoId),
         ...saldoPendienteList.map((i) => i.colegiadoId),
         ...pendientesList.map((i) => i.colegiadoId),
         ...ultimosPagadosList.map((i) => i.colegiadoId),
+        ...docsIncompletosList.map((i) => i.colegiadoId),
       ].filter(Boolean)),
     ];
 
@@ -327,6 +348,23 @@ export class ExpedienteSlaService {
         numColegiatura: col?.NUM_COLEGIATURA || '-',
         dni: col?.DNI || '-',
       };
+    };
+
+    const vencidosItems = itemsVencer.filter((i) => i.condicion === 'VENCIDO').map(enriquecer);
+    const porVencerItems = itemsVencer.filter((i) => i.condicion === 'POR_VENCER').map(enriquecer);
+    const docsIncompletosItems = docsIncompletosList.map(enriquecer);
+    const saldoPendienteItems = saldoPendienteList.map(enriquecer);
+
+    const alertasPendientes = {
+      totalAlertas: vencidosItems.length + porVencerItems.length + docsIncompletosItems.length + saldoPendienteItems.length,
+      vencidosCount: vencidosItems.length,
+      porVencerCount: porVencerItems.length,
+      docsIncompletosCount: docsIncompletosItems.length,
+      saldoPendienteCount: saldoPendienteItems.length,
+      vencidos: vencidosItems,
+      porVencer: porVencerItems,
+      docsIncompletos: docsIncompletosItems,
+      saldoPendiente: saldoPendienteItems,
     };
 
     const totalExpedientesRegistrados = todosEstados.reduce((acc, curr) => acc + curr._count, 0);
@@ -350,25 +388,41 @@ export class ExpedienteSlaService {
       porBanco: Array.from(mapaBanco.values()).sort((a, b) => b.monto - a.monto),
       totalExpedientes: totalExpedientesRegistrados,
       porEstadoTotal,
+      alertasPendientes,
+      docsIncompletosList: docsIncompletosItems,
       vencidosList: itemsVencer.map(enriquecer),
-      saldoPendienteList: saldoPendienteList.map(enriquecer),
+      saldoPendienteList: saldoPendienteItems,
       pendientesList: pendientesList.map(enriquecer),
       ultimosPagadosList: ultimosPagadosList.map(enriquecer),
     };
   }
 
   async getTrazabilidad(expedienteId: string) {
-    const logs = await (this.prisma as any).auditLog.findMany({
-      where: {
-        entity: { in: ['fam_registro', 'fam_beneficio'] },
-        entityId: expedienteId,
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 100,
-    });
+    const [solicitud, logs] = await Promise.all([
+      this.prisma.famSolicitudBeneficio.findUnique({
+        where: { id: expedienteId },
+        include: {
+          tipoBeneficio: true,
+          vinculos: { include: { beneficiario: true } },
+          depositos: true,
+        },
+      }),
+      (this.prisma as any).auditLog.findMany({
+        where: {
+          entity: { in: ['fam_registro', 'fam_beneficio', 'fam_carta_poder', 'fam_documento', 'fam_deposito'] },
+          entityId: { startsWith: expedienteId },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 200,
+      }),
+    ]);
 
     // Resolver UUIDs de usuarios a usernames
     const userIds = [...new Set(logs.map((l: any) => l.userId).filter((id: string) => id && !['system', 'Sistema'].includes(id)))];
+    if (solicitud?.registradoPor && !userIds.includes(solicitud.registradoPor)) {
+      userIds.push(solicitud.registradoPor);
+    }
+
     const userMap: Record<string, string> = {};
     if (userIds.length > 0) {
       try {
@@ -382,20 +436,68 @@ export class ExpedienteSlaService {
       } catch {}
     }
 
+    const documentosLista: Array<{ campo: string; nombre: string; cargado: boolean }> = [
+      { campo: 'fichaAdmisibilidad', nombre: 'Ficha de Admisibilidad', cargado: Boolean((solicitud as any)?.fichaAdmisibilidad) },
+      { campo: 'solicitudAsignacion', nombre: 'Solicitud de Asignación', cargado: Boolean((solicitud as any)?.solicitudAsignacion) },
+      { campo: 'cartaRemision', nombre: 'Carta de Remisión', cargado: Boolean((solicitud as any)?.cartaRemision) },
+      { campo: 'memorando', nombre: 'Memorando', cargado: Boolean((solicitud as any)?.memorando) },
+      { campo: 'ordenPago', nombre: 'Orden de Pago', cargado: Boolean((solicitud as any)?.ordenPago) },
+      { campo: 'actaDefuncion', nombre: 'Acta de Defunción', cargado: Boolean((solicitud as any)?.actaDefuncion) },
+      { campo: 'declaracionJurada', nombre: 'Declaración Jurada', cargado: Boolean((solicitud as any)?.declaracionJurada) },
+      { campo: 'cartaPoder', nombre: 'Carta Poder', cargado: Boolean((solicitud as any)?.cartaPoder) },
+    ];
+
+    const mapaDocsPorEstado: Record<string, any[]> = {
+      PENDIENTE: documentosLista.filter((d) => ['fichaAdmisibilidad', 'solicitudAsignacion', 'actaDefuncion', 'declaracionJurada'].includes(d.campo)),
+      EN_REVISION: documentosLista.filter((d) => ['cartaRemision', 'memorando', 'cartaPoder'].includes(d.campo)),
+      APROBADA: documentosLista.filter((d) => ['ordenPago'].includes(d.campo)),
+      PAGADA: (solicitud?.depositos || []).map((dep: any) => ({
+        campo: 'comprobantePdf',
+        nombre: `Comprobante de depósito · ${dep.nombreBeneficiario || 'Beneficiario'}`,
+        cargado: Boolean(dep.comprobantePdf),
+      })),
+      RECHAZADA: [],
+    };
+
     return logs.map((log: any) => {
       let mensaje = '';
       const changes = log.changesJson ? JSON.parse(log.changesJson) : {};
       const userName = changes.userName || userMap[log.userId] || log.userId || 'Sistema';
 
+      const estadoAnterior =
+        changes.transicion?.estadoAnterior ||
+        changes.estado?.old ||
+        changes.registro?.old?.estado ||
+        changes.old?.estado ||
+        (log.action === 'CREATE' ? null : 'PENDIENTE');
+
+      const estadoNuevo =
+        changes.transicion?.estadoNuevo ||
+        changes.estado?.new ||
+        changes.registro?.new?.estado ||
+        changes.new?.estado ||
+        (log.action === 'CREATE' ? (solicitud?.estado || 'PENDIENTE') : solicitud?.estado || 'PENDIENTE');
+
+      const observaciones =
+        changes.transicion?.observaciones ||
+        changes.observaciones ||
+        changes.registro?.new?.observaciones ||
+        changes.documentacionObservacion ||
+        (log.action === 'CREATE' ? solicitud?.observaciones : null) ||
+        null;
+
+      const etapa = estadoNuevo || 'PENDIENTE';
+      const docsEtapa = mapaDocsPorEstado[etapa] || [];
+
       switch (log.action) {
         case 'CREATE':
-          mensaje = `${userName} creó el expediente`;
+          mensaje = `${userName} registró el expediente`;
           break;
         case 'UPDATE':
-          if (changes.old?.estado && changes.new?.estado) {
-            mensaje = `${userName} cambió estado de "${changes.old.estado}" a "${changes.new.estado}"`;
+          if (estadoAnterior && estadoNuevo && estadoAnterior !== estadoNuevo) {
+            mensaje = `${userName} cambió estado de "${estadoAnterior}" a "${estadoNuevo}"`;
           } else if (changes.campo) {
-            mensaje = `${userName} actualizó ${changes.campo}`;
+            mensaje = `${userName} actualizó documento ${changes.campo}`;
           } else {
             mensaje = `${userName} actualizó el expediente`;
           }
@@ -407,12 +509,25 @@ export class ExpedienteSlaService {
           mensaje = `${userName} realizó una acción (${log.action})`;
       }
 
+      const marcaTiempoExacta = log.createdAt ? new Date(log.createdAt).toISOString() : new Date().toISOString();
+      const fechaHoraFormateada = log.createdAt
+        ? new Date(log.createdAt).toLocaleString('es-PE', {
+            day: '2-digit', month: '2-digit', year: 'numeric',
+            hour: '2-digit', minute: '2-digit', second: '2-digit',
+          })
+        : '';
+
       return {
         id: log.id,
         accion: log.action,
         mensaje,
-        usuario: userName,
-        fecha: log.createdAt,
+        estadoAnterior,
+        estadoNuevo,
+        marcaTiempoExacta,
+        fechaHoraFormateada,
+        usuarioResponsable: userName,
+        observaciones,
+        documentosAsociados: docsEtapa,
         detalles: changes,
       };
     });

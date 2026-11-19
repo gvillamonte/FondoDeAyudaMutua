@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, Fragment } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import api from '@/lib/api';
 import { getCurrentUser } from '@/lib/auth';
@@ -11,6 +11,7 @@ import CompletarBeneficiariosModal from '@/components/fam/CompletarBeneficiarios
 import PagoExpedienteModal from '@/components/fam/PagoExpedienteModal';
 import EditarDepositoModal from '@/components/fam/EditarDepositoModal';
 import HistorialExpediente from '@/components/fam/HistorialExpediente';
+import { BeneficiariosDocumentacionAutonomo } from '@/components/fam/BeneficiariosDocumentacion';
 import EliminarExpedienteModal from '@/components/fam/EliminarExpedienteModal';
 import ModalRegularizarSaldo from '@/components/fam/ModalRegularizarSaldo';
 import ModalCartaPoder from '@/components/fam/ModalCartaPoder';
@@ -193,6 +194,37 @@ const fmt = (v: string | null | undefined) =>
   v ? new Date(v).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' }) : '—';
 const fmtMonto = (m: number) => `S/ ${Number(m).toLocaleString('es-PE', { minimumFractionDigits: 2 })}`;
 
+/** Un beneficiario "recibió el beneficio" si tiene depósito/pago registrado o el expediente ya está pagado. */
+function beneficiarioRecibio(estado: string, depositos: DepositoBeneficiario[], b: BeneficiarioVinculado) {
+  const dep = depositos.find((d) => d.beneficiarioId === b.id || (d.dniBeneficiario && d.dniBeneficiario === b.dni));
+  return Boolean(dep) || estado === 'PAGADA';
+}
+
+/** Avance de documentación del expediente y de sus beneficiarios (para el panel de estado). */
+function resumenDocumentacion(d: DetalleExpediente) {
+  const benef = d.beneficiariosVinculados || [];
+  const campos = Object.keys(DOCS_LABELS).filter(
+    (campo) => (campo !== 'ordenPago' && campo !== 'declaracionJurada') || benef.length <= 1,
+  );
+  const faltantes: string[] = campos
+    .filter((campo) => !d.documentosDisponibles?.[campo])
+    .map((campo) => DOCS_LABELS[campo]);
+  let total = campos.length;
+  let cargados = campos.length - faltantes.length;
+  if (benef.length > 1) {
+    for (const b of benef) {
+      total += 2;
+      if (b.tieneDeclaracionJurada) cargados += 1;
+      else faltantes.push(`Declaración jurada · ${b.nombre}`);
+      if (b.tieneOrdenPago) cargados += 1;
+      else faltantes.push(`Orden de pago · ${b.nombre}`);
+    }
+  }
+  const porcentaje = total ? Math.round((cargados / total) * 100) : 0;
+  const completos = benef.filter((b) => b.tieneDeclaracionJurada && b.tieneOrdenPago).length;
+  return { total, cargados, faltantes, porcentaje, completos, benefTotal: benef.length };
+}
+
 export default function DetalleExpedientePage() {
   const router = useRouter();
   const params = useParams();
@@ -201,8 +233,9 @@ export default function DetalleExpedientePage() {
   const [detalle, setDetalle] = useState<DetalleExpediente | null>(null);
   const [loading, setLoading] = useState(true);
   const [pdfLoadingKey, setPdfLoadingKey] = useState<string | null>(null);
-  const [pdfViewer, setPdfViewer] = useState<{ base64: string; nombre: string } | null>(null);
-  const [activeTab, setActiveTab] = useState<'montos' | 'docs' | 'benef' | 'admin' | 'historial'>('montos');
+  const [pdfViewer, setPdfViewer] = useState<{ base64: string; nombre: string; beneficiarioId?: string } | null>(null);
+  const [benefAbierto, setBenefAbierto] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'montos' | 'docs' | 'benef' | 'admin' | 'historial'>('benef');
   const [docsOtros, setDocsOtros] = useState<Record<string, { docs: Record<string, boolean>; expediente: string; dniDJ: string; benefCount: number }>>({});
   const [docsCargados, setDocsCargados] = useState(false);
   const [docsGrupoSel, setDocsGrupoSel] = useState<string | null>(null);
@@ -331,7 +364,7 @@ export default function DetalleExpedientePage() {
     }
     try {
       const { data } = await api.get(`/fam-beneficios/${id}/beneficiario/${beneficiarioId}/declaracion`);
-      setPdfViewer({ base64: data.contenido, nombre: `Declaración jurada - ${nombre || dni || 'Beneficiario'}` });
+      setPdfViewer({ base64: data.contenido, nombre: `Declaración jurada - ${nombre || dni || 'Beneficiario'}`, beneficiarioId });
     } catch {
       showConfirmMessage('error', 'Error al abrir declaración', 'No se pudo abrir la declaración jurada.');
     }
@@ -344,7 +377,7 @@ export default function DetalleExpedientePage() {
     }
     try {
       const { data } = await api.get(`/fam-beneficios/${id}/beneficiario/${beneficiarioId}/orden-pago`);
-      setPdfViewer({ base64: data.contenido, nombre: `Orden de pago / Voucher - ${nombre || 'Beneficiario'}` });
+      setPdfViewer({ base64: data.contenido, nombre: `Orden de pago / Voucher - ${nombre || 'Beneficiario'}`, beneficiarioId });
     } catch {
       showConfirmMessage('error', 'Error al abrir orden de pago', 'No se pudo abrir la orden de pago del beneficiario.');
     }
@@ -920,6 +953,25 @@ export default function DetalleExpedientePage() {
         </div>
       )}
 
+      {/* Alerta de Carta Poder */}
+      {detalle.conCartaPoder && (
+        <div className="w-full p-4 bg-amber-50 border border-[#D97706]/40 rounded-xl flex items-start gap-3 text-slate-800">
+          <div className="p-2 bg-amber-100 text-[#D97706] rounded-lg shrink-0">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+            </svg>
+          </div>
+          <div className="min-w-0">
+            <h3 className="font-bold text-sm text-[#D97706]">Cuenta con Carta Poder</h3>
+            <p className="text-xs text-slate-700 mt-0.5">
+              El beneficio será recogido por <strong>{detalle.apoderadoNombre || 'un apoderado'}</strong>
+              {detalle.apoderadoDni ? ` (DNI ${detalle.apoderadoDni})` : ''}
+              {detalle.apoderadoParentesco ? ` · ${detalle.apoderadoParentesco}` : ''}.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Cabecera limpia integrada con el layout (sin cuadro flotante en el medio) */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-xs sm:text-sm">
@@ -1283,6 +1335,277 @@ export default function DetalleExpedientePage() {
       </section>
       {/* END: MemberAndFileHeaderCard */}
 
+      {/* BEGIN: PaymentSummaryCard / Distribución y Documentación por Beneficiario */}
+      <section className="w-full bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden" data-purpose="payment-banner">
+        {/* Header Banner */}
+        <div className="p-4 sm:p-5 border-b border-emerald-200/80 bg-emerald-50/70 flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
+          <div className="flex items-start sm:items-center space-x-3 min-w-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center shadow-xs shrink-0 mt-0.5 sm:mt-0">
+              <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" />
+              </svg>
+            </div>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-sm sm:text-base font-bold text-slate-900">
+                  {detalle.estado === 'PAGADA' || detalle.beneficiariosVinculados.some((b) => beneficiarioRecibio(detalle.estado, depositos, b))
+                    ? 'Beneficiarios que recibieron el beneficio'
+                    : 'Beneficiarios del expediente'}
+                </h3>
+                <span className="text-[10px] sm:text-[11px] font-bold px-2 py-0.5 rounded-full bg-white text-slate-700 border border-slate-200 shrink-0">
+                  {detalle.beneficiariosVinculados.filter((b) => beneficiarioRecibio(detalle.estado, depositos, b)).length} de {detalle.beneficiariosVinculados.length} recibieron
+                </span>
+                <span className="text-[10px] sm:text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 shrink-0">
+                  {MODALIDAD_LABELS[detalle.modalidadBeneficio || ''] || 'Monto Compartido'} ({reparto ? `${reparto.porcentajeAsignado}% Asignado` : '100% Asignado'})
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+                Quiénes recibieron el beneficio, cuánto y cuándo, junto con la documentación subida de cada beneficiario.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            {puedeOperar && (
+              <button
+                onClick={() => setCartaPoderOpen(true)}
+                className="inline-flex items-center px-3 py-1.5 text-xs font-semibold text-amber-900 bg-amber-100 hover:bg-amber-200 rounded-lg border border-amber-300 transition-colors"
+                type="button"
+                title="Registrar cuando el beneficiario (ej. Hijo) o el colegiado otorga Carta Poder a otra persona para cobrar el cheque"
+              >
+                📋 {detalle.conCartaPoder ? 'Gestionar Carta Poder' : 'Registrar Carta Poder (Cobro)'}
+              </button>
+            )}
+            {detalle.estado !== 'PAGADA' && puedeOperar && (
+              <button
+                onClick={() => setCompletarOpen(true)}
+                className="inline-flex items-center px-3 py-1.5 text-xs font-semibold text-[#3258CA] bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 transition-colors"
+                type="button"
+              >
+                <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 4v16m8-8H4" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
+                </svg>
+                + Agregar Beneficiario
+              </button>
+            )}
+            {detalle.estado === 'PAGADA' && isAdmin && (
+              <button
+                onClick={() => setCompletarOpen(true)}
+                className="inline-flex items-center px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 rounded-lg border border-slate-300 shadow-2xs transition-colors"
+                type="button"
+              >
+                Corregir declaraciones
+              </button>
+            )}
+            {detalle.estado === 'APROBADA' && puedeOperar && (
+              <button
+                onClick={() => (reparto?.listoParaPago ? setPagoOpen(true) : setCompletarOpen(true))}
+                className="inline-flex items-center px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-2xs transition-colors"
+                type="button"
+              >
+                Registrar pago
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Lista de beneficiarios (vista principal) */}
+        <div className="bg-white">
+          {detalle.beneficiariosVinculados.length === 0 ? (
+            <div className="p-8 text-center">
+              <p className="text-sm font-semibold text-slate-800">Aún no hay beneficiarios asignados</p>
+              <p className="text-xs text-slate-500 mt-1">Asigna beneficiarios para habilitar el desembolso.</p>
+              {detalle.estado !== 'PAGADA' && puedeOperar && (
+                <button
+                  onClick={() => setCompletarOpen(true)}
+                  className="mt-4 inline-flex items-center px-4 py-2 text-xs font-semibold text-white bg-[#3258CA] rounded-lg hover:bg-[#2846a3] transition-colors"
+                  type="button"
+                >
+                  + Asignar Beneficiarios
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200 text-left text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                    <th className="px-4 py-3 w-10">N°</th>
+                    <th className="px-4 py-3">Beneficiario</th>
+                    <th className="px-4 py-3">Parentesco</th>
+                    <th className="px-4 py-3 text-right">Asignado</th>
+                    <th className="px-4 py-3 text-right">Monto recibido</th>
+                    <th className="px-4 py-3">Fecha de pago</th>
+                    <th className="px-4 py-3">Entrega</th>
+                    <th className="px-4 py-3">Documentación subida</th>
+                    <th className="px-4 py-3 text-right">Ver documentación</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {[...detalle.beneficiariosVinculados]
+                    .sort((x, y) => Number(beneficiarioRecibio(detalle.estado, depositos, y)) - Number(beneficiarioRecibio(detalle.estado, depositos, x)))
+                    .map((b, index) => {
+                    const dep = depositos.find((d) => d.beneficiarioId === b.id || (d.dniBeneficiario && d.dniBeneficiario === b.dni));
+                    const montoBenef = dep?.monto != null ? dep.monto : (detalle.monto * (b.porcentajeAsignado || 0)) / 100;
+                    const tieneDJ = Boolean(b.tieneDeclaracionJurada);
+                    const tieneVoucher = Boolean(b.tieneOrdenPago);
+                    const docsCount = (tieneDJ ? 1 : 0) + (tieneVoucher ? 1 : 0);
+                    const docsCompletos = docsCount === 2;
+                    const pct = docsCount * 50;
+                    const abierto = benefAbierto === b.id;
+                    const recibio = beneficiarioRecibio(detalle.estado, depositos, b);
+                    const norm = (v?: string | null) => (v || '').replace(/\D/g, '');
+                    const esColegiado = b.dni && detalle.DNI ? norm(b.dni) === norm(detalle.DNI) : null;
+                    const apoderadoNombre = dep?.apoderadoNombre || detalle.apoderadoNombre;
+                    const conPoder = Boolean(
+                      (dep?.conCartaPoder || (detalle.conCartaPoder && (!detalle.poderOtorganteDni || detalle.poderOtorganteDni === b.dni))) &&
+                        apoderadoNombre,
+                    );
+                    return (
+                      <Fragment key={b.id || index}>
+                        <tr className={abierto ? 'bg-blue-50/40' : 'hover:bg-slate-50/70'}>
+                          <td className="px-4 py-3.5 text-slate-400 font-semibold">{index + 1}</td>
+                          <td className="px-4 py-3.5">
+                            <p className="font-bold text-slate-900">{b.nombre}</p>
+                            <p className="text-xs text-slate-500 font-mono">DNI {b.dni || '—'}</p>
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {esColegiado !== null && (
+                                <span className={`px-2 py-0.5 text-[10px] font-semibold rounded-full ${esColegiado ? 'bg-[#3258CA]/10 text-[#3258CA]' : 'border border-slate-200 text-slate-500'}`}>
+                                  {esColegiado ? 'Es el colegiado' : 'No es el colegiado'}
+                                </span>
+                              )}
+                              {conPoder && (
+                                <span className="px-2 py-0.5 text-[10px] font-semibold rounded-full bg-[#D97706]/10 text-[#D97706]">
+                                  ⚠ Carta poder
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3.5 text-slate-600">{b.parentesco || '—'}</td>
+                          <td className="px-4 py-3.5 text-right font-semibold text-slate-800">{b.porcentajeAsignado}%</td>
+                          <td className="px-4 py-3.5 text-right font-bold text-slate-900 whitespace-nowrap">{fmtMonto(montoBenef)}</td>
+                          <td className="px-4 py-3.5 text-slate-700 whitespace-nowrap">
+                            {recibio ? fmt(dep?.fechaPago || detalle.fechaPago || detalle.fechaSolicitud) : '—'}
+                          </td>
+                          <td className="px-4 py-3.5">
+                            {recibio ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">✓ Recibió</span>
+                            ) : (
+                              <span className="inline-flex items-center px-2.5 py-1 text-[11px] font-semibold rounded-full bg-amber-50 text-amber-700 border border-amber-200">Pendiente de pago</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3.5">
+                            <div className="flex items-center gap-2 mb-1.5">
+                              <span className={`text-sm font-bold ${docsCompletos ? 'text-emerald-600' : pct >= 50 ? 'text-amber-600' : 'text-red-600'}`}>{pct}%</span>
+                              <span className="text-[11px] text-slate-500">{docsCount} de 2 documentos</span>
+                            </div>
+                            <div className="flex flex-wrap gap-1">
+                              {tieneDJ ? (
+                                <button type="button" onClick={() => verDeclaracionBeneficiario(b.id, b.nombre, b.dni)} className="px-2 py-0.5 text-[11px] font-medium text-emerald-700 bg-emerald-50 rounded-full hover:bg-emerald-100">
+                                  ✓ Declaración jurada
+                                </button>
+                              ) : (
+                                <span className="px-2 py-0.5 text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-full">Falta declaración jurada</span>
+                              )}
+                              {tieneVoucher ? (
+                                <button type="button" onClick={() => verOrdenPagoBeneficiario(b.id, b.nombre)} className="px-2 py-0.5 text-[11px] font-medium text-emerald-700 bg-emerald-50 rounded-full hover:bg-emerald-100">
+                                  ✓ Orden de pago
+                                </button>
+                              ) : (
+                                <span className="px-2 py-0.5 text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-full">Falta orden de pago</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3.5 text-right">
+                            <button
+                              type="button"
+                              onClick={() => setBenefAbierto(abierto ? null : b.id)}
+                              className="px-3 py-1.5 text-xs font-semibold text-white bg-[#3258CA] hover:bg-[#2846a3] rounded-lg transition-colors whitespace-nowrap"
+                            >
+                              {abierto ? 'Ocultar' : 'Ver documentación'}
+                            </button>
+                          </td>
+                        </tr>
+                        {abierto && (
+                          <tr className="bg-slate-50/70">
+                            <td colSpan={9} className="px-4 sm:px-8 py-4">
+                              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                <div>
+                                  <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">Documentos de {b.nombre}</p>
+                                  <ul className="space-y-2">
+                                    {[
+                                      { key: 'dj', nombre: 'Declaración jurada', ok: tieneDJ, detalle: b.declaracionJuradaDni ? `DNI declarante ${b.declaracionJuradaDni}` : '', ver: () => verDeclaracionBeneficiario(b.id, b.nombre, b.dni) },
+                                      { key: 'op', nombre: 'Orden de pago / Voucher', ok: tieneVoucher, detalle: '', ver: () => verOrdenPagoBeneficiario(b.id, b.nombre) },
+                                    ].map((doc) => (
+                                      <li key={doc.key} className={`flex items-center justify-between gap-3 p-3 rounded-lg bg-white border ${doc.ok ? 'border-slate-200' : 'border-amber-300'}`}>
+                                        <div className="min-w-0">
+                                          <p className="text-sm font-semibold text-slate-800">{doc.nombre}</p>
+                                          <p className={`text-xs font-medium ${doc.ok ? 'text-emerald-600' : 'text-amber-600'}`}>
+                                            {doc.ok ? 'Cargado' : 'Pendiente'}
+                                            {doc.detalle && <span className="text-slate-500 font-normal"> · {doc.detalle}</span>}
+                                          </p>
+                                        </div>
+                                        <div className="flex items-center gap-2 shrink-0">
+                                          {doc.ok ? (
+                                            <button type="button" onClick={doc.ver} className="px-2.5 py-1 text-xs font-semibold text-[#3258CA] border border-[#3258CA]/30 rounded-lg hover:bg-[#3258CA]/5">
+                                              Ver documento
+                                            </button>
+                                          ) : (
+                                            puedeOperar && (
+                                              <button type="button" onClick={() => setCompletarOpen(true)} className="px-2.5 py-1 text-xs font-bold text-white bg-[#3258CA] hover:bg-[#2846a3] rounded-lg">
+                                                + Cargar
+                                              </button>
+                                            )
+                                          )}
+                                          {doc.ok && isAdmin && (
+                                            <button type="button" onClick={() => setCompletarOpen(true)} className="text-xs text-slate-500 hover:text-slate-700">
+                                              Editar
+                                            </button>
+                                          )}
+                                        </div>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                                <div className="space-y-3">
+                                  <div className="p-3 rounded-lg bg-white border border-slate-200 text-xs text-slate-600">
+                                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">Datos del cobro</p>
+                                    <p>Banco: <strong className="text-slate-800">{dep?.banco || detalle.banco || 'CMAC'}</strong></p>
+                                    {(dep?.numeroCuenta || detalle.numeroCuenta) && (
+                                      <p>Cheque/Cta: <strong className="text-slate-800 font-mono">{dep?.numeroCuenta || detalle.numeroCuenta}</strong></p>
+                                    )}
+                                    <p>F. Pago: <strong className="text-slate-800">{fmt(dep?.fechaPago || detalle.fechaPago || detalle.fechaSolicitud)}</strong></p>
+                                    {dep && puedeOperar && (
+                                      <button type="button" onClick={() => setDepositoEdit(dep)} className="mt-1.5 text-[#3258CA] hover:underline font-semibold">
+                                        ✎ Editar cobro/cheque
+                                      </button>
+                                    )}
+                                  </div>
+                                  {conPoder && (
+                                    <div className="p-3 rounded-lg bg-amber-50 border border-[#D97706]/40 text-xs text-slate-800">
+                                      <p className="font-bold text-[#D97706] mb-0.5">⚠ Cobro por Carta Poder</p>
+                                      <p>
+                                        <strong>{b.nombre}</strong> ({b.parentesco}) otorgó poder a <strong>{apoderadoNombre}</strong>
+                                        {(dep?.apoderadoDni || detalle.apoderadoDni) ? ` (DNI ${dep?.apoderadoDni || detalle.apoderadoDni})` : ''}
+                                        {(dep?.apoderadoParentesco || detalle.apoderadoParentesco) ? ` · ${dep?.apoderadoParentesco || detalle.apoderadoParentesco}` : ''}.
+                                      </p>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </section>
+      {/* END: PaymentSummaryCard */}
+
       {/* BEGIN: StepperWorkflowSection (Abarca el 100% de ancho) */}
       <section className="w-full bg-white rounded-xl border border-slate-200 shadow-xs p-4 sm:p-5" data-purpose="workflow-stepper">
         <div className="flex items-center justify-between mb-4">
@@ -1357,311 +1680,6 @@ export default function DetalleExpedientePage() {
       </section>
       {/* END: StepperWorkflowSection */}
 
-      {/* BEGIN: PaymentSummaryCard / Distribución y Documentación por Beneficiario */}
-      <section className="w-full bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden" data-purpose="payment-banner">
-        {/* Header Banner */}
-        <div className="p-4 sm:p-5 border-b border-emerald-200/80 bg-emerald-50/70 flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
-          <div className="flex items-start sm:items-center space-x-3 min-w-0">
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center shadow-xs shrink-0 mt-0.5 sm:mt-0">
-              <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" />
-              </svg>
-            </div>
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-sm sm:text-base font-bold text-slate-900">Distribución y Documentación por Beneficiario</h3>
-                <span className="text-[10px] sm:text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 shrink-0">
-                  {MODALIDAD_LABELS[detalle.modalidadBeneficio || ''] || 'Monto Compartido'} ({reparto ? `${reparto.porcentajeAsignado}% Asignado` : '100% Asignado'})
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
-                Cada beneficiario debe contar con sus documentos de identidad y sustento adjuntos individualmente para habilitar el desembolso.
-              </p>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
-            {puedeOperar && (
-              <button
-                onClick={() => setCartaPoderOpen(true)}
-                className="inline-flex items-center px-3 py-1.5 text-xs font-semibold text-amber-900 bg-amber-100 hover:bg-amber-200 rounded-lg border border-amber-300 transition-colors"
-                type="button"
-                title="Registrar cuando el beneficiario (ej. Hijo) o el colegiado otorga Carta Poder a otra persona para cobrar el cheque"
-              >
-                📋 {detalle.conCartaPoder ? 'Gestionar Carta Poder' : 'Registrar Carta Poder (Cobro)'}
-              </button>
-            )}
-            {detalle.estado !== 'PAGADA' && puedeOperar && (
-              <button
-                onClick={() => setCompletarOpen(true)}
-                className="inline-flex items-center px-3 py-1.5 text-xs font-semibold text-[#3258CA] bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 transition-colors"
-                type="button"
-              >
-                <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 4v16m8-8H4" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
-                </svg>
-                + Agregar Beneficiario
-              </button>
-            )}
-            {detalle.estado === 'PAGADA' && isAdmin && (
-              <button
-                onClick={() => setCompletarOpen(true)}
-                className="inline-flex items-center px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 rounded-lg border border-slate-300 shadow-2xs transition-colors"
-                type="button"
-              >
-                Corregir declaraciones
-              </button>
-            )}
-            {detalle.estado === 'APROBADA' && puedeOperar && (
-              <button
-                onClick={() => (reparto?.listoParaPago ? setPagoOpen(true) : setCompletarOpen(true))}
-                className="inline-flex items-center px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-2xs transition-colors"
-                type="button"
-              >
-                Registrar pago
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Tarjetas de Beneficiarios */}
-        <div className="p-3.5 sm:p-5 lg:p-6 space-y-4 bg-slate-50/50">
-          {detalle.beneficiariosVinculados.length === 0 ? (
-            <div className="bg-white rounded-xl border border-dashed border-slate-300 p-6 sm:p-8 text-center">
-              <div className="w-12 h-12 rounded-full bg-blue-50 text-[#3258CA] flex items-center justify-center mx-auto mb-2">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-                </svg>
-              </div>
-              <h4 className="text-sm font-bold text-slate-900">Sin beneficiarios vinculados</h4>
-              <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
-                Este expediente aún no cuenta con beneficiarios asignados para el reparto del beneficio.
-              </p>
-              {puedeOperar && (
-                <button
-                  onClick={() => setCompletarOpen(true)}
-                  className="mt-4 inline-flex items-center px-4 py-2 text-xs font-semibold text-white bg-[#3258CA] rounded-lg hover:bg-[#2846a3] transition-colors"
-                >
-                  + Asignar Beneficiarios
-                </button>
-              )}
-            </div>
-          ) : (
-            detalle.beneficiariosVinculados.map((b, index) => {
-              const dep = depositos.find((d) => d.beneficiarioId === b.id || (d.dniBeneficiario && d.dniBeneficiario === b.dni));
-              const montoBenef = dep?.monto != null ? dep.monto : (detalle.monto * (b.porcentajeAsignado || 0)) / 100;
-              const tieneDJ = Boolean(b.tieneDeclaracionJurada);
-              const tieneVoucher = Boolean(b.tieneOrdenPago);
-              const docsCompletos = tieneDJ && tieneVoucher;
-              const docsCount = (tieneDJ ? 1 : 0) + (tieneVoucher ? 1 : 0);
-
-              return (
-                <div
-                  key={b.id || index}
-                  className={`bg-white rounded-xl border ${docsCompletos ? 'border-slate-200' : 'border-amber-300'} shadow-2xs p-3.5 sm:p-5 transition-colors`}
-                >
-                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 sm:gap-4 pb-3.5 sm:pb-4 border-b border-slate-100">
-                    <div className="flex items-start sm:items-center space-x-3 sm:space-x-3.5 min-w-0">
-                      <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center font-bold text-xs sm:text-sm shrink-0 border ${
-                        docsCompletos
-                          ? 'bg-blue-50 border-blue-100 text-[#3258CA]'
-                          : 'bg-amber-50 border-amber-200 text-amber-800'
-                      }`}>
-                        {index + 1}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                          <h4 className="text-xs sm:text-sm font-bold text-slate-900 tracking-tight break-words">{b.nombre}</h4>
-                          <span className="text-[11px] sm:text-xs font-semibold text-slate-500 bg-slate-100 px-1.5 sm:px-2 py-0.5 rounded font-mono">
-                            DNI: {b.dni || '—'}
-                          </span>
-                          <span className={`inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded text-[11px] sm:text-xs font-bold border ${
-                            docsCompletos
-                              ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
-                              : 'bg-amber-100 text-amber-900 border-amber-200'
-                          }`}>
-                            {b.porcentajeAsignado}% Asignado
-                          </span>
-                        </div>
-                        <p className="text-[11px] sm:text-xs text-slate-500 mt-1 flex items-center gap-2 sm:gap-3 flex-wrap">
-                          <span>Banco: <strong className="text-slate-700 font-semibold">{dep?.banco || detalle.banco || 'CMAC'}</strong></span>
-                          {(dep?.numeroCuenta || detalle.numeroCuenta) && (
-                            <>
-                              <span>•</span>
-                              <span>Cheque/Cta: <strong className="text-slate-700 font-mono font-semibold">{dep?.numeroCuenta || detalle.numeroCuenta}</strong></span>
-                            </>
-                          )}
-                          <span>•</span>
-                          <span>F. Pago: <strong className="text-slate-700 font-semibold">{fmt(dep?.fechaPago || detalle.fechaPago || detalle.fechaSolicitud)}</strong></span>
-                          <span>•</span>
-                          <span>Parentesco: <strong className="text-slate-700 font-semibold">{b.parentesco}</strong></span>
-                          {dep && puedeOperar && (
-                            <button
-                              type="button"
-                              onClick={() => setDepositoEdit(dep)}
-                              className="text-[#3258CA] hover:underline font-semibold ml-1"
-                            >
-                              ✎ Editar cobro/cheque
-                            </button>
-                          )}
-                        </p>
-                        {(dep?.conCartaPoder || (detalle.conCartaPoder && (!detalle.poderOtorganteDni || detalle.poderOtorganteDni === b.dni))) &&
-                          (dep?.apoderadoNombre || detalle.apoderadoNombre) && (
-                            <div className="mt-2 inline-flex flex-wrap items-center gap-2 px-2.5 py-1.5 rounded-lg bg-amber-50 border border-amber-300 text-xs text-amber-900">
-                              <span className="font-bold">
-                                📋 Cobro por Carta Poder:
-                              </span>
-                              <span>
-                                <strong>{b.nombre}</strong> ({b.parentesco}) otorgó poder a{' '}
-                                <strong>{dep?.apoderadoNombre || detalle.apoderadoNombre}</strong>
-                                {(dep?.apoderadoDni || detalle.apoderadoDni) ? ` (DNI: ${dep?.apoderadoDni || detalle.apoderadoDni})` : ''}
-                                {(dep?.apoderadoParentesco || detalle.apoderadoParentesco) ? ` · ${dep?.apoderadoParentesco || detalle.apoderadoParentesco}` : ''}
-                              </span>
-                            </div>
-                          )}
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap sm:flex-nowrap items-center justify-between lg:justify-end gap-3 sm:gap-4 pt-2 sm:pt-0 border-t sm:border-t-0 lg:border-l lg:border-slate-200 lg:pl-4">
-                      <div className="text-left lg:text-right">
-                        <span className="text-[10px] sm:text-[11px] font-medium text-slate-400 uppercase tracking-wider block">Monto a Liquidar</span>
-                        <span className="text-base sm:text-lg font-bold text-slate-900">{fmtMonto(montoBenef)}</span>
-                      </div>
-                      <div>
-                        {docsCompletos ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] sm:text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                            <svg className="w-3.5 h-3.5 text-emerald-600 shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                            </svg>
-                            2 de 2 docs adjuntados
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] sm:text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-300">
-                            <svg className="w-3.5 h-3.5 text-amber-600 shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                            </svg>
-                            {docsCount === 0 ? '2 docs pendientes' : '1 doc pendiente'}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Documentos Requeridos por Beneficiario */}
-                  <div className="mt-3.5 sm:mt-4 pt-1">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2 mb-2.5 sm:mb-3">
-                      <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5 truncate">
-                        <svg className="w-4 h-4 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
-                        </svg>
-                        <span className="truncate">Docs: {b.nombre}</span>
-                      </span>
-                      {puedeOperar && (
-                        <button
-                          onClick={() => setCompletarOpen(true)}
-                          className="inline-flex items-center text-xs font-semibold text-[#3258CA] hover:text-[#2846a3] bg-blue-50 hover:bg-blue-100 px-2 sm:px-2.5 py-1 rounded-md transition-colors self-start sm:self-auto"
-                          type="button"
-                        >
-                          <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path d="M12 4v16m8-8H4" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
-                          </svg>
-                          Gestionar Documentos
-                        </button>
-                      )}
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 sm:gap-3">
-                      {/* Doc 1: DNI / Identidad */}
-                      <div className="flex items-center justify-between p-2.5 sm:p-3 rounded-lg bg-slate-50 border border-slate-200 gap-2">
-                        <div className="flex items-center space-x-2.5 min-w-0">
-                          <div className="w-7 h-7 rounded bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
-                            </svg>
-                          </div>
-                          <div className="min-w-0 truncate">
-                            <p className="text-xs font-semibold text-slate-800 truncate">DNI / Identidad</p>
-                            <p className="text-[11px] text-emerald-700 font-medium truncate">DNI {b.dni || 'Sin DNI'}</p>
-                          </div>
-                        </div>
-                        <div className="shrink-0">
-                          {b.tieneDeclaracionJurada ? (
-                            <button
-                              onClick={() => verDeclaracionBeneficiario(b.id, b.nombre, b.dni)}
-                              className="text-xs font-semibold text-[#3258CA] hover:underline"
-                              type="button"
-                            >
-                              Ver PDF
-                            </button>
-                          ) : (
-                            <span className="text-xs text-slate-400">Validado</span>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Doc 2: Declaración Jurada */}
-                      {tieneDJ ? (
-                        <div className="flex items-center justify-between p-2.5 sm:p-3 rounded-lg bg-slate-50 border border-slate-200 gap-2">
-                          <div className="flex items-center space-x-2.5 min-w-0">
-                            <div className="w-7 h-7 rounded bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
-                              </svg>
-                            </div>
-                            <div className="min-w-0 truncate">
-                              <p className="text-xs font-semibold text-slate-800 truncate">Declaración Jurada</p>
-                              <p className="text-[11px] text-emerald-700 font-medium truncate">dj_{b.dni || b.id}_firmada.pdf</p>
-                            </div>
-                          </div>
-                          <div className="flex items-center space-x-2 shrink-0">
-                            <button
-                              onClick={() => verDeclaracionBeneficiario(b.id, b.nombre, b.dni)}
-                              className="text-xs font-semibold text-[#3258CA] hover:underline"
-                              type="button"
-                            >
-                              Ver PDF
-                            </button>
-                            {isAdmin && (
-                              <>
-                                <span className="text-slate-300">|</span>
-                                <button onClick={() => setCompletarOpen(true)} className="text-xs text-slate-500 hover:text-slate-700" type="button">
-                                  Editar
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex items-center justify-between p-2.5 sm:p-3 rounded-lg bg-amber-50/70 border border-amber-300 gap-2">
-                          <div className="flex items-center space-x-2.5 min-w-0">
-                            <div className="w-7 h-7 rounded bg-amber-100 text-amber-800 flex items-center justify-center shrink-0">
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
-                              </svg>
-                            </div>
-                            <div className="min-w-0 truncate">
-                              <p className="text-xs font-semibold text-slate-800 truncate">Declaración Jurada</p>
-                              <p className="text-[11px] text-amber-800 font-medium truncate">Falta adjuntar sustento</p>
-                            </div>
-                          </div>
-                          <div className="shrink-0">
-                            <button
-                              onClick={() => setCompletarOpen(true)}
-                              className="inline-flex items-center px-2.5 py-1 text-xs font-bold text-white bg-[#3258CA] hover:bg-[#2846a3] rounded transition-colors shadow-2xs"
-                              type="button"
-                            >
-                              + Cargar
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
-      </section>
-      {/* END: PaymentSummaryCard */}
 
       {/* BEGIN: QuickActionsPanel (Abarca el 100% de ancho) */}
       {puedeRegistrarHistorico && tiposFaltantes.length > 0 && (
@@ -1707,33 +1725,74 @@ export default function DetalleExpedientePage() {
         </div>
       )}
 
+      {/* Panel de estado: lo esencial del expediente de un vistazo */}
+      {(() => {
+        const r = resumenDocumentacion(detalle);
+        const tono = r.porcentaje === 100 ? 'text-emerald-600' : r.porcentaje >= 60 ? 'text-amber-600' : 'text-red-600';
+        const barra = r.porcentaje === 100 ? 'bg-emerald-500' : r.porcentaje >= 60 ? 'bg-amber-500' : 'bg-red-500';
+        return (
+          <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3" aria-label="Resumen del expediente">
+            <div className="bg-white border border-slate-200 rounded-xl p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Documentación</p>
+              <p className={`text-2xl font-extrabold mt-1 ${tono}`}>{r.porcentaje}%</p>
+              <div className="h-1.5 rounded-full bg-slate-200 overflow-hidden mt-2">
+                <div className={`h-full ${barra}`} style={{ width: `${r.porcentaje}%` }} />
+              </div>
+              <button type="button" onClick={() => setActiveTab('docs')} className="mt-2 text-xs font-semibold text-[#3258CA] hover:underline">
+                {r.faltantes.length === 0 ? 'Documentación completa' : `Faltan ${r.faltantes.length} · Ver documentos`}
+              </button>
+            </div>
+            <div className="bg-white border border-slate-200 rounded-xl p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Beneficiarios</p>
+              <p className="text-2xl font-extrabold text-slate-900 mt-1">{r.benefTotal}</p>
+              <p className="text-xs text-slate-500 mt-1">
+                {r.benefTotal === 0 ? 'Sin beneficiarios vinculados' : `${r.completos} con documentación completa`}
+              </p>
+              <button type="button" onClick={() => setActiveTab('benef')} className="mt-2 text-xs font-semibold text-[#3258CA] hover:underline">
+                Ver beneficiarios
+              </button>
+            </div>
+            <div className="bg-white border border-slate-200 rounded-xl p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Quién cobra</p>
+              {detalle.conCartaPoder ? (
+                <>
+                  <p className="text-sm font-bold text-[#D97706] mt-1">Apoderado (Carta Poder)</p>
+                  <p className="text-xs text-slate-700 mt-1 truncate">{detalle.apoderadoNombre || '—'}</p>
+                  <p className="text-xs text-slate-500">DNI {detalle.apoderadoDni || '—'}</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm font-bold text-slate-900 mt-1">Directamente el beneficiario</p>
+                  <p className="text-xs text-slate-500 mt-1">Sin carta poder</p>
+                </>
+              )}
+            </div>
+            <div className="bg-white border border-slate-200 rounded-xl p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Siguiente paso</p>
+              <p className="text-sm font-bold text-slate-900 mt-1">
+                {detalle.estado === 'PAGADA'
+                  ? 'Expediente finalizado'
+                  : r.faltantes.length > 0
+                    ? 'Completar documentos'
+                    : 'Registrar el pago'}
+              </p>
+              <p className="text-xs text-slate-500 mt-1 line-clamp-2">
+                {r.faltantes.length > 0 ? r.faltantes.slice(0, 3).join(', ') + (r.faltantes.length > 3 ? '…' : '') : 'Todo en orden'}
+              </p>
+            </div>
+          </section>
+        );
+      })()}
+
       {/* BEGIN: TabsAndConceptTableSection (Abarca el 100% de ancho) */}
       <section className="w-full bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden" data-purpose="detailed-tabs">
         {/* Navigation Tabs */}
         <div className="border-b border-slate-200 bg-slate-50/50 px-4 sm:px-6 pt-2 sm:pt-3">
-          <nav aria-label="Pestañas de expediente" className="flex space-x-3 sm:space-x-6 -mb-px overflow-x-auto whitespace-nowrap py-0.5">
-            <button
-              onClick={() => setActiveTab('montos')}
-              className={`py-2.5 sm:py-3 px-1 text-xs sm:text-sm font-bold flex items-center transition-colors shrink-0 ${
-                activeTab === 'montos' ? 'border-b-2 border-[#3258CA] text-[#3258CA]' : 'border-b-2 border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-              }`}
-              type="button"
-            >
-              Montos
-            </button>
-            <button
-              onClick={() => setActiveTab('docs')}
-              className={`py-2.5 sm:py-3 px-1 text-xs sm:text-sm font-medium flex items-center transition-colors shrink-0 ${
-                activeTab === 'docs' ? 'border-b-2 border-[#3258CA] text-[#3258CA] font-bold' : 'border-b-2 border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-              }`}
-              type="button"
-            >
-              Documentos
-            </button>
+          <nav aria-label="Pestañas de expediente" className="flex gap-1 -mb-px overflow-x-auto whitespace-nowrap py-0.5">
             <button
               onClick={() => setActiveTab('benef')}
-              className={`py-2.5 sm:py-3 px-1 text-xs sm:text-sm font-medium flex items-center gap-1.5 transition-colors shrink-0 ${
-                activeTab === 'benef' ? 'border-b-2 border-[#3258CA] text-[#3258CA] font-bold' : 'border-b-2 border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              className={`px-3.5 py-2 text-xs sm:text-sm font-semibold rounded-t-lg flex items-center gap-1.5 transition-colors shrink-0 ${
+                activeTab === 'benef' ? 'bg-white border border-slate-200 border-b-white text-[#3258CA]' : 'border border-transparent text-slate-500 hover:text-slate-800 hover:bg-white/60'
               }`}
               type="button"
             >
@@ -1743,9 +1802,29 @@ export default function DetalleExpedientePage() {
               </span>
             </button>
             <button
+              onClick={() => setActiveTab('montos')}
+              className={`px-3.5 py-2 text-xs sm:text-sm font-semibold rounded-t-lg flex items-center transition-colors shrink-0 ${
+                activeTab === 'montos' ? 'bg-white border border-slate-200 border-b-white text-[#3258CA]' : 'border border-transparent text-slate-500 hover:text-slate-800 hover:bg-white/60'
+              }`}
+              type="button"
+            >
+              Resumen de montos
+            </button>
+            <button
+              onClick={() => setActiveTab('docs')}
+              className={`px-3.5 py-2 text-xs sm:text-sm font-semibold rounded-t-lg flex items-center transition-colors shrink-0 ${
+                activeTab === 'docs' ? 'bg-white border border-slate-200 border-b-white text-[#3258CA]' : 'border border-transparent text-slate-500 hover:text-slate-800 hover:bg-white/60'
+              }`}
+              type="button"
+            >
+              Documentos
+              {(() => { const f = resumenDocumentacion(detalle).faltantes.length; return f > 0 ? <span className="bg-amber-50 text-[#D97706] border border-amber-200 text-[10px] sm:text-xs px-2 py-0.5 rounded-full font-bold ml-1.5">{f} pend.</span> : null; })()}
+            </button>
+            
+            <button
               onClick={() => setActiveTab('historial')}
-              className={`py-2.5 sm:py-3 px-1 text-xs sm:text-sm font-medium flex items-center transition-colors shrink-0 ${
-                activeTab === 'historial' ? 'border-b-2 border-[#3258CA] text-[#3258CA] font-bold' : 'border-b-2 border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              className={`px-3.5 py-2 text-xs sm:text-sm font-semibold rounded-t-lg flex items-center transition-colors shrink-0 ${
+                activeTab === 'historial' ? 'bg-white border border-slate-200 border-b-white text-[#3258CA]' : 'border border-transparent text-slate-500 hover:text-slate-800 hover:bg-white/60'
               }`}
               type="button"
             >
@@ -1754,8 +1833,8 @@ export default function DetalleExpedientePage() {
             {isAdmin && (
               <button
                 onClick={() => setActiveTab('admin')}
-                className={`py-2.5 sm:py-3 px-1 text-xs sm:text-sm font-medium flex items-center transition-colors shrink-0 ${
-                  activeTab === 'admin' ? 'border-b-2 border-[#3258CA] text-[#3258CA] font-bold' : 'border-b-2 border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                className={`px-3.5 py-2 text-xs sm:text-sm font-semibold rounded-t-lg flex items-center transition-colors shrink-0 ${
+                  activeTab === 'admin' ? 'bg-white border border-slate-200 border-b-white text-[#3258CA]' : 'border border-transparent text-slate-500 hover:text-slate-800 hover:bg-white/60'
                 }`}
                 type="button"
               >
@@ -2023,6 +2102,27 @@ export default function DetalleExpedientePage() {
                           <span>Solo el ADMINISTRADOR puede subir documentos.</span>
                         )}
                       </div>
+                      {(() => {
+                        const campos = Object.keys(DOCS_LABELS).filter((campo) => {
+                          if (campo !== 'ordenPago' && campo !== 'declaracionJurada') return true;
+                          const benefCount = reg.id === id ? (detalle?.beneficiariosVinculados?.length || 0) : (docsOtros[reg.id]?.benefCount || 0);
+                          return benefCount <= 1;
+                        });
+                        const cargados = campos.filter((campo) => Boolean(docsDeExpediente(reg.id)[campo])).length;
+                        const pct = campos.length ? Math.round((cargados / campos.length) * 100) : 0;
+                        const color = pct === 100 ? 'bg-emerald-500 text-emerald-600' : pct >= 60 ? 'bg-amber-500 text-amber-600' : 'bg-red-500 text-red-600';
+                        return (
+                          <div className="mb-3">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-xs font-semibold text-slate-700">Documentación cargada: {cargados} de {campos.length}</span>
+                              <span className={`text-sm font-bold ${color.split(' ')[1]}`}>{pct}%</span>
+                            </div>
+                            <div className="h-1.5 rounded-full bg-slate-200 overflow-hidden">
+                              <div className={`h-full ${color.split(' ')[0]}`} style={{ width: `${pct}%` }} />
+                            </div>
+                          </div>
+                        );
+                      })()}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 sm:gap-3">
                         {Object.entries(DOCS_LABELS)
                           .filter(([campo]) => {
@@ -2038,8 +2138,8 @@ export default function DetalleExpedientePage() {
                             return (
                               <div key={campo} className="flex flex-col sm:flex-row items-center justify-between p-2.5 sm:p-3 bg-white rounded-lg border border-slate-200 gap-2">
                                 <div className="flex items-center gap-2 min-w-0">
-                                  <span className={`w-2 h-2 rounded-full shrink-0 ${disponible ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                                  <span className="text-xs font-semibold text-slate-800 truncate">{label}</span>
+                                  <span className={`w-2 h-2 rounded-full shrink-0 ${disponible ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                                  <div className="min-w-0"><span className="block text-xs font-semibold text-slate-800 truncate">{label}</span><span className={`block text-[11px] font-medium ${disponible ? 'text-emerald-600' : 'text-amber-600'}`}>{disponible ? 'Cargado' : 'Pendiente'}</span></div>
                                   {campo === 'declaracionJurada' && (reg.id === id ? detalle?.declaracionJuradaDni : docsOtros[reg.id]?.dniDJ) && (
                                     <span className="text-[10px] text-slate-500 font-mono font-normal">
                                       (DNI {reg.id === id ? detalle?.declaracionJuradaDni : docsOtros[reg.id]?.dniDJ})
@@ -2051,10 +2151,10 @@ export default function DetalleExpedientePage() {
                                     <button
                                       onClick={() => abrirPdf(reg.id, campo)}
                                       disabled={pdfLoadingKey === loadKey}
-                                      className="text-xs font-semibold text-[#3258CA] hover:underline disabled:opacity-50"
+                                      className="px-2.5 py-1 text-xs font-semibold text-[#3258CA] border border-[#3258CA]/30 rounded-lg hover:bg-[#3258CA]/5 disabled:opacity-50"
                                       type="button"
                                     >
-                                      {pdfLoadingKey === loadKey ? 'Abriendo...' : 'Ver PDF'}
+                                      {pdfLoadingKey === loadKey ? 'Abriendo...' : 'Ver documento'}
                                     </button>
                                   )}
                                   {isAdmin ? (
@@ -2095,60 +2195,16 @@ export default function DetalleExpedientePage() {
                   </button>
                 </div>
               )}
-              {detalle.beneficiariosVinculados.length > 0 ? (
-                <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
-                  <table className="w-full min-w-[640px] text-xs sm:text-sm">
-                    <thead>
-                      <tr className="bg-slate-50 border-b border-slate-200 text-[10px] sm:text-xs font-bold uppercase text-slate-500">
-                        <th className="px-3 sm:px-4 py-2.5 text-left">Nombre</th>
-                        <th className="px-3 sm:px-4 py-2.5 text-left">DNI</th>
-                        <th className="px-3 sm:px-4 py-2.5 text-left">Parentesco</th>
-                        <th className="px-3 sm:px-4 py-2.5 text-right">% Asignado</th>
-                        <th className="px-3 sm:px-4 py-2.5 text-left">Declaración Jurada</th>
-                        <th className="px-3 sm:px-4 py-2.5 text-left">Orden de Pago</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {detalle.beneficiariosVinculados.map((b) => (
-                        <tr key={b.id} className="hover:bg-slate-50/50">
-                          <td className="px-3 sm:px-4 py-3 font-semibold text-slate-900">{b.nombre}</td>
-                          <td className="px-3 sm:px-4 py-3 text-slate-500 font-mono text-xs">{b.dni || '—'}</td>
-                          <td className="px-3 sm:px-4 py-3 text-slate-600">{b.parentesco}</td>
-                          <td className="px-3 sm:px-4 py-3 text-right font-bold text-slate-900">{b.porcentajeAsignado}%</td>
-                          <td className="px-3 sm:px-4 py-3">
-                            {b.tieneDeclaracionJurada ? (
-                              <button
-                                onClick={() => verDeclaracionBeneficiario(b.id, b.nombre, b.dni)}
-                                className="text-xs font-semibold text-[#3258CA] hover:underline"
-                                type="button"
-                              >
-                                Ver PDF
-                              </button>
-                            ) : (
-                              <span className="text-xs font-medium text-amber-600">Pendiente</span>
-                            )}
-                          </td>
-                          <td className="px-3 sm:px-4 py-3">
-                            {b.tieneOrdenPago ? (
-                              <button
-                                onClick={() => verOrdenPagoBeneficiario(b.id, b.nombre)}
-                                className="text-xs font-semibold text-[#3258CA] hover:underline"
-                                type="button"
-                              >
-                                Ver PDF
-                              </button>
-                            ) : (
-                              <span className="text-xs font-medium text-amber-600">Pendiente</span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <p className="text-sm text-slate-500 text-center py-8">No hay beneficiarios vinculados</p>
-              )}
+              <BeneficiariosDocumentacionAutonomo
+                key={detalle.beneficiariosVinculados.length}
+                expedienteId={id}
+                montos={Object.fromEntries(
+                  detalle.beneficiariosVinculados.map((b) => {
+                    const dep = depositos.find((d) => d.beneficiarioId === b.id || (d.dniBeneficiario && d.dniBeneficiario === b.dni));
+                    return [b.id, dep?.monto != null ? Number(dep.monto) : (detalle.monto * (b.porcentajeAsignado || 0)) / 100];
+                  }),
+                )}
+              />
             </div>
           )}
 
@@ -2337,7 +2393,43 @@ export default function DetalleExpedientePage() {
 
       {/* MODALES */}
       {pdfViewer && (
-        <PdfViewerModal base64={pdfViewer.base64} nombre={pdfViewer.nombre} onClose={() => setPdfViewer(null)} />
+                <PdfViewerModal
+          base64={pdfViewer.base64}
+          nombre={pdfViewer.nombre}
+          onClose={() => setPdfViewer(null)}
+          overlay={(() => {
+            const ben = detalle.beneficiariosVinculados.find((x) => x.id === pdfViewer.beneficiarioId);
+            const mismoDni = (a?: string | null, b?: string | null) =>
+              Boolean(a && b && a.replace(/\D/g, '') === b.replace(/\D/g, ''));
+            const esColegiado = ben ? mismoDni(ben.dni, detalle.DNI) : null;
+            return (
+              <div className="w-64 bg-white/95 border border-slate-200 rounded-lg p-3 text-xs">
+                <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">
+                  {ben ? 'Beneficiario' : 'Colegiado titular'}
+                </p>
+                <p className="text-sm font-semibold text-slate-900 leading-tight">{ben ? ben.nombre : detalle.NOMBRE_COLEGIADO}</p>
+                <p className="text-slate-500 mt-0.5">DNI {(ben ? ben.dni : detalle.DNI) || '—'}</p>
+                {ben?.parentesco && <p className="text-slate-500">Parentesco: {ben.parentesco}</p>}
+                {ben && <p className="text-slate-500">Reparto: {ben.porcentajeAsignado}%</p>}
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {esColegiado !== null && (
+                    <span className={`px-2 py-0.5 text-[10px] font-semibold rounded-full ${esColegiado ? 'bg-[#3258CA]/10 text-[#3258CA]' : 'border border-slate-200 text-slate-500'}`}>
+                      {esColegiado ? 'Es el colegiado' : 'No es el colegiado'}
+                    </span>
+                  )}
+                  {detalle.conCartaPoder && (
+                    <span className="px-2 py-0.5 text-[10px] font-semibold rounded-full bg-[#D97706]/10 text-[#D97706]">Carta poder</span>
+                  )}
+                </div>
+                {ben && (
+                  <p className="mt-2 pt-2 border-t border-slate-200 text-slate-500">
+                    Colegiado: <span className="text-slate-900 font-medium">{detalle.NOMBRE_COLEGIADO}</span>
+                  </p>
+                )}
+              </div>
+            );
+          })()}
+        />
       )}
 
       {completarOpen && detalle && (

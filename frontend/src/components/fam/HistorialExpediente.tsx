@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import api from '@/lib/api';
 import Modal from '@/components/ui/Modal';
 import PdfViewerModal from '@/components/common/PdfViewerModal';
+import BeneficiariosDocumentacion from '@/components/fam/BeneficiariosDocumentacion';
 import { showConfirmMessage } from '@/components/common/ConfirmCenterMessage';
 
 interface DocumentoHistorial {
@@ -258,21 +259,24 @@ export default function HistorialExpediente({ expedienteId, onUpdated }: Props) 
     }
   };
 
+  const urlDocumento = (doc: DocumentoHistorial) => {
+    if (doc.tipo === 'expediente') return `/fam-beneficios/${expedienteId}/documento/${doc.campo}`;
+    if (doc.tipo === 'declaracionJurada')
+      return `/fam-beneficios/${expedienteId}/beneficiario/${doc.beneficiarioId}/declaracion`;
+    if (doc.tipo === 'ordenPago')
+      return `/fam-beneficios/${expedienteId}/beneficiario/${doc.beneficiarioId}/orden-pago`;
+    return `/fam-beneficios/${expedienteId}/deposito/${doc.depositoId}/comprobante`;
+  };
+
+  const obtenerPdf = async (doc: DocumentoHistorial): Promise<string> => {
+    const { data: respuesta } = await api.get(urlDocumento(doc));
+    return respuesta.contenido as string;
+  };
+
   const verDocumento = async (doc: DocumentoHistorial) => {
     setPdfLoadingId(doc.id);
     try {
-      let url = '';
-      if (doc.tipo === 'expediente') {
-        url = `/fam-beneficios/${expedienteId}/documento/${doc.campo}`;
-      } else if (doc.tipo === 'declaracionJurada') {
-        url = `/fam-beneficios/${expedienteId}/beneficiario/${doc.beneficiarioId}/declaracion`;
-      } else if (doc.tipo === 'ordenPago') {
-        url = `/fam-beneficios/${expedienteId}/beneficiario/${doc.beneficiarioId}/orden-pago`;
-      } else if (doc.tipo === 'comprobante') {
-        url = `/fam-beneficios/${expedienteId}/deposito/${doc.depositoId}/comprobante`;
-      }
-      const { data: respuesta } = await api.get(url);
-      setPdfViewer({ base64: respuesta.contenido, nombre: doc.nombre });
+      setPdfViewer({ base64: await obtenerPdf(doc), nombre: doc.nombre });
     } catch (err: any) {
       showConfirmMessage(
         'error',
@@ -449,57 +453,14 @@ export default function HistorialExpediente({ expedienteId, onUpdated }: Props) 
           )}
         </div>
       </section>
-
-      <section className="border border-border-main rounded-xl overflow-hidden">
-        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between px-4 py-3 border-b border-border-main">
-          <div>
-            <h4 className="text-sm font-semibold text-text-main">Beneficiarios</h4>
-            <p className="text-[11px] text-text-sec">
-              Personas vinculadas y reparto asignado en este expediente.
-            </p>
-          </div>
-          <p className="text-[11px] text-text-main font-medium">
-            {`${beneficiarios.length} ${
-              beneficiarios.length === 1 ? 'beneficiario' : 'beneficiarios'
-            }`}
-          </p>
-        </div>
-        {beneficiarios.length === 0 ? (
-          <p className="px-4 py-6 text-center text-xs text-text-sec">
-            Sin beneficiarios vinculados.
-          </p>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4">
-            {beneficiarios.map((b) => (
-              <div key={b.id} className="border border-border-main rounded-lg p-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-text-main truncate">{b.nombre}</p>
-                    <p className="text-[11px] text-text-sec mt-0.5">
-                      DNI: {b.dni || '—'}
-                      {b.parentesco ? ` · ${b.parentesco}` : ''}
-                    </p>
-                  </div>
-                  <span className="inline-flex px-2 py-0.5 text-[10px] font-semibold rounded-full bg-primary/10 text-primary flex-shrink-0">
-                    {Number(b.porcentaje)}%
-                  </span>
-                </div>
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-[11px]">
-                  <span className={b.tieneDeclaracionJurada ? 'text-success' : 'text-warning'}>
-                    {b.tieneDeclaracionJurada ? 'DJ cargada' : 'DJ pendiente'}
-                  </span>
-                  <span className={b.tieneOrdenPago ? 'text-success' : 'text-warning'}>
-                    {b.tieneOrdenPago ? 'Orden de pago cargada' : 'Orden de pago pendiente'}
-                  </span>
-                  {b.declaracionJuradaDni && (
-                    <span className="text-text-sec">DNI DJ: {b.declaracionJuradaDni}</span>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
+      <BeneficiariosDocumentacion
+        expedienteId={expedienteId}
+        beneficiarios={beneficiarios}
+        documentos={data.documentos}
+        puedeSubir={permisos.puedeSubirDocumentos}
+        obtenerPdf={obtenerPdf}
+        onSubir={abrirSubida}
+      />
 
       <section className="border border-border-main rounded-xl overflow-hidden">
         <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between px-4 py-3 border-b border-border-main">

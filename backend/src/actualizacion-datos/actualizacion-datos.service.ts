@@ -4,6 +4,11 @@ import { LegacyService } from '../legacy/legacy.service';
 import { AuditService } from '../audit/audit.service';
 import { ActualizacionDatosEmailService } from './actualizacion-datos-email.service';
 import { ConsultarColegiadoDto, ActualizarDatosColegiadoDto, FiltroActualizacionesDto } from './dto/actualizacion-datos.dto';
+import {
+  ActualizarEmailConfigDto,
+  ProbarEnvioEmailDto,
+  PrevisualizarEmailDto,
+} from './dto/actualizacion-datos-email-config.dto';
 
 @Injectable()
 export class ActualizacionDatosService {
@@ -787,5 +792,82 @@ export class ActualizacionDatosService {
       errores,
       message: `Proceso completado: ${enviados} enviados con éxito, ${fallidos} no enviados de un total de ${pendientes.length}.`,
     };
+  }
+
+  // ========================================================
+  // ADMINISTRACIÓN DE PLANTILLA Y CONFIGURACIÓN DE CORREO
+  // ========================================================
+
+  async obtenerEmailConfig() {
+    return this.emailService.obtenerConfiguracion();
+  }
+
+  async guardarEmailConfig(
+    dto: ActualizarEmailConfigDto,
+    usuarioId: string,
+    ip: string,
+    userAgent?: string,
+  ) {
+    const configAnterior = await this.emailService.obtenerConfiguracion();
+    const configNueva = await this.emailService.guardarConfiguracion(dto, usuarioId);
+
+    // Registro inmutable de auditoría
+    await this.auditService.log({
+      userId: usuarioId,
+      action: 'UPDATE_EMAIL_CONFIG',
+      entity: 'actualizacion_datos_email_config',
+      entityId: 'CONFIG_EMAIL_ACTUALIZACION',
+      changes: {
+        config: {
+          old: {
+            asunto: configAnterior.asunto,
+            colorPrimario: configAnterior.colorPrimario,
+            logoTipo: configAnterior.logoTipo,
+            usarCodigoPersonalizado: configAnterior.usarCodigoPersonalizado,
+          },
+          new: {
+            asunto: configNueva.asunto,
+            colorPrimario: configNueva.colorPrimario,
+            logoTipo: configNueva.logoTipo,
+            usarCodigoPersonalizado: configNueva.usarCodigoPersonalizado,
+          },
+        },
+      },
+      ipAddress: ip,
+      userAgent: userAgent || 'unknown',
+    });
+
+    return {
+      success: true,
+      message: 'Configuración y diseño de correo actualizados exitosamente.',
+      data: configNueva,
+    };
+  }
+
+  async restaurarEmailConfig(usuarioId: string, ip: string, userAgent?: string) {
+    const configRestaurada = await this.emailService.restaurarConfiguracion(usuarioId);
+
+    await this.auditService.log({
+      userId: usuarioId,
+      action: 'RESET_EMAIL_CONFIG',
+      entity: 'actualizacion_datos_email_config',
+      entityId: 'CONFIG_EMAIL_ACTUALIZACION',
+      ipAddress: ip,
+      userAgent: userAgent || 'unknown',
+    });
+
+    return {
+      success: true,
+      message: 'Plantilla y colores de correo restaurados a valores predeterminados.',
+      data: configRestaurada,
+    };
+  }
+
+  async previsualizarEmail(dto: PrevisualizarEmailDto) {
+    return this.emailService.previsualizarHtml(dto.config, dto.datosPrueba);
+  }
+
+  async probarEnvioEmail(dto: ProbarEnvioEmailDto) {
+    return this.emailService.probarEnvio(dto.destinatario, dto.config);
   }
 }

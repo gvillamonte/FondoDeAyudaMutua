@@ -262,6 +262,17 @@ export default function QuiénesActualizaronPage() {
 
         {/* Botones de Acción Global */}
         <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href="/dashboard/actualizacion-datos/correo"
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold text-white bg-[#3258CA] hover:bg-[#2846a3] transition-colors shadow-sm"
+            title="Personalizar colores, logo, textos y plantilla del correo de actualización"
+          >
+            <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+            <span>Configurar Correo & Plantilla</span>
+          </Link>
+
           <button
             type="button"
             onClick={handleReenviarPendientes}
@@ -311,6 +322,38 @@ export default function QuiénesActualizaronPage() {
             )}
           </button>
         </div>
+      </div>
+
+      {/* Submódulos de Navegación */}
+      <div className="flex border-b border-slate-200 gap-4 sm:gap-6 text-xs sm:text-sm overflow-x-auto">
+        <Link
+          href="/dashboard/actualizacion-datos"
+          className="pb-3 border-b-2 border-[#3258CA] font-semibold text-[#3258CA] flex items-center gap-2 whitespace-nowrap"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+          </svg>
+          Quiénes Actualizaron Datos
+        </Link>
+        <Link
+          href="/dashboard/actualizacion-datos/correo"
+          className="pb-3 border-b-2 border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300 font-medium transition-colors flex items-center gap-2 whitespace-nowrap"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+          </svg>
+          Plantilla de Correo & Colores
+        </Link>
+        <Link
+          href="/actualizar-datos"
+          target="_blank"
+          className="pb-3 border-b-2 border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300 font-medium transition-colors flex items-center gap-1.5 ml-auto whitespace-nowrap"
+        >
+          <span>Portal Colegiado</span>
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+          </svg>
+        </Link>
       </div>
 
       {/* Alertas de Notificación de Envío */}

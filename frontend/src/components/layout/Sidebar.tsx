@@ -40,6 +40,7 @@ const menuItems: MenuItem[] = [
     ),
     children: [
       { label: 'Quiénes actualizaron datos', href: '/dashboard/actualizacion-datos' },
+      { label: 'Plantilla de Correo', href: '/dashboard/actualizacion-datos/correo' },
       { label: 'Portal Colegiado', href: '/actualizar-datos' },
     ],
   },

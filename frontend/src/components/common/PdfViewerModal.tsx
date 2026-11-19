@@ -1,17 +1,19 @@
-'use client';
+﻿'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 
 interface PdfViewerModalProps {
   base64: string;
   nombre: string;
   onClose: () => void;
+  /** Contenido flotante en la esquina superior derecha del visor. */
+  overlay?: ReactNode;
 }
 
 const nombreArchivo = (nombre: string) =>
   `${nombre.replace(/[^\p{L}\p{N}]+/gu, '_').replace(/_+$/g, '').slice(0, 60) || 'Documento'}.pdf`;
 
-export default function PdfViewerModal({ base64, nombre, onClose }: PdfViewerModalProps) {
+export default function PdfViewerModal({ base64, nombre, onClose, overlay }: PdfViewerModalProps) {
   const [url, setUrl] = useState('');
 
   useEffect(() => {
@@ -64,12 +66,13 @@ export default function PdfViewerModal({ base64, nombre, onClose }: PdfViewerMod
         </div>
 
         {/* Visor */}
-        <div className="flex-1 bg-gray-100">
+        <div className="flex-1 bg-gray-100 relative">
           {url ? (
             <iframe src={url} title={nombre} className="w-full h-full border-0" />
           ) : (
             <div className="h-full flex items-center justify-center text-sm text-text-sec">Cargando documento...</div>
           )}
+          {overlay && <div className="absolute top-3 right-6 z-10">{overlay}</div>}
         </div>
       </div>
     </div>

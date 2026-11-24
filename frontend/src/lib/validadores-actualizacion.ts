@@ -186,53 +186,71 @@ export interface ResultadoValidacionCelular {
   mensaje?: string;
 }
 
-export function validarCelular(celularRaw: string): ResultadoValidacionCelular {
+export function validarCelular(celularRaw: string, codigoPais = '+51'): ResultadoValidacionCelular {
   const digitos = (celularRaw || '').replace(/\D/g, '');
 
   if (!digitos) {
-    return { valido: false, mensaje: 'El número de celular es obligatorio.' };
+    return { valido: false, mensaje: 'El número de celular o teléfono es obligatorio.' };
   }
 
-  if (digitos.length !== 9) {
-    return {
-      valido: false,
-      mensaje: `El celular debe contener exactamente 9 dígitos numéricos (actualmente tiene ${digitos.length}).`,
-    };
-  }
-
-  if (!digitos.startsWith('9')) {
-    return {
-      valido: false,
-      mensaje: 'En Perú, todos los números de celular inician obligatoriamente con el dígito 9 (9XXXXXXXX).',
-    };
-  }
-
-  // Lista negra de números de prueba conocidos
-  if (TELEFONOS_PRUEBA_BLOQUEADOS.has(digitos)) {
-    return {
-      valido: false,
-      mensaje: 'No se permiten números telefónicos de prueba, ficticios o en secuencia consecutiva.',
-    };
-  }
-
-  // Detección de dígitos idénticos repetidos en exceso (ej. 988888881 tiene siete 8s)
-  const conteoDigitos: Record<string, number> = {};
-  for (const d of digitos) {
-    conteoDigitos[d] = (conteoDigitos[d] || 0) + 1;
-    if (conteoDigitos[d] >= 6) {
+  // Validación para Perú (+51)
+  if (codigoPais === '+51') {
+    if (digitos.length !== 9) {
       return {
         valido: false,
-        mensaje: 'El número celular contiene demasiados dígitos idénticos repetidos. Ingrese su número personal real.',
+        mensaje: `Para Perú (+51), el celular debe contener exactamente 9 dígitos numéricos (actualmente tiene ${digitos.length}).`,
       };
     }
-  }
 
-  // Detección de patrones repetitivos tipo 3 dígitos repetidos 3 veces
-  if (digitos.slice(0, 3) === digitos.slice(3, 6) && digitos.slice(3, 6) === digitos.slice(6, 9)) {
-    return {
-      valido: false,
-      mensaje: 'El número celular presenta un patrón repetitivo ficticio. Ingrese un celular real.',
-    };
+    if (!digitos.startsWith('9')) {
+      return {
+        valido: false,
+        mensaje: 'En Perú, todos los números de celular inician obligatoriamente con el dígito 9 (9XXXXXXXX).',
+      };
+    }
+
+    // Lista negra de números de prueba conocidos
+    if (TELEFONOS_PRUEBA_BLOQUEADOS.has(digitos)) {
+      return {
+        valido: false,
+        mensaje: 'No se permiten números telefónicos de prueba, ficticios o en secuencia consecutiva.',
+      };
+    }
+
+    // Detección de dígitos idénticos repetidos en exceso (ej. 988888881 tiene siete 8s)
+    const conteoDigitos: Record<string, number> = {};
+    for (const d of digitos) {
+      conteoDigitos[d] = (conteoDigitos[d] || 0) + 1;
+      if (conteoDigitos[d] >= 6) {
+        return {
+          valido: false,
+          mensaje: 'El número celular contiene demasiados dígitos idénticos repetidos. Ingrese su número personal real.',
+        };
+      }
+    }
+
+    // Detección de patrones repetitivos tipo 3 dígitos repetidos 3 veces
+    if (digitos.slice(0, 3) === digitos.slice(3, 6) && digitos.slice(3, 6) === digitos.slice(6, 9)) {
+      return {
+        valido: false,
+        mensaje: 'El número celular presenta un patrón repetitivo ficticio. Ingrese un celular real.',
+      };
+    }
+  } else {
+    // Validación para Números Internacionales (Extranjeros)
+    if (digitos.length < 6 || digitos.length > 15) {
+      return {
+        valido: false,
+        mensaje: `Para números internacionales (${codigoPais}), la longitud debe estar entre 6 y 15 dígitos (actualmente tiene ${digitos.length}).`,
+      };
+    }
+
+    if (new Set(digitos.split('')).size === 1) {
+      return {
+        valido: false,
+        mensaje: 'El número telefónico internacional no puede consistir en un solo dígito repetido.',
+      };
+    }
   }
 
   return { valido: true };

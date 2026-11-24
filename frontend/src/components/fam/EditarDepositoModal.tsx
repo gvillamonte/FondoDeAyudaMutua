@@ -184,7 +184,7 @@ export default function EditarDepositoModal({ isOpen, onClose, onSaved, expedien
               type="checkbox"
               checked={conCartaPoder}
               onChange={(e) => setConCartaPoder(e.target.checked)}
-              className="w-4 h-4 accent-[#3258CA] rounded"
+              className="w-4 h-4 accent-[#8f0404] rounded"
             />
             <span className="text-xs font-bold text-amber-900">
               📋 El beneficiario otorgó Carta Poder a otra persona para cobrar el cheque
@@ -243,7 +243,7 @@ export default function EditarDepositoModal({ isOpen, onClose, onSaved, expedien
               <div className="flex items-center gap-3">
                 <span className="text-[11px] font-semibold text-amber-900 uppercase">Carta Poder PDF:</span>
                 {cartaPoderPdf && <span className="text-xs text-green-700 font-medium">PDF cargado</span>}
-                <label className="cursor-pointer text-xs font-semibold text-[#3258CA] hover:underline">
+                <label className="cursor-pointer text-xs font-semibold text-[#8f0404] hover:underline">
                   {deposito?.tieneCartaPoder || cartaPoderPdf ? 'Reemplazar Carta Poder' : 'Subir Carta Poder PDF'}
                   <input
                     type="file"

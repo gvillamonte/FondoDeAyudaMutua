@@ -54,7 +54,7 @@ interface AutocompleteItem {
 const PARENTESCO_COLORS: Record<string, string> = {
   'Conyugue': 'bg-purple-100 text-purple-700',
   'Madre': 'bg-pink-100 text-pink-700',
-  'Padre': 'bg-blue-100 text-blue-700',
+  'Padre': 'bg-red-100 text-[#8f0404]',
   'Hijo(a)': 'bg-green-100 text-green-700',
   'Hermano(a)': 'bg-amber-100 text-amber-700',
   'Tio(a)': 'bg-indigo-100 text-indigo-700',
@@ -106,7 +106,7 @@ export default function FamPage() {
   const [colegiados, setColegiados] = useState<ColegiadoFAM[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(25);
+  const [limit, setLimit] = useState(10);
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
@@ -550,8 +550,8 @@ export default function FamPage() {
                   <tr key={item.COLEGIADO_ID} className="hover:bg-gray-50 transition-colors">
                     <td className="px-4 py-3">
                       <button onClick={() => openBeneficiarios(item)}
-                        className="p-1.5 rounded-lg hover:bg-blue-50 border border-transparent hover:border-blue-200 transition-colors group" title="Ver beneficiarios">
-                        <svg className="w-4 h-4 text-blue-500 group-hover:text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                        className="p-1.5 rounded-lg hover:bg-red-50 border border-transparent hover:border-red-200 transition-colors group" title="Ver beneficiarios">
+                        <svg className="w-4 h-4 text-amber-600 group-hover:text-[#8f0404]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
                       </button>
                     </td>
                     <td className="px-4 py-3">
@@ -646,8 +646,8 @@ export default function FamPage() {
                       </div>
                     </div>
                     <div className="mt-2">
-                      <div className="flex items-center justify-between mb-1"><span className="text-xs text-text-sec">Porcentaje</span><span className={`text-sm font-bold ${b.PORCENTAJE >= 100 ? 'text-blue-600' : b.PORCENTAJE >= 50 ? 'text-green-600' : 'text-amber-600'}`}>{b.PORCENTAJE}%</span></div>
-                      <div className="w-full bg-gray-100 rounded-full h-1.5"><div className={`h-1.5 rounded-full transition-all ${b.PORCENTAJE >= 100 ? 'bg-blue-500' : b.PORCENTAJE >= 50 ? 'bg-green-500' : 'bg-amber-500'}`} style={{ width: `${Math.min(b.PORCENTAJE, 100)}%` }} /></div>
+                      <div className="flex items-center justify-between mb-1"><span className="text-xs text-text-sec">Porcentaje</span><span className={`text-sm font-bold ${b.PORCENTAJE >= 100 ? 'text-[#8f0404]' : b.PORCENTAJE >= 50 ? 'text-green-600' : 'text-amber-600'}`}>{b.PORCENTAJE}%</span></div>
+                      <div className="w-full bg-gray-100 rounded-full h-1.5"><div className={`h-1.5 rounded-full transition-all ${b.PORCENTAJE >= 100 ? 'bg-amber-500' : b.PORCENTAJE >= 50 ? 'bg-green-500' : 'bg-amber-500'}`} style={{ width: `${Math.min(b.PORCENTAJE, 100)}%` }} /></div>
                       {montosFam.length > 0 && (
                         <div className="mt-2.5 border-t border-border pt-2 space-y-1.5">
                           {montosFam.map((m) => {
@@ -812,8 +812,8 @@ export default function FamPage() {
                       <div className="flex justify-between"><span className="text-sm text-text-sec">Nombre</span><span className="text-sm font-medium text-text-main">{detailBeneficiario.NOMBRE_BENEFICIARIO}</span></div>
                       <div className="flex justify-between"><span className="text-sm text-text-sec">DNI</span><span className="text-sm text-text-main">{detailBeneficiario.DNI || '-'}</span></div>
                       <div className="flex justify-between"><span className="text-sm text-text-sec">Parentesco</span><span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${PARENTESCO_COLORS[detailBeneficiario.PARENTESCO] || 'bg-gray-100 text-gray-700'}`}>{detailBeneficiario.PARENTESCO}</span></div>
-                      <div className="flex justify-between items-center"><span className="text-sm text-text-sec">Porcentaje</span><span className={`text-lg font-bold ${detailBeneficiario.PORCENTAJE >= 100 ? 'text-blue-600' : detailBeneficiario.PORCENTAJE >= 50 ? 'text-green-600' : 'text-amber-600'}`}>{detailBeneficiario.PORCENTAJE}%</span></div>
-                      <div className="w-full bg-gray-200 rounded-full h-2 mt-1"><div className={`h-2 rounded-full transition-all ${detailBeneficiario.PORCENTAJE >= 100 ? 'bg-blue-500' : detailBeneficiario.PORCENTAJE >= 50 ? 'bg-green-500' : 'bg-amber-500'}`} style={{ width: `${Math.min(detailBeneficiario.PORCENTAJE, 100)}%` }} /></div>
+                      <div className="flex justify-between items-center"><span className="text-sm text-text-sec">Porcentaje</span><span className={`text-lg font-bold ${detailBeneficiario.PORCENTAJE >= 100 ? 'text-[#8f0404]' : detailBeneficiario.PORCENTAJE >= 50 ? 'text-green-600' : 'text-amber-600'}`}>{detailBeneficiario.PORCENTAJE}%</span></div>
+                      <div className="w-full bg-gray-200 rounded-full h-2 mt-1"><div className={`h-2 rounded-full transition-all ${detailBeneficiario.PORCENTAJE >= 100 ? 'bg-amber-500' : detailBeneficiario.PORCENTAJE >= 50 ? 'bg-green-500' : 'bg-amber-500'}`} style={{ width: `${Math.min(detailBeneficiario.PORCENTAJE, 100)}%` }} /></div>
                       {montosFam.length > 0 && (
                         <div className="mt-3 pt-3 border-t border-border space-y-2">
                           <h5 className="text-[10px] font-semibold text-text-sec uppercase tracking-wider">Estimaci&oacute;n de pagos</h5>

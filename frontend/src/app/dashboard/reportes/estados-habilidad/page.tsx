@@ -724,7 +724,7 @@ export default function EstadosDeHabilidadPage() {
             className="animate-spin h-5 w-5 text-primary"
             width="20"
             height="20"
-            style={{ width: '20px', height: '20px', color: '#3258CA' }}
+            style={{ width: '20px', height: '20px', color: '#8f0404' }}
             viewBox="0 0 24 24"
             fill="none"
           >

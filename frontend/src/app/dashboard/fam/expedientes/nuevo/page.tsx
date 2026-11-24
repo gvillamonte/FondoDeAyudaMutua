@@ -1009,7 +1009,7 @@ export default function NuevoExpedientePage() {
                         </span>
                       )}
                       {expedienteActivo?.expedienteNumero && (
-                        <span className="px-2 py-0.5 text-[11px] font-semibold rounded-full bg-blue-100 text-blue-700">
+                        <span className="px-2 py-0.5 text-[11px] font-semibold rounded-full bg-red-100 text-[#8f0404]">
                           Exp. Previo: {expedienteActivo.expedienteNumero}
                         </span>
                       )}
@@ -1085,18 +1085,18 @@ export default function NuevoExpedientePage() {
           {/* Alerta de Expediente Previo NO fallecido */}
           {expedienteActivo && !expedienteActivo.colegiadoFallecido && colegiado?.ESTADO !== 'FALLECIDO' && (
             <div className={`border rounded-lg p-4 ${
-              expedienteActivo.completo ? 'bg-blue-50 border-blue-200' : 'bg-amber-50 border-amber-200'
+              expedienteActivo.completo ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'
             }`}>
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div className="flex items-start gap-3">
                   <div>
                     <h4 className={`text-sm font-bold ${
-                      expedienteActivo.completo ? 'text-blue-800' : 'text-amber-800'
+                      expedienteActivo.completo ? 'text-[#730202]' : 'text-amber-800'
                     }`}>
                       Ya existe un expediente de {expedienteActivo.tipoBeneficio?.nombre || 'este tipo'} para este colegiado
                     </h4>
                     <p className={`text-xs mt-1 ${
-                      expedienteActivo.completo ? 'text-blue-700' : 'text-amber-700'
+                      expedienteActivo.completo ? 'text-[#8f0404]' : 'text-amber-700'
                     }`}>
                       {expedienteActivo.completo
                         ? 'Está cubierto al 100%. Marque la casilla de duplicado si desea registrar un nuevo expediente.'
@@ -1161,7 +1161,7 @@ export default function NuevoExpedientePage() {
               </div>
             </div>
             {form.tipoBeneficioConfigId && !esFallecimiento && (
-              <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
+              <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
                 <button
                   type="button"
                   onClick={() => {
@@ -1190,7 +1190,7 @@ export default function NuevoExpedientePage() {
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between w-full gap-1">
                   <span className="text-sm text-text-main font-medium">¿El titular del colegiado es el beneficiario?</span>
                   {beneficiarioEsTitular && (
-                    <span className="text-[11px] text-blue-700 font-semibold bg-blue-100/60 px-2 py-0.5 rounded">
+                    <span className="text-[11px] text-[#8f0404] font-semibold bg-red-100/60 px-2 py-0.5 rounded">
                       ✓ Titular asignado como beneficiario único (100%)
                     </span>
                   )}
@@ -1227,7 +1227,7 @@ export default function NuevoExpedientePage() {
                           }
                         }
                       }}
-                      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors shrink-0 ${conCartaPoder ? 'bg-[#3258CA]' : 'bg-gray-300'}`}
+                      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors shrink-0 ${conCartaPoder ? 'bg-[#8f0404]' : 'bg-gray-300'}`}
                     >
                       <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${conCartaPoder ? 'translate-x-4.5' : 'translate-x-0.5'}`} />
                     </button>
@@ -1241,7 +1241,7 @@ export default function NuevoExpedientePage() {
                     </div>
                   </div>
                   {conCartaPoder && (
-                    <span className="text-[11px] font-semibold text-[#3258CA] bg-blue-100/70 px-2 py-0.5 rounded whitespace-nowrap">
+                    <span className="text-[11px] font-semibold text-[#8f0404] bg-red-100/70 px-2 py-0.5 rounded whitespace-nowrap">
                       Con Carta Poder
                     </span>
                   )}
@@ -1270,8 +1270,8 @@ export default function NuevoExpedientePage() {
                               }
                               className={`px-2 py-0.5 rounded text-[11px] font-medium border ${
                                 apoderado.otorganteNombre === b.nombre
-                                  ? 'bg-[#3258CA] text-white border-[#3258CA]'
-                                  : 'bg-slate-50 text-slate-700 border-slate-300 hover:bg-blue-50'
+                                  ? 'bg-[#8f0404] text-white border-[#8f0404]'
+                                  : 'bg-slate-50 text-slate-700 border-slate-300 hover:bg-red-50'
                               }`}
                             >
                               👤 {b.nombre} ({b.parentesco || 'Beneficiario'})
@@ -1290,8 +1290,8 @@ export default function NuevoExpedientePage() {
                               }
                               className={`px-2 py-0.5 rounded text-[11px] font-medium border ${
                                 apoderado.otorganteNombre === colegiado.NOMBRE_COLEGIADO
-                                  ? 'bg-[#3258CA] text-white border-[#3258CA]'
-                                  : 'bg-slate-50 text-slate-700 border-slate-300 hover:bg-blue-50'
+                                  ? 'bg-[#8f0404] text-white border-[#8f0404]'
+                                  : 'bg-slate-50 text-slate-700 border-slate-300 hover:bg-red-50'
                               }`}
                             >
                               🎓 {colegiado.NOMBRE_COLEGIADO} (Titular)
@@ -1454,7 +1454,7 @@ export default function NuevoExpedientePage() {
                             </button>
                           </>
                         ) : (
-                          <label className="cursor-pointer inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-[#3258CA] bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors">
+                          <label className="cursor-pointer inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-[#8f0404] bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg transition-colors">
                             <span>Subir Carta Poder</span>
                             <input
                               type="file"
@@ -1486,7 +1486,7 @@ export default function NuevoExpedientePage() {
                     type="checkbox"
                     checked={tramitarPorSucesion}
                     onChange={(e) => setTramitarPorSucesion(e.target.checked)}
-                    className="w-4 h-4 rounded text-primary focus:ring-primary accent-[#3258CA] cursor-pointer"
+                    className="w-4 h-4 rounded text-primary focus:ring-primary accent-[#8f0404] cursor-pointer"
                   />
                   <span className="text-xs font-semibold text-amber-900">
                     ¿Tramitar mediante Sucesión Intestada (Múltiples Herederos / Beneficiarios)?
@@ -1522,7 +1522,7 @@ export default function NuevoExpedientePage() {
                   <button
                     type="button"
                     onClick={agregarBeneficiarioManual}
-                    className="px-3 py-1.5 text-xs font-semibold text-white bg-[#3258CA] hover:bg-[#2846a2] rounded-lg transition-colors inline-flex items-center gap-1.5 shadow-sm"
+                    className="px-3 py-1.5 text-xs font-semibold text-white bg-[#8f0404] hover:bg-[#730202] rounded-lg transition-colors inline-flex items-center gap-1.5 shadow-sm"
                   >
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -1565,7 +1565,7 @@ export default function NuevoExpedientePage() {
                             setBeneficiarioEsTitular(true);
                           }
                         }}
-                        className="px-3.5 py-1.5 text-xs font-semibold text-white bg-[#3258CA] hover:bg-[#2846a2] rounded-lg transition-colors inline-flex items-center gap-1.5"
+                        className="px-3.5 py-1.5 text-xs font-semibold text-white bg-[#8f0404] hover:bg-[#730202] rounded-lg transition-colors inline-flex items-center gap-1.5"
                       >
                         <span>+ Asignar Colegiado Titular como Beneficiario</span>
                       </button>
@@ -1584,7 +1584,7 @@ export default function NuevoExpedientePage() {
                   const corresponde = calcularCorresponde(parseFloat(f.porcentaje) || 0);
                   return (
                     <div key={f.key}
-                      className={`border rounded-lg p-3 transition-colors ${esSolicitante ? 'border-primary bg-blue-50/60' : 'border-border bg-white'}`}>
+                      className={`border rounded-lg p-3 transition-colors ${esSolicitante ? 'border-primary bg-red-50/60' : 'border-border bg-white'}`}>
                       {f.esManual ? (
                         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 pb-2.5 mb-2 border-b border-border/60">
                           <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-2 w-full">
@@ -1657,7 +1657,7 @@ export default function NuevoExpedientePage() {
                                   : [...prev, f.key]
                               );
                             }}
-                            className="w-4 h-4 rounded text-primary focus:ring-primary accent-[#3258CA] flex-shrink-0 cursor-pointer"
+                            className="w-4 h-4 rounded text-primary focus:ring-primary accent-[#8f0404] flex-shrink-0 cursor-pointer"
                           />
                           <span className="text-sm font-medium text-text-main truncate">{f.nombre || (f.esManual ? 'Nuevo Beneficiario' : '-')}</span>
                         </label>
@@ -1869,7 +1869,7 @@ export default function NuevoExpedientePage() {
                 type="button"
                 onClick={verExpedienteCompletoPdf}
                 disabled={totalDocsCargados === 0 || uniendoDocs}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-[#3258CA] rounded-lg hover:bg-[#2846a3] disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-xs shrink-0 self-start sm:self-auto"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-[#8f0404] rounded-lg hover:bg-[#730202] disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-xs shrink-0 self-start sm:self-auto"
                 title={totalDocsCargados === 0 ? 'Suba al menos un documento para ver el consolidado' : 'Ver todos los documentos en un solo PDF'}
               >
                 {uniendoDocs ? (
@@ -1898,7 +1898,7 @@ export default function NuevoExpedientePage() {
                     key={key}
                     className={`flex items-center gap-3 border rounded-lg px-3 py-2.5 transition-colors ${
                       esCompleto
-                        ? 'border-blue-300 bg-blue-50/50'
+                        ? 'border-red-300 bg-red-50/50'
                         : presentado
                         ? 'border-border bg-white'
                         : 'border-amber-300 bg-amber-50'
@@ -2043,7 +2043,7 @@ export default function NuevoExpedientePage() {
                   <button
                     type="button"
                     onClick={() => setModalCartaOpen(true)}
-                    className="text-xs font-semibold text-[#3258CA] hover:text-[#2846a2] hover:underline inline-flex items-center gap-1"
+                    className="text-xs font-semibold text-[#8f0404] hover:text-[#730202] hover:underline inline-flex items-center gap-1"
                     title="Registrar nueva carta en un popup"
                   >
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2065,7 +2065,7 @@ export default function NuevoExpedientePage() {
                   className="w-full px-3 py-2 border border-border rounded-lg text-sm"
                 >
                   <option value="">-- Seleccionar carta --</option>
-                  <option value="__NUEVA__" className="font-semibold text-[#3258CA] bg-blue-50">
+                  <option value="__NUEVA__" className="font-semibold text-[#8f0404] bg-red-50">
                     + Registrar nueva carta...
                   </option>
                   {catalogoCartas.map((c: any) => (
@@ -2084,7 +2084,7 @@ export default function NuevoExpedientePage() {
                   <button
                     type="button"
                     onClick={() => setModalMemorandoOpen(true)}
-                    className="text-xs font-semibold text-[#3258CA] hover:text-[#2846a2] hover:underline inline-flex items-center gap-1"
+                    className="text-xs font-semibold text-[#8f0404] hover:text-[#730202] hover:underline inline-flex items-center gap-1"
                     title="Registrar nuevo memorándum en un popup"
                   >
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2106,7 +2106,7 @@ export default function NuevoExpedientePage() {
                   className="w-full px-3 py-2 border border-border rounded-lg text-sm"
                 >
                   <option value="">-- Seleccionar memorándum --</option>
-                  <option value="__NUEVO__" className="font-semibold text-[#3258CA] bg-blue-50">
+                  <option value="__NUEVO__" className="font-semibold text-[#8f0404] bg-red-50">
                     + Registrar nuevo memorándum...
                   </option>
                   {catalogoMemorandos.map((m: any) => (
@@ -2150,10 +2150,10 @@ export default function NuevoExpedientePage() {
 
               {/* Apartado dinámico: Número de Cuenta que se le depositó */}
               {Boolean(form.formaPago) && (
-                <div className="col-span-full bg-blue-50/70 border border-blue-200 rounded-lg p-3.5 space-y-2.5 transition-all">
+                <div className="col-span-full bg-red-50/70 border border-red-200 rounded-lg p-3.5 space-y-2.5 transition-all">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-[#3258CA] uppercase tracking-wider flex items-center gap-1.5">
-                      <svg className="w-4 h-4 text-[#3258CA] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <span className="text-xs font-bold text-[#8f0404] uppercase tracking-wider flex items-center gap-1.5">
+                      <svg className="w-4 h-4 text-[#8f0404] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
                       </svg>
                       Información de la Cuenta / Depósito Realizado ({form.formaPago})
@@ -2177,7 +2177,7 @@ export default function NuevoExpedientePage() {
                           value={form.numeroCuenta}
                           onChange={(e) => setForm({ ...form, numeroCuenta: e.target.value })}
                           placeholder={form.formaPago === 'CHEQUE' ? 'Ej. CHQ-0012485' : 'Ej. 191-12345678-0-12'}
-                          className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-white font-mono text-text-main focus:outline-none focus:ring-2 focus:ring-[#3258CA]/30"
+                          className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-white font-mono text-text-main focus:outline-none focus:ring-2 focus:ring-[#8f0404]/30"
                         />
                       </div>
                       <div>
@@ -2190,7 +2190,7 @@ export default function NuevoExpedientePage() {
                           value={form.cci}
                           onChange={(e) => setForm({ ...form, cci: e.target.value })}
                           placeholder="Ej. 002-191-001234567801-23"
-                          className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-white font-mono text-text-main focus:outline-none focus:ring-2 focus:ring-[#3258CA]/30"
+                          className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-white font-mono text-text-main focus:outline-none focus:ring-2 focus:ring-[#8f0404]/30"
                         />
                       </div>
                     </div>
@@ -2277,7 +2277,7 @@ export default function NuevoExpedientePage() {
           Cancelar
         </button>
         <button onClick={() => guardar()} disabled={guardando || Boolean(expedienteActivo?.id && !confirmarRegistroDuplicado)}
-          className="px-5 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary/90 disabled:opacity-50 inline-flex items-center gap-2 transition-colors">
+          className="px-5 py-2 text-sm font-medium text-white bg-[#8f0404] rounded-lg hover:bg-[#730202] disabled:opacity-50 inline-flex items-center gap-2 transition-colors">
           {guardando && (
             <svg
               className="animate-spin w-4 h-4"

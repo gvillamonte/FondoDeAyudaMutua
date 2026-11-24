@@ -301,7 +301,7 @@ export default function RegistroHistoricoDrawer({
               {tipoSeleccionado && (() => {
                 const disp = calcularMontoDisponible();
                 return disp !== null ? (
-                  <p className={`text-xs mt-1 ${disp > 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                  <p className={`text-xs mt-1 ${disp > 0 ? 'text-[#8f0404]' : 'text-red-600'}`}>
                     Disponible: S/ {disp.toLocaleString()} {disp === 0 ? '— Agotado' : ''}
                   </p>
                 ) : null;

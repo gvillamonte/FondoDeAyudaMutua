@@ -48,6 +48,11 @@ _backup_pre_fam_registro_*
 *.sqlite
 *.db
 
+# Claves privadas SSH y configuraciones de despliegue local
+*.pem
+*.key
+.deploy_config.json
+
 # Scripts locales de Windows
 iniciar.bat
 iniciar.ps1

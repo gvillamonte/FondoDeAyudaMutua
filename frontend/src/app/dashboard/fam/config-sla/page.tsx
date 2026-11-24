@@ -6,7 +6,7 @@ import api from '@/lib/api';
 
 const ESTADO_COLORS: Record<string, string> = {
   PENDIENTE: 'bg-amber-500',
-  EN_REVISION: 'bg-blue-500',
+  EN_REVISION: 'bg-amber-500',
   APROBADA: 'bg-green-500',
   RECHAZADA: 'bg-red-500',
   PAGADA: 'bg-emerald-500',
@@ -133,7 +133,7 @@ export default function ConfigSlaPage() {
                         <label className="block text-xs font-medium text-text-sec uppercase mb-1">Color Badge</label>
                         <input type="text" value={form.colorBadge ?? ''}
                           onChange={(e) => setForm({ ...form, colorBadge: e.target.value })}
-                          placeholder="#3258CA" className="w-full px-3 py-2 border border-border rounded-lg text-sm" />
+                          placeholder="#8f0404" className="w-full px-3 py-2 border border-border rounded-lg text-sm" />
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-text-sec uppercase mb-1">Orden Flujo</label>

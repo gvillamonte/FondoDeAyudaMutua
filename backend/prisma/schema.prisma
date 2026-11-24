@@ -13,7 +13,7 @@ model Usuario {
   email           String    @unique @db.VarChar(255)
   passwordHash    String    @map("password_hash") @db.VarChar(255)
   nombreCompleto  String    @map("nombre_completo") @db.VarChar(200)
-  rol             String    @db.VarChar(30)
+  rol             String    @db.VarChar(50)
   activo          Boolean   @default(true) @db.Bit
   ultimoAcceso    DateTime? @map("ultimo_acceso")
   createdAt       DateTime  @default(now()) @map("created_at")
@@ -23,8 +23,23 @@ model Usuario {
   beneficiosCreados        Beneficio[]             @relation("BeneficioCreatedBy")
   solicitudesResueltas     SolicitudBeneficio[]    @relation("SolicitudResueltoPor")
   pagosRegistrados         Pago[]                  @relation("PagoRegistradoPor")
+  rolInfo                  Rol?                    @relation(fields: [rol], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@map("usuarios")
+}
+
+model Rol {
+  id          String    @id @db.VarChar(50)
+  nombre      String    @db.VarChar(100)
+  descripcion String?   @db.NVarChar(500)
+  modulos     String    @default("[]") @db.NVarChar(max)
+  activo      Boolean   @default(true) @db.Bit
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  usuarios    Usuario[]
+
+  @@map("roles")
 }
 
 model RefreshToken {

@@ -75,11 +75,11 @@ export async function createLegacyPool(config: ConfigService): Promise<{
     );
   }
 
-  const legacyServer = server || 'localhost\\SQLEXPRESS';
+  const legacyServer = server ? (server.includes(',') ? server : `${server},${port}`) : `localhost,1433`;
   const connStr =
     envUrl && envUrl.includes('Trusted_Connection')
       ? envUrl
-      : `Driver={ODBC Driver 18 for SQL Server};Server=${legacyServer};Database=${database};Trusted_Connection=Yes;TrustServerCertificate=Yes;`;
+      : `Driver={ODBC Driver 17 for SQL Server};Server=${legacyServer};Database=${database};Trusted_Connection=Yes;TrustServerCertificate=Yes;`;
 
   const pool = new mssqlv8.ConnectionPool({
     connectionString: connStr,

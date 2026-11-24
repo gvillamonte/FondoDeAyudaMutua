@@ -233,7 +233,7 @@ export default function CatalogoTable({ endpoint, titulo, descripcion, columnas,
                     <div className="flex items-center gap-2">
                       <input id={`chk-${c.key}`} type="checkbox" checked={!!form[c.key]}
                         onChange={(e) => setForm({ ...form, [c.key]: e.target.checked })}
-                        className="w-4 h-4 accent-[#3258CA]" />
+                        className="w-4 h-4 accent-[#8f0404]" />
                       <label htmlFor={`chk-${c.key}`} className="text-sm text-text-main">{c.label}</label>
                     </div>
                   ) : (
@@ -245,7 +245,7 @@ export default function CatalogoTable({ endpoint, titulo, descripcion, columnas,
                         <select
                           value={form[c.key] ?? ''}
                           onChange={(e) => setForm({ ...form, [c.key]: e.target.value })}
-                          className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#3258CA]/30 focus:border-[#3258CA]"
+                          className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#8f0404]/30 focus:border-[#8f0404]"
                         >
                           <option value="">-- Seleccione --</option>
                           {(c.options || []).map((o) => (
@@ -267,7 +267,7 @@ export default function CatalogoTable({ endpoint, titulo, descripcion, columnas,
                               }
                               setForm({ ...form, [c.key]: val });
                             }}
-                            className={`w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#3258CA]/30 focus:border-[#3258CA] ${c.onlyNumbers ? 'font-mono' : ''}`}
+                            className={`w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#8f0404]/30 focus:border-[#8f0404] ${c.onlyNumbers ? 'font-mono' : ''}`}
                             placeholder={c.placeholder}
                           />
                           {c.helperText && (

@@ -3,7 +3,41 @@ export interface User {
   username: string;
   email: string;
   nombreCompleto: string;
-  rol: 'ADMINISTRADOR' | 'OPERADOR_PAGOS' | 'AUDITOR';
+  rol: string;
+  modulos?: string[];
+  activo?: boolean;
+}
+
+export interface Rol {
+  id: string;
+  nombre: string;
+  descripcion?: string | null;
+  modulos: string[];
+  activo: boolean;
+  usuariosCount?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ModuloSistema {
+  id: string;
+  nombre: string;
+  descripcion: string;
+  ruta: string;
+  categoria: 'PRINCIPAL' | 'OPERATIVO' | 'SISTEMA';
+}
+
+export interface UsuarioAdmin {
+  id: string;
+  username: string;
+  email: string;
+  nombreCompleto: string;
+  rol: string;
+  rolNombre?: string;
+  activo: boolean;
+  ultimoAcceso?: string | null;
+  createdAt: string;
+  modulos?: string[];
 }
 
 export interface ApiResponse<T> {

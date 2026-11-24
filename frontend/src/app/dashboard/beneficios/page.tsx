@@ -12,7 +12,7 @@ export default function BeneficiosPage() {
   const [beneficios, setBeneficios] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(25);
+  const [limit, setLimit] = useState(10);
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState('');
   const [drawerOpen, setDrawerOpen] = useState(false);

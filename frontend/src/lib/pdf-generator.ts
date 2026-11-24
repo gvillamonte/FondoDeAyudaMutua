@@ -110,7 +110,7 @@ export function generarDeclaracionJuradaPdf({
   });
 
   // Franja superior institucional
-  doc.setFillColor(50, 88, 202); // #3258CA
+  doc.setFillColor(50, 88, 202); // #8f0404
   doc.rect(0, 0, 210, 16, 'F');
 
   doc.setTextColor(255, 255, 255);
@@ -205,7 +205,7 @@ export function generarVoucherOrdenPagoPdf({
   const fechaEmision = fecha || new Date().toLocaleDateString('es-PE');
 
   // Franja superior
-  doc.setFillColor(50, 88, 202); // #3258CA
+  doc.setFillColor(50, 88, 202); // #8f0404
   doc.rect(0, 0, 210, 16, 'F');
 
   doc.setTextColor(255, 255, 255);

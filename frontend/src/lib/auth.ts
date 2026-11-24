@@ -51,3 +51,26 @@ export function hasRole(roles: string[]): boolean {
   const user = getCurrentUser();
   return user ? roles.includes(user.rol) : false;
 }
+
+export function hasModuleAccess(moduleKey: string): boolean {
+  const user = getCurrentUser();
+  if (!user) return false;
+  if (user.rol === 'ADMINISTRADOR' || user.rol === 'SUPER_ADMINISTRADOR') return true;
+  if (Array.isArray(user.modulos)) {
+    return user.modulos.includes(moduleKey);
+  }
+  return true;
+}
+
+export async function refreshCurrentUser(): Promise<User | null> {
+  try {
+    const response = await api.get('/auth/me');
+    if (response.data) {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('user', JSON.stringify(response.data));
+      }
+      return response.data;
+    }
+  } catch {}
+  return getCurrentUser();
+}

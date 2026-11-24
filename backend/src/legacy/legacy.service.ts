@@ -196,6 +196,8 @@ export class LegacyService implements OnModuleInit, OnModuleDestroy {
       SELECT
         c.nIdColegiado AS COLEGIADO_ID,
         c.cCodigoCIP AS NUM_COLEGIATURA,
+        c.cConsValorEstadoColegiado AS ESTADO_COLEGIADO_COD,
+        COALESCE(estCol.cConsDescripcion, 'Normal') AS ESTADO_COLEGIADO,
         COALESCE(doc.cDocumentoIdentidad, '') AS DNI,
         p.cNombres AS NOMBRES,
         p.cApPaterno AS APELLIDO_PATERNO,
@@ -273,6 +275,8 @@ export class LegacyService implements OnModuleInit, OnModuleDestroy {
       SELECT
         c.nIdColegiado AS COLEGIADO_ID,
         c.cCodigoCIP AS NUM_COLEGIATURA,
+        c.cConsValorEstadoColegiado AS ESTADO_COLEGIADO_COD,
+        COALESCE(estCol.cConsDescripcion, 'Normal') AS ESTADO_COLEGIADO,
         COALESCE(doc.cDocumentoIdentidad, '') AS DNI,
         doc.cConsValorTipoDocIdentidad AS TIPO_DOC_COD,
         c.cConsValorTipoAsociado AS TIPO_ASOCIADO_COD,
@@ -325,6 +329,10 @@ export class LegacyService implements OnModuleInit, OnModuleDestroy {
           AND TRY_CAST(ec.cConsValor AS INT) = TRY_CAST(pn.cConsValorEstadoCivil AS INT)
         )
       )
+      LEFT JOIN TConstante estCol ON estCol.nConsCod = 1103 AND (
+        estCol.cConsValor = c.cConsValorEstadoColegiado
+        OR LTRIM(RTRIM(estCol.cConsValor)) = LTRIM(RTRIM(c.cConsValorEstadoColegiado))
+      )
       WHERE CAST(c.nIdColegiado AS VARCHAR) = @id OR c.cCodigoCIP = @id
     `;
 
@@ -350,6 +358,8 @@ export class LegacyService implements OnModuleInit, OnModuleDestroy {
       SELECT
         c.nIdColegiado AS COLEGIADO_ID,
         c.cCodigoCIP AS NUM_COLEGIATURA,
+        c.cConsValorEstadoColegiado AS ESTADO_COLEGIADO_COD,
+        COALESCE(estCol.cConsDescripcion, 'Normal') AS ESTADO_COLEGIADO,
         COALESCE(doc.cDocumentoIdentidad, '') AS DNI,
         doc.cConsValorTipoDocIdentidad AS TIPO_DOC_COD,
         c.cConsValorTipoAsociado AS TIPO_ASOCIADO_COD,
@@ -413,12 +423,27 @@ export class LegacyService implements OnModuleInit, OnModuleDestroy {
           AND TRY_CAST(ec.cConsValor AS INT) = TRY_CAST(pn.cConsValorEstadoCivil AS INT)
         )
       )
-      WHERE c.cCodigoCIP = @numero
+      LEFT JOIN TConstante estCol ON estCol.nConsCod = 1103 AND (
+        estCol.cConsValor = c.cConsValorEstadoColegiado
+        OR LTRIM(RTRIM(estCol.cConsValor)) = LTRIM(RTRIM(c.cConsValorEstadoColegiado))
+      )
+      WHERE (
+        LTRIM(RTRIM(c.cCodigoCIP)) = @numero
+        OR LTRIM(RTRIM(c.cCodigoCIP)) = @cipPadded
+        OR LTRIM(RTRIM(c.cCodigoCIP)) = @cipNum
+        OR (TRY_CAST(c.cCodigoCIP AS BIGINT) IS NOT NULL AND TRY_CAST(c.cCodigoCIP AS BIGINT) = TRY_CAST(@cipNum AS BIGINT))
+      )
     `;
+
+    const cipRaw = (numeroColegiatura || '').trim();
+    const cipNum = cipRaw.replace(/^0+/, '') || cipRaw;
+    const cipPadded = cipNum.padStart(6, '0');
 
     this.enforceReadOnly(query);
     const result = await this.runQuery((request) => {
-      request.input('numero', sql.VarChar, numeroColegiatura.trim());
+      request.input('numero', sql.VarChar, cipRaw);
+      request.input('cipPadded', sql.VarChar, cipPadded);
+      request.input('cipNum', sql.VarChar, cipNum);
       return request.query(query);
     });
     const colegiado = result.recordset[0];
@@ -435,14 +460,18 @@ export class LegacyService implements OnModuleInit, OnModuleDestroy {
     }
 
     const cipRaw = (cip || '').trim();
-    const dniRaw = (dni || '').trim();
-    const cipNum = cipRaw.replace(/^0+/, '');
+    const dniRaw = (dni || '').trim().replace(/\s+/g, '');
+    const cipNum = cipRaw.replace(/^0+/, '') || cipRaw;
     const cipPadded = cipNum.padStart(6, '0');
+    const dniNum = dniRaw.replace(/^0+/, '') || dniRaw;
+    const dniPadded8 = /^\d+$/.test(dniNum) ? dniNum.padStart(8, '0') : dniRaw;
 
     const query = `
       SELECT TOP 1
         c.nIdColegiado AS COLEGIADO_ID,
         c.cCodigoCIP AS NUM_COLEGIATURA,
+        c.cConsValorEstadoColegiado AS ESTADO_COLEGIADO_COD,
+        COALESCE(estCol.cConsDescripcion, 'Normal') AS ESTADO_COLEGIADO,
         COALESCE(doc.cDocumentoIdentidad, '') AS DNI,
         doc.cConsValorTipoDocIdentidad AS TIPO_DOC_COD,
         c.cConsValorTipoAsociado AS TIPO_ASOCIADO_COD,
@@ -477,6 +506,8 @@ export class LegacyService implements OnModuleInit, OnModuleDestroy {
             PARTITION BY nIdPersona
             ORDER BY 
               CASE 
+                WHEN LTRIM(RTRIM(cDocumentoIdentidad)) = @dni THEN 0
+                WHEN LTRIM(RTRIM(cDocumentoIdentidad)) = @dniPadded8 THEN 0
                 WHEN cConsValorTipoDocIdentidad = '1' THEN 1
                 WHEN cConsValorTipoDocIdentidad = '4' THEN 2
                 WHEN cConsValorTipoDocIdentidad = '7' THEN 3
@@ -485,7 +516,7 @@ export class LegacyService implements OnModuleInit, OnModuleDestroy {
               nIdDocumentoPersona DESC
           ) AS rn
         FROM TDocumentoPersona
-        WHERE cConsValorTipoDocIdentidad IN ('1', '4', '7')
+        WHERE cConsValorTipoDocIdentidad IN ('1', '4', '6', '7')
       ) doc ON p.nIdPersona = doc.nIdPersona AND doc.rn = 1
       LEFT JOIN (
         SELECT nIdColegiado, MAX(nIdCapitulo) AS nIdCapitulo, MAX(dFechaIncorporacionACIP) AS dFechaIncorporacionACIP
@@ -506,8 +537,36 @@ export class LegacyService implements OnModuleInit, OnModuleDestroy {
           AND TRY_CAST(ec.cConsValor AS INT) = TRY_CAST(pn.cConsValorEstadoCivil AS INT)
         )
       )
-      WHERE (c.cCodigoCIP = @cip OR c.cCodigoCIP = @cipPadded OR c.cCodigoCIP = @cipNum)
-        AND doc.cDocumentoIdentidad = @dni
+      LEFT JOIN TConstante estCol ON estCol.nConsCod = 1103 AND (
+        estCol.cConsValor = c.cConsValorEstadoColegiado
+        OR LTRIM(RTRIM(estCol.cConsValor)) = LTRIM(RTRIM(c.cConsValorEstadoColegiado))
+      )
+      WHERE (
+        LTRIM(RTRIM(c.cCodigoCIP)) = @cip
+        OR LTRIM(RTRIM(c.cCodigoCIP)) = @cipPadded
+        OR LTRIM(RTRIM(c.cCodigoCIP)) = @cipNum
+        OR (TRY_CAST(c.cCodigoCIP AS BIGINT) IS NOT NULL AND TRY_CAST(c.cCodigoCIP AS BIGINT) = TRY_CAST(@cipNum AS BIGINT))
+      )
+      AND (
+        LTRIM(RTRIM(doc.cDocumentoIdentidad)) = @dni
+        OR LTRIM(RTRIM(doc.cDocumentoIdentidad)) = @dniPadded8
+        OR REPLACE(LTRIM(RTRIM(doc.cDocumentoIdentidad)), ' ', '') = @dni
+        OR EXISTS (
+          SELECT 1 FROM TDocumentoPersona dp
+          WHERE dp.nIdPersona = p.nIdPersona
+            AND (
+              LTRIM(RTRIM(dp.cDocumentoIdentidad)) = @dni
+              OR LTRIM(RTRIM(dp.cDocumentoIdentidad)) = @dniPadded8
+              OR LTRIM(RTRIM(dp.cDocumentoIdentidad)) = @dniNum
+              OR REPLACE(LTRIM(RTRIM(dp.cDocumentoIdentidad)), ' ', '') = @dni
+              OR (
+                TRY_CAST(dp.cDocumentoIdentidad AS BIGINT) IS NOT NULL 
+                AND TRY_CAST(@dniNum AS BIGINT) IS NOT NULL 
+                AND TRY_CAST(dp.cDocumentoIdentidad AS BIGINT) = TRY_CAST(@dniNum AS BIGINT)
+              )
+            )
+        )
+      )
     `;
 
     this.enforceReadOnly(query);
@@ -516,12 +575,14 @@ export class LegacyService implements OnModuleInit, OnModuleDestroy {
       request.input('cipPadded', sql.VarChar, cipPadded);
       request.input('cipNum', sql.VarChar, cipNum);
       request.input('dni', sql.VarChar, dniRaw);
+      request.input('dniNum', sql.VarChar, dniNum);
+      request.input('dniPadded8', sql.VarChar, dniPadded8);
       return request.query(query);
     });
 
     const colegiado = result.recordset[0];
     if (!colegiado) {
-      throw new NotFoundException(`No se encontró ningún colegiado con CIP ${cipRaw} y DNI ${dniRaw}`);
+      throw new NotFoundException(`No se encontró ningún colegiado con CIP ${cipRaw} y documento ${dniRaw}`);
     }
 
     return colegiado;

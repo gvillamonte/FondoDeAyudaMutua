@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { LegacyService } from '../legacy/legacy.service';
 import { AuditService } from '../audit/audit.service';
@@ -22,6 +22,83 @@ export class ActualizacionDatosService {
   ) {}
 
   /**
+   * Valida si el colegiado se encuentra en un estado que le impide
+   * realizar actualización de datos (Fallecido, Temporal o Transferido).
+   */
+  async validarEstadoColegiadoParaActualizacion(colegiado: any): Promise<{
+    bloqueado: boolean;
+    tipo?: 'FALLECIDO' | 'TEMPORAL' | 'TRANSFERIDO';
+    mensaje?: string;
+  }> {
+    if (!colegiado) return { bloqueado: false };
+
+    const codEstado = String(colegiado.ESTADO_COLEGIADO_COD || '').trim();
+    const nombreEstado = String(colegiado.ESTADO_COLEGIADO || '').toUpperCase().trim();
+    const estadoColegiatura = String(colegiado.ESTADO_COLEGIATURA || '').toUpperCase().trim();
+
+    // 1. Verificar si es FALLECIDO (por código 5, descripción o expediente FAM en APP_DB)
+    let esFallecido = codEstado === '5' || nombreEstado.includes('FALLEC') || estadoColegiatura.includes('FALLEC');
+
+    if (!esFallecido) {
+      const colId = String(colegiado.COLEGIADO_ID || '').trim();
+      const numCip = String(colegiado.NUM_COLEGIATURA || '').trim();
+      const posiblesIds = [colId, `C-${colId}`, colId.replace(/^C-/, '')];
+      if (numCip) posiblesIds.push(numCip);
+
+      try {
+        const fallecidoEnFam = await this.prisma.famSolicitudBeneficio?.findFirst({
+          where: {
+            colegiadoId: { in: posiblesIds.filter(Boolean) },
+            estado: { not: 'RECHAZADA' },
+            OR: [
+              { tipoBeneficio: { codigo: 'FALLECIMIENTO' } },
+              { tipoBeneficio: { nombre: { contains: 'Fallecimiento' } } },
+              { fechaDefuncion: { not: null } },
+              { actaDefuncion: { not: null } },
+            ],
+          },
+          select: { id: true },
+        });
+        if (fallecidoEnFam) {
+          esFallecido = true;
+        }
+      } catch (err: any) {
+        this.logger.warn(`No se pudo verificar fallecimiento en FAM: ${err.message}`);
+      }
+    }
+
+    if (esFallecido) {
+      return {
+        bloqueado: true,
+        tipo: 'FALLECIDO',
+        mensaje: 'El colegiado figura como FALLECIDO en el padrón institucional. Por normativa del Colegio de Ingenieros del Perú, no está permitida la actualización de datos personales.',
+      };
+    }
+
+    // 2. Verificar si es TEMPORAL (código 2 o descripción)
+    const esTemporal = codEstado === '2' || nombreEstado.includes('TEMPORAL');
+    if (esTemporal) {
+      return {
+        bloqueado: true,
+        tipo: 'TEMPORAL',
+        mensaje: 'El colegiado figura con estado TEMPORAL en el padrón institucional. No está habilitado para realizar la actualización de datos a través de este portal. Debe regularizar su colegiatura presencialmente en el Consejo Departamental.',
+      };
+    }
+
+    // 3. Verificar si es TRANSFERIDO (código 3 o descripción)
+    const esTransferido = codEstado === '3' || nombreEstado.includes('TRANSF');
+    if (esTransferido) {
+      return {
+        bloqueado: true,
+        tipo: 'TRANSFERIDO',
+        mensaje: 'El colegiado figura con estado TRANSFERIDO en el padrón del Consejo Departamental de Cusco. No está habilitado para realizar la actualización de datos en este portal institucional.',
+      };
+    }
+
+    return { bloqueado: false };
+  }
+
+  /**
    * Verifica si un N° CIP existe en el padrón del colegio.
    * Primer paso del flujo de actualización antes de solicitar el DNI.
    */
@@ -40,6 +117,16 @@ export class ActualizacionDatosService {
 
     if (!colegiado) {
       throw new NotFoundException(`No se encontró ningún colegiado con el N° CIP ${cipNormalized}`);
+    }
+
+    const estadoVal = await this.validarEstadoColegiadoParaActualizacion(colegiado);
+    if (estadoVal.bloqueado) {
+      throw new ForbiddenException({
+        statusCode: 403,
+        bloqueado: true,
+        estadoColegiado: estadoVal.tipo,
+        message: estadoVal.mensaje,
+      });
     }
 
     const nombreCompleto = [
@@ -68,6 +155,8 @@ export class ActualizacionDatosService {
       nombreEnmascarado,
       especialidad: colegiado.ESPECIALIDAD || '',
       estadoColegiatura: esVitalicio ? 'HABILITADO' : (colegiado.ESTADO_COLEGIATURA || (colegiado.HABILITADO ? 'HABILITADO' : 'NO HABILITADO')),
+      estadoColegiado: colegiado.ESTADO_COLEGIADO || 'Normal',
+      estadoColegiadoCodigo: colegiado.ESTADO_COLEGIADO_COD || '1',
       habilitado: esVitalicio ? true : Boolean(colegiado.HABILITADO),
       esVitalicio,
       tipoAsociado: esVitalicio ? 'Vitalicio' : 'Ordinario',
@@ -85,6 +174,16 @@ export class ActualizacionDatosService {
     const colegiado = await this.legacyService.getColegiadoByCipAndDni(dto.cip, dto.dni);
     if (!colegiado) {
       throw new NotFoundException('No se encontró ningún colegiado con los datos ingresados');
+    }
+
+    const estadoVal = await this.validarEstadoColegiadoParaActualizacion(colegiado);
+    if (estadoVal.bloqueado) {
+      throw new ForbiddenException({
+        statusCode: 403,
+        bloqueado: true,
+        estadoColegiado: estadoVal.tipo,
+        message: estadoVal.mensaje,
+      });
     }
 
     const cipStr = String(colegiado.NUM_COLEGIATURA || dto.cip).trim();
@@ -226,6 +325,8 @@ export class ActualizacionDatosService {
       nombreCompleto,
       especialidad: colegiado.ESPECIALIDAD || '',
       estadoColegiatura: esVitalicio ? 'HABILITADO' : (colegiado.ESTADO_COLEGIATURA || (colegiado.HABILITADO ? 'HABILITADO' : 'NO HABILITADO')),
+      estadoColegiado: colegiado.ESTADO_COLEGIADO || 'Normal',
+      estadoColegiadoCodigo: colegiado.ESTADO_COLEGIADO_COD || '1',
       habilitado: esVitalicio ? true : Boolean(colegiado.HABILITADO),
       fechaUltimoPago: esVitalicio
         ? null

@@ -6,6 +6,9 @@ import { parseJsonSafe } from '@/lib/safe-json';
 interface AuditLog {
   id: string;
   userId: string;
+  usuarioNombre?: string | null;
+  usuarioUsername?: string | null;
+  usuarioRol?: string | null;
   action: 'CREATE' | 'UPDATE' | 'DELETE';
   entity: string;
   entityId: string;
@@ -31,10 +34,11 @@ const ACTION_COLORS: Record<string, { bg: string; text: string }> = {
 export default function AuditoriaPage() {
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
-  const [meta, setMeta] = useState<AuditMeta>({ total: 0, page: 1, limit: 25, totalPages: 1 });
+  const [meta, setMeta] = useState<AuditMeta>({ total: 0, page: 1, limit: 10, totalPages: 1 });
 
   const [actionFilter, setActionFilter] = useState('');
   const [entityFilter, setEntityFilter] = useState('');
+  const [userFilter, setUserFilter] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
 
@@ -47,6 +51,7 @@ export default function AuditoriaPage() {
       const params = new URLSearchParams({ page: String(page), limit: String(limit) });
       if (actionFilter) params.set('action', actionFilter);
       if (entityFilter) params.set('entity', entityFilter);
+      if (userFilter.trim()) params.set('userId', userFilter.trim());
       if (startDate) params.set('startDate', startDate);
       if (endDate) params.set('endDate', endDate);
 
@@ -57,14 +62,14 @@ export default function AuditoriaPage() {
       if (response.ok) {
         const result = await parseJsonSafe<{ data?: unknown[]; meta?: unknown }>(response);
         setLogs((result.data as any[]) || []);
-        setMeta((result.meta as any) || { total: 0, page: 1, limit: 25, totalPages: 1 });
+        setMeta((result.meta as any) || { total: 0, page: 1, limit: 10, totalPages: 1 });
       }
     } catch {
       setLogs([]);
     } finally {
       setLoading(false);
     }
-  }, [actionFilter, entityFilter, startDate, endDate]);
+  }, [actionFilter, entityFilter, userFilter, startDate, endDate]);
 
   useEffect(() => {
     fetchLogs(meta.page, meta.limit);
@@ -151,14 +156,14 @@ export default function AuditoriaPage() {
         className="rounded-lg p-5"
         style={{ backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0' }}
       >
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           {/* Action Dropdown */}
           <div>
             <label
               className="block text-sm font-medium mb-1.5"
               style={{ color: '#1E293B' }}
             >
-              Accion
+              Acción
             </label>
             <select
               value={actionFilter}
@@ -190,6 +195,28 @@ export default function AuditoriaPage() {
               value={entityFilter}
               onChange={(e) => setEntityFilter(e.target.value)}
               placeholder="Ej: beneficio, pago..."
+              className="w-full rounded-md px-3 py-2 text-sm outline-none transition-colors"
+              style={{
+                backgroundColor: '#FFFFFF',
+                border: '1px solid #E2E8F0',
+                color: '#1E293B',
+              }}
+            />
+          </div>
+
+          {/* User Input */}
+          <div>
+            <label
+              className="block text-sm font-medium mb-1.5"
+              style={{ color: '#1E293B' }}
+            >
+              Usuario
+            </label>
+            <input
+              type="text"
+              value={userFilter}
+              onChange={(e) => setUserFilter(e.target.value)}
+              placeholder="Nombre o username..."
               className="w-full rounded-md px-3 py-2 text-sm outline-none transition-colors"
               style={{
                 backgroundColor: '#FFFFFF',
@@ -243,11 +270,26 @@ export default function AuditoriaPage() {
         </div>
 
         {/* Filter Button */}
-        <div className="mt-4 flex justify-end">
+        <div className="mt-4 flex justify-end gap-2">
+          {(actionFilter || entityFilter || userFilter || startDate || endDate) && (
+            <button
+              onClick={() => {
+                setActionFilter('');
+                setEntityFilter('');
+                setUserFilter('');
+                setStartDate('');
+                setEndDate('');
+                setMeta((prev) => ({ ...prev, page: 1 }));
+              }}
+              className="px-4 py-2 rounded-md text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors"
+            >
+              Limpiar
+            </button>
+          )}
           <button
             onClick={handleFilter}
             className="px-5 py-2 rounded-md text-sm font-medium text-white transition-colors hover:opacity-90"
-            style={{ backgroundColor: '#3258CA' }}
+            style={{ backgroundColor: '#8f0404' }}
           >
             Filtrar
           </button>
@@ -267,8 +309,8 @@ export default function AuditoriaPage() {
                 style={{ backgroundColor: '#F8FAFC', color: '#64748B' }}
               >
                 <th className="px-4 py-3">Fecha/Hora</th>
-                <th className="px-4 py-3">Usuario ID</th>
-                <th className="px-4 py-3">Accion</th>
+                <th className="px-4 py-3">Usuario</th>
+                <th className="px-4 py-3">Acción</th>
                 <th className="px-4 py-3">Entidad</th>
                 <th className="px-4 py-3">ID Registro</th>
                 <th className="px-4 py-3">Cambios</th>
@@ -285,7 +327,7 @@ export default function AuditoriaPage() {
               ) : logs.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-4 py-12 text-center" style={{ color: '#64748B' }}>
-                    No se encontraron registros de auditoria
+                    No se encontraron registros de auditoría
                   </td>
                 </tr>
               ) : (
@@ -294,11 +336,38 @@ export default function AuditoriaPage() {
                   const isExpanded = expandedRows.has(log.id);
                   return (
                     <tr key={log.id} style={{ borderBottom: '1px solid #E2E8F0' }}>
-                      <td className="px-4 py-3 whitespace-nowrap" style={{ color: '#64748B' }}>
+                      <td className="px-4 py-3 whitespace-nowrap text-xs" style={{ color: '#64748B' }}>
                         {formatDateTime(log.createdAt)}
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        {log.userId}
+                      <td className="px-4 py-3">
+                        {log.usuarioNombre ? (
+                          <div className="max-w-[220px]">
+                            <div className="font-semibold text-slate-800 truncate" title={log.usuarioNombre}>
+                              {log.usuarioNombre}
+                            </div>
+                            <div className="flex items-center gap-1.5 mt-0.5 text-xs text-slate-500">
+                              <span className="font-mono bg-slate-100 text-slate-700 px-1 py-0.2 rounded text-[11px]">
+                                @{log.usuarioUsername}
+                              </span>
+                              {log.usuarioRol && (
+                                <span className="bg-red-50 text-[#8f0404] px-1 py-0.2 rounded text-[10px] font-semibold tracking-wide">
+                                  {log.usuarioRol}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ) : log.userId === 'system' || log.userId === 'sistema' ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700">
+                            ⚙ Sistema
+                          </span>
+                        ) : (
+                          <div title={`ID completo: ${log.userId}`}>
+                            <span className="font-medium text-slate-700 text-xs block">Usuario no catalogado</span>
+                            <span className="text-[11px] font-mono text-slate-400">
+                              ID: {log.userId ? log.userId.slice(0, 8) + '...' : 'N/A'}
+                            </span>
+                          </div>
+                        )}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <span
@@ -308,26 +377,26 @@ export default function AuditoriaPage() {
                           {log.action}
                         </span>
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
+                      <td className="px-4 py-3 whitespace-nowrap font-medium text-slate-700">
                         {log.entity}
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap" style={{ color: '#64748B' }}>
+                      <td className="px-4 py-3 whitespace-nowrap text-xs font-mono" style={{ color: '#64748B' }}>
                         {log.entityId}
                       </td>
                       <td className="px-4 py-3">
                         {log.changesJson ? (
                           <button
                             onClick={() => toggleRow(log.id)}
-                            className="text-xs underline transition-colors hover:opacity-80"
-                            style={{ color: '#3258CA' }}
+                            className="text-xs font-medium underline transition-colors hover:opacity-80"
+                            style={{ color: '#8f0404' }}
                           >
                             {isExpanded ? 'Ocultar' : 'Ver cambios'}
                           </button>
                         ) : (
-                          <span style={{ color: '#64748B' }}>N/A</span>
+                          <span style={{ color: '#94A3B8' }} className="text-xs">Sin cambios</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap" style={{ color: '#64748B' }}>
+                      <td className="px-4 py-3 whitespace-nowrap text-xs font-mono" style={{ color: '#64748B' }}>
                         {log.ipAddress || 'N/A'}
                       </td>
                     </tr>
@@ -425,9 +494,9 @@ export default function AuditoriaPage() {
                   onClick={() => handlePageChange(p)}
                   className="px-3 py-1.5 rounded-md text-sm font-medium transition-colors"
                   style={{
-                    backgroundColor: p === meta.page ? '#3258CA' : '#FFFFFF',
+                    backgroundColor: p === meta.page ? '#8f0404' : '#FFFFFF',
                     border: '1px solid',
-                    borderColor: p === meta.page ? '#3258CA' : '#E2E8F0',
+                    borderColor: p === meta.page ? '#8f0404' : '#E2E8F0',
                     color: p === meta.page ? '#FFFFFF' : '#1E293B',
                   }}
                 >

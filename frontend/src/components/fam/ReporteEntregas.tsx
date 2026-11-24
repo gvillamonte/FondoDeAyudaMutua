@@ -68,7 +68,7 @@ const FORMA_PAGO_LABELS: Record<string, string> = {
 };
 
 const FORMA_PAGO_BADGE: Record<string, string> = {
-  DEPOSITO: 'bg-blue-50 text-[#3258CA] border-blue-200',
+  DEPOSITO: 'bg-red-50 text-[#8f0404] border-red-200',
   CHEQUE: 'bg-amber-50 text-amber-800 border-amber-200',
   TRANSFERENCIA: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   EFECTIVO: 'bg-slate-100 text-slate-700 border-slate-300',
@@ -555,7 +555,7 @@ export default function ReporteEntregas({ tipos }: { tipos: TipoBeneficioOpt[] }
                   <td className="px-4 py-3 text-xs text-text-sec whitespace-nowrap">{fmtFecha(b.ultimaFechaPago)}</td>
                 </tr>
               ))}
-              <tr className="bg-blue-50/40 font-semibold">
+              <tr className="bg-red-50/40 font-semibold">
                 <td className="px-4 py-3 text-sm text-text-main" colSpan={2}>
                   Total consolidado · {beneficiarios.length} beneficiario{beneficiarios.length !== 1 ? 's' : ''}
                 </td>
@@ -660,7 +660,7 @@ export default function ReporteEntregas({ tipos }: { tipos: TipoBeneficioOpt[] }
                 </tr>
                 );
               })}
-              <tr className="bg-blue-50/40 font-semibold">
+              <tr className="bg-red-50/40 font-semibold">
                 <td className="px-4 py-3 text-sm text-text-main" colSpan={4}>Total · {filtradas.length} entrega{filtradas.length !== 1 ? 's' : ''}</td>
                 <td className="px-4 py-3 text-sm font-bold text-primary">{fmtMonto(totalEntregado)}</td>
                 <td colSpan={3}></td>

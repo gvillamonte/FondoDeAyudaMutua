@@ -71,10 +71,10 @@ const TYPE_CONFIG: Record<MessageType, { bg: string; border: string; icon: React
   },
   info: {
     bg: 'bg-white',
-    border: 'border-[#3258CA]',
+    border: 'border-[#8f0404]',
     icon: (
       <svg
-        className="w-7 h-7 text-[#3258CA] flex-shrink-0"
+        className="w-7 h-7 text-[#8f0404] flex-shrink-0"
         width={28}
         height={28}
         style={{ width: '28px', height: '28px', minWidth: '28px', minHeight: '28px', flexShrink: 0 }}
@@ -115,14 +115,29 @@ export default function ConfirmCenterMessage() {
           return (
             <div
               key={msg.id}
-              className={`${cfg.bg} border-l-4 ${cfg.border} rounded-lg shadow-lg px-6 py-4 flex items-center gap-4 min-w-[320px] max-w-[480px] animate-fadeIn`}
+              onClick={() => setMessages((msgs) => msgs.filter((m) => m.id !== msg.id))}
+              className={`${cfg.bg} border-l-4 ${cfg.border} rounded-lg shadow-2xl px-6 py-4 flex items-center gap-4 min-w-[320px] max-w-[480px] animate-fadeIn cursor-pointer transition-transform hover:scale-[1.01]`}
               style={{ animation: 'fadeIn 0.2s ease-in' }}
+              title="Click para cerrar"
             >
               {cfg.icon}
               <div className="flex-1">
                 <p className="text-sm font-semibold text-text-main">{msg.text}</p>
                 {msg.subtext && <p className="text-xs text-text-sec mt-0.5">{msg.subtext}</p>}
               </div>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setMessages((msgs) => msgs.filter((m) => m.id !== msg.id));
+                }}
+                className="text-slate-400 hover:text-slate-600 p-1 -mr-2 rounded transition-colors"
+                aria-label="Cerrar mensaje"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
             </div>
           );
         })}

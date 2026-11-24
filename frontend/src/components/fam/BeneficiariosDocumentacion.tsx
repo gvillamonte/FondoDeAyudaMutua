@@ -26,6 +26,9 @@ export interface BeneficiarioFila {
   dni: string | null;
   parentesco: string | null;
   porcentaje: number;
+  tieneDeclaracionJurada?: boolean;
+  tieneOrdenPago?: boolean;
+  declaracionJuradaDni?: string | null;
 }
 
 interface TitularYPoder {
@@ -227,6 +230,20 @@ export default function BeneficiariosDocumentacion({
                     <p className="text-[11px] text-text-sec">DNI: {b.dni || '—'}</p>
                     <div className="flex flex-wrap gap-1 mt-1">
                       <BadgeColegiado esColegiado={esColegiado(b)} />
+                    {(b.tieneDeclaracionJurada != null || b.tieneOrdenPago != null) && (
+                      <div className="flex flex-wrap items-center gap-2 mt-1 text-[11px]">
+                        {b.tieneDeclaracionJurada != null && (
+                          <span className={b.tieneDeclaracionJurada ? "text-success" : "text-warning"}>
+                            {b.tieneDeclaracionJurada ? "DJ cargada" : "DJ pendiente"}
+                          </span>
+                        )}
+                        {b.tieneOrdenPago != null && (
+                          <span className={b.tieneOrdenPago ? "text-success" : "text-warning"}>
+                            {b.tieneOrdenPago ? "Orden de pago cargada" : "Orden de pago pendiente"}
+                          </span>
+                        )}
+                      </div>
+                    )}
                       {info?.conCartaPoder && <BadgeCartaPoder />}
                     </div>
                   </td>

@@ -45,7 +45,7 @@ const CONFIG_INICIAL: EmailConfig = {
   colorAlertaBg: '#FEF2F2',
   colorAlertaTexto: '#991B1B',
   tituloInstitucional: 'COLEGIO DE INGENIEROS DEL PERÚ',
-  subtituloInstitucional: 'Consejo Departamental Cusco — Fondo de Ayuda Mutua',
+  subtituloInstitucional: 'Consejo Departamental Cusco',
   mensajeBienvenida:
     'Le confirmamos que sus datos de contacto, residencia y filiación han sido actualizados satisfactoriamente en el padrón del Colegio de Ingenieros del Perú. A continuación, se detalla el resumen de la información registrada:',
   avisoSeguridad:
@@ -76,7 +76,7 @@ const PALETAS_PRESET = [
   },
   {
     nombre: 'Azul Institucional CIP',
-    primario: '#3258CA',
+    primario: '#8f0404',
     secundario: '#1E293B',
     fondo: '#F8FAFC',
     texto: '#1E293B',
@@ -401,13 +401,13 @@ export default function ConfiguracionCorreoPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 text-xs text-slate-500 mb-1">
-            <Link href="/dashboard" className="hover:text-blue-700 transition-colors">
+            <Link href="/dashboard" className="hover:text-[#8f0404] transition-colors">
               Inicio
             </Link>
             <span>/</span>
             <Link
               href="/dashboard/actualizacion-datos"
-              className="hover:text-blue-700 transition-colors"
+              className="hover:text-[#8f0404] transition-colors"
             >
               Actualización de Datos
             </Link>
@@ -444,9 +444,9 @@ export default function ConfiguracionCorreoPage() {
               setModalPruebaAbierto(true);
             }}
             disabled={saving || loading}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-blue-800 bg-blue-50 border border-blue-200 hover:bg-blue-100 disabled:opacity-50 transition-colors shadow-sm"
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-[#730202] bg-red-50 border border-red-200 hover:bg-red-100 disabled:opacity-50 transition-colors shadow-sm"
           >
-            <svg className="w-3.5 h-3.5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="w-3.5 h-3.5 text-[#8f0404]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
             </svg>
             <span>Enviar Correo de Prueba</span>
@@ -456,7 +456,7 @@ export default function ConfiguracionCorreoPage() {
             type="button"
             onClick={handleGuardar}
             disabled={saving || loading}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold text-white bg-[#3258CA] hover:bg-[#2846a3] disabled:opacity-50 transition-colors shadow-sm"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold text-white bg-[#8f0404] hover:bg-[#730202] disabled:opacity-50 transition-colors shadow-sm"
           >
             {saving ? (
               <>
@@ -491,7 +491,7 @@ export default function ConfiguracionCorreoPage() {
         </Link>
         <Link
           href="/dashboard/actualizacion-datos/correo"
-          className="pb-3 border-b-2 border-[#3258CA] font-semibold text-[#3258CA] flex items-center gap-2 whitespace-nowrap"
+          className="pb-3 border-b-2 border-[#8f0404] font-semibold text-[#8f0404] flex items-center gap-2 whitespace-nowrap"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
@@ -558,7 +558,7 @@ export default function ConfiguracionCorreoPage() {
               onClick={() => setActiveTab('colores')}
               className={`px-3.5 py-2.5 text-xs font-semibold rounded-t-lg transition-colors flex items-center gap-2 ${
                 activeTab === 'colores'
-                  ? 'bg-white text-[#3258CA] border-t-2 border-[#3258CA] shadow-sm'
+                  ? 'bg-white text-[#8f0404] border-t-2 border-[#8f0404] shadow-sm'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -574,7 +574,7 @@ export default function ConfiguracionCorreoPage() {
               onClick={() => setActiveTab('textos')}
               className={`px-3.5 py-2.5 text-xs font-semibold rounded-t-lg transition-colors flex items-center gap-2 ${
                 activeTab === 'textos'
-                  ? 'bg-white text-[#3258CA] border-t-2 border-[#3258CA] shadow-sm'
+                  ? 'bg-white text-[#8f0404] border-t-2 border-[#8f0404] shadow-sm'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -589,7 +589,7 @@ export default function ConfiguracionCorreoPage() {
               onClick={() => setActiveTab('codigo')}
               className={`px-3.5 py-2.5 text-xs font-semibold rounded-t-lg transition-colors flex items-center gap-2 ${
                 activeTab === 'codigo'
-                  ? 'bg-white text-[#3258CA] border-t-2 border-[#3258CA] shadow-sm'
+                  ? 'bg-white text-[#8f0404] border-t-2 border-[#8f0404] shadow-sm'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -624,7 +624,7 @@ export default function ConfiguracionCorreoPage() {
                         onClick={() => aplicarPreset(p)}
                         className={`p-2 rounded-lg border text-left text-xs transition-all flex items-center gap-2 ${
                           config.colorPrimario.toLowerCase() === p.primario.toLowerCase()
-                            ? 'border-[#3258CA] bg-blue-50/50 shadow-sm'
+                            ? 'border-[#8f0404] bg-red-50/50 shadow-sm'
                             : 'border-slate-200 hover:border-slate-300 bg-white'
                         }`}
                       >
@@ -660,7 +660,7 @@ export default function ConfiguracionCorreoPage() {
                           type="text"
                           value={config.colorPrimario}
                           onChange={(e) => setConfig({ ...config, colorPrimario: e.target.value })}
-                          className="flex-1 px-3 py-1.5 text-xs font-mono uppercase border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600"
+                          className="flex-1 px-3 py-1.5 text-xs font-mono uppercase border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#8f0404]"
                         />
                       </div>
                     </div>
@@ -681,7 +681,7 @@ export default function ConfiguracionCorreoPage() {
                           type="text"
                           value={config.colorFondo}
                           onChange={(e) => setConfig({ ...config, colorFondo: e.target.value })}
-                          className="flex-1 px-3 py-1.5 text-xs font-mono uppercase border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600"
+                          className="flex-1 px-3 py-1.5 text-xs font-mono uppercase border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#8f0404]"
                         />
                       </div>
                     </div>
@@ -702,7 +702,7 @@ export default function ConfiguracionCorreoPage() {
                           type="text"
                           value={config.colorTexto}
                           onChange={(e) => setConfig({ ...config, colorTexto: e.target.value })}
-                          className="flex-1 px-3 py-1.5 text-xs font-mono uppercase border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600"
+                          className="flex-1 px-3 py-1.5 text-xs font-mono uppercase border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#8f0404]"
                         />
                       </div>
                     </div>
@@ -723,7 +723,7 @@ export default function ConfiguracionCorreoPage() {
                           type="text"
                           value={config.colorBorde}
                           onChange={(e) => setConfig({ ...config, colorBorde: e.target.value })}
-                          className="flex-1 px-3 py-1.5 text-xs font-mono uppercase border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600"
+                          className="flex-1 px-3 py-1.5 text-xs font-mono uppercase border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#8f0404]"
                         />
                       </div>
                     </div>
@@ -744,7 +744,7 @@ export default function ConfiguracionCorreoPage() {
                           type="text"
                           value={config.colorAlertaBg}
                           onChange={(e) => setConfig({ ...config, colorAlertaBg: e.target.value })}
-                          className="flex-1 px-3 py-1.5 text-xs font-mono uppercase border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600"
+                          className="flex-1 px-3 py-1.5 text-xs font-mono uppercase border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#8f0404]"
                         />
                       </div>
                     </div>
@@ -765,7 +765,7 @@ export default function ConfiguracionCorreoPage() {
                           type="text"
                           value={config.colorAlertaTexto}
                           onChange={(e) => setConfig({ ...config, colorAlertaTexto: e.target.value })}
-                          className="flex-1 px-3 py-1.5 text-xs font-mono uppercase border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600"
+                          className="flex-1 px-3 py-1.5 text-xs font-mono uppercase border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#8f0404]"
                         />
                       </div>
                     </div>
@@ -784,7 +784,7 @@ export default function ConfiguracionCorreoPage() {
                       onClick={() => setConfig({ ...config, logoTipo: 'default' })}
                       className={`p-2.5 rounded-lg border text-xs font-medium text-center transition-all ${
                         config.logoTipo === 'default'
-                          ? 'border-[#3258CA] bg-blue-50/60 text-[#3258CA] font-semibold shadow-sm'
+                          ? 'border-[#8f0404] bg-red-50/60 text-[#8f0404] font-semibold shadow-sm'
                           : 'border-slate-200 text-slate-700 hover:bg-slate-50'
                       }`}
                     >
@@ -795,7 +795,7 @@ export default function ConfiguracionCorreoPage() {
                       onClick={() => setConfig({ ...config, logoTipo: 'custom' })}
                       className={`p-2.5 rounded-lg border text-xs font-medium text-center transition-all ${
                         config.logoTipo === 'custom'
-                          ? 'border-[#3258CA] bg-blue-50/60 text-[#3258CA] font-semibold shadow-sm'
+                          ? 'border-[#8f0404] bg-red-50/60 text-[#8f0404] font-semibold shadow-sm'
                           : 'border-slate-200 text-slate-700 hover:bg-slate-50'
                       }`}
                     >
@@ -806,7 +806,7 @@ export default function ConfiguracionCorreoPage() {
                       onClick={() => setConfig({ ...config, logoTipo: 'none' })}
                       className={`p-2.5 rounded-lg border text-xs font-medium text-center transition-all ${
                         config.logoTipo === 'none'
-                          ? 'border-[#3258CA] bg-blue-50/60 text-[#3258CA] font-semibold shadow-sm'
+                          ? 'border-[#8f0404] bg-red-50/60 text-[#8f0404] font-semibold shadow-sm'
                           : 'border-slate-200 text-slate-700 hover:bg-slate-50'
                       }`}
                     >
@@ -826,7 +826,7 @@ export default function ConfiguracionCorreoPage() {
                           type="file"
                           accept="image/png,image/jpeg,image/webp,image/svg+xml"
                           onChange={handleSubirLogo}
-                          className="block w-full text-xs text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-blue-100 file:text-blue-800 hover:file:bg-blue-200 cursor-pointer"
+                          className="block w-full text-xs text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-red-100 file:text-[#730202] hover:file:bg-red-200 cursor-pointer"
                         />
                       </div>
 
@@ -874,7 +874,7 @@ export default function ConfiguracionCorreoPage() {
                             onChange={(e) =>
                               setConfig({ ...config, logoAncho: parseInt(e.target.value) || 180 })
                             }
-                            className="w-full px-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600"
+                            className="w-full px-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#8f0404]"
                           />
                         </div>
                         <div>
@@ -889,7 +889,7 @@ export default function ConfiguracionCorreoPage() {
                             onChange={(e) =>
                               setConfig({ ...config, logoAlto: parseInt(e.target.value) || 75 })
                             }
-                            className="w-full px-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600"
+                            className="w-full px-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#8f0404]"
                           />
                         </div>
                       </div>
@@ -916,7 +916,7 @@ export default function ConfiguracionCorreoPage() {
                     type="text"
                     value={config.asunto}
                     onChange={(e) => setConfig({ ...config, asunto: e.target.value })}
-                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600"
+                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#8f0404]"
                   />
                 </div>
 
@@ -929,7 +929,7 @@ export default function ConfiguracionCorreoPage() {
                     type="text"
                     value={config.nombreRemitente}
                     onChange={(e) => setConfig({ ...config, nombreRemitente: e.target.value })}
-                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600"
+                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#8f0404]"
                   />
                 </div>
 
@@ -942,7 +942,7 @@ export default function ConfiguracionCorreoPage() {
                     type="text"
                     value={config.tituloInstitucional}
                     onChange={(e) => setConfig({ ...config, tituloInstitucional: e.target.value })}
-                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600"
+                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#8f0404]"
                   />
                 </div>
 
@@ -955,7 +955,7 @@ export default function ConfiguracionCorreoPage() {
                     type="text"
                     value={config.subtituloInstitucional}
                     onChange={(e) => setConfig({ ...config, subtituloInstitucional: e.target.value })}
-                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600"
+                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#8f0404]"
                   />
                 </div>
 
@@ -968,7 +968,7 @@ export default function ConfiguracionCorreoPage() {
                     rows={3}
                     value={config.mensajeBienvenida}
                     onChange={(e) => setConfig({ ...config, mensajeBienvenida: e.target.value })}
-                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600"
+                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#8f0404]"
                   />
                 </div>
 
@@ -981,7 +981,7 @@ export default function ConfiguracionCorreoPage() {
                     rows={2}
                     value={config.avisoSeguridad}
                     onChange={(e) => setConfig({ ...config, avisoSeguridad: e.target.value })}
-                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600"
+                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#8f0404]"
                   />
                 </div>
 
@@ -994,7 +994,7 @@ export default function ConfiguracionCorreoPage() {
                     rows={3}
                     value={config.piePagina}
                     onChange={(e) => setConfig({ ...config, piePagina: e.target.value })}
-                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600"
+                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#8f0404]"
                   />
                 </div>
               </div>
@@ -1025,7 +1025,7 @@ export default function ConfiguracionCorreoPage() {
                       }
                       className="sr-only peer"
                     />
-                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#3258CA]"></div>
+                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#8f0404]"></div>
                   </label>
                 </div>
 
@@ -1037,7 +1037,7 @@ export default function ConfiguracionCorreoPage() {
                   <button
                     type="button"
                     onClick={copiarPlantillaACodigo}
-                    className="text-xs text-blue-700 hover:text-blue-900 font-medium inline-flex items-center gap-1"
+                    className="text-xs text-[#8f0404] hover:text-[#730202] font-medium inline-flex items-center gap-1"
                   >
                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
@@ -1054,7 +1054,7 @@ export default function ConfiguracionCorreoPage() {
                       type="button"
                       onClick={() => insertarVariable(v.tag)}
                       title={`Insertar ${v.desc}`}
-                      className="px-2 py-0.5 rounded text-[11px] font-mono bg-white border border-slate-300 hover:bg-blue-50 hover:border-blue-400 hover:text-blue-700 transition-colors"
+                      className="px-2 py-0.5 rounded text-[11px] font-mono bg-white border border-slate-300 hover:bg-red-50 hover:border-red-300 hover:text-[#8f0404] transition-colors"
                     >
                       {v.tag}
                     </button>
@@ -1080,7 +1080,7 @@ export default function ConfiguracionCorreoPage() {
                     }
                     placeholder="Escriba o pegue aquí su código HTML personalizado con las variables {{...}}"
                     spellCheck={false}
-                    className="w-full p-3 font-mono text-xs leading-relaxed text-slate-800 bg-slate-900 !text-slate-100 rounded-xl border border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-inner"
+                    className="w-full p-3 font-mono text-xs leading-relaxed text-slate-800 bg-slate-900 !text-slate-100 rounded-xl border border-slate-700 focus:outline-none focus:ring-2 focus:ring-[#8f0404] shadow-inner"
                   />
                 </div>
               </div>
@@ -1101,7 +1101,7 @@ export default function ConfiguracionCorreoPage() {
                   Vista Previa en Vivo
                 </span>
                 {loadingPreview && (
-                  <span className="text-[11px] text-blue-600 font-medium">Actualizando...</span>
+                  <span className="text-[11px] text-[#8f0404] font-medium">Actualizando...</span>
                 )}
               </div>
 
@@ -1112,7 +1112,7 @@ export default function ConfiguracionCorreoPage() {
                   onClick={() => setVistaDispositivo('desktop')}
                   className={`px-2.5 py-1 text-xs font-medium rounded flex items-center gap-1.5 transition-colors ${
                     vistaDispositivo === 'desktop'
-                      ? 'bg-[#3258CA] text-white shadow-sm'
+                      ? 'bg-[#8f0404] text-white shadow-sm'
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
@@ -1126,7 +1126,7 @@ export default function ConfiguracionCorreoPage() {
                   onClick={() => setVistaDispositivo('mobile')}
                   className={`px-2.5 py-1 text-xs font-medium rounded flex items-center gap-1.5 transition-colors ${
                     vistaDispositivo === 'mobile'
-                      ? 'bg-[#3258CA] text-white shadow-sm'
+                      ? 'bg-[#8f0404] text-white shadow-sm'
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
@@ -1153,7 +1153,7 @@ export default function ConfiguracionCorreoPage() {
               </div>
               <div className="flex items-start gap-1.5 text-slate-900 pt-0.5">
                 <span className="font-semibold text-slate-800 flex-shrink-0">Asunto:</span>
-                <span className="font-medium text-blue-900 line-clamp-1">{previewSubject || config.asunto}</span>
+                <span className="font-medium text-[#730202] line-clamp-1">{previewSubject || config.asunto}</span>
               </div>
             </div>
 
@@ -1188,7 +1188,7 @@ export default function ConfiguracionCorreoPage() {
               <button
                 type="button"
                 onClick={() => setModalPruebaAbierto(true)}
-                className="text-blue-700 hover:text-blue-900 font-semibold"
+                className="text-[#8f0404] hover:text-[#730202] font-semibold"
               >
                 Enviar prueba a mi correo →
               </button>
@@ -1205,7 +1205,7 @@ export default function ConfiguracionCorreoPage() {
           <div className="bg-white rounded-2xl shadow-xl border border-slate-200 max-w-md w-full p-6 space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-slate-900 font-bold text-base">
-                <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-lg bg-red-100 text-[#8f0404] flex items-center justify-center">
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                   </svg>
@@ -1238,7 +1238,7 @@ export default function ConfiguracionCorreoPage() {
                   placeholder="ejemplo@cipcusco.org.pe"
                   value={emailPrueba}
                   onChange={(e) => setEmailPrueba(e.target.value)}
-                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#8f0404]"
                 />
               </div>
 
@@ -1274,7 +1274,7 @@ export default function ConfiguracionCorreoPage() {
                 <button
                   type="submit"
                   disabled={enviandoPrueba}
-                  className="px-4 py-2 text-xs font-semibold text-white bg-[#3258CA] hover:bg-[#2846a3] rounded-lg disabled:opacity-50 flex items-center gap-1.5"
+                  className="px-4 py-2 text-xs font-semibold text-white bg-[#8f0404] hover:bg-[#730202] rounded-lg disabled:opacity-50 flex items-center gap-1.5"
                 >
                   {enviandoPrueba ? (
                     <>

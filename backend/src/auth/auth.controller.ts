@@ -1,6 +1,7 @@
 import {
   Controller,
   Post,
+  Get,
   Body,
   HttpCode,
   HttpStatus,
@@ -41,6 +42,13 @@ export class AuthController {
   @ApiOperation({ summary: 'Renovar access token' })
   async refresh(@Body('refreshToken') refreshToken: string) {
     return this.authService.refreshTokens(refreshToken);
+  }
+
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Obtener datos del usuario autenticado y sus permisos por módulo' })
+  async me(@Request() req: any) {
+    return this.authService.getProfile(req.user.sub);
   }
 
   @Post('logout')

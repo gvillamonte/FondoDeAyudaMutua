@@ -220,7 +220,7 @@ export default function ModalBeneficiariosFallecido({
                             </td>
                           )}
                           <td className="px-3 py-2 text-center">
-                            <span className="inline-block px-1.5 py-0.5 text-[10px] rounded bg-blue-50 text-blue-700 border border-blue-200">
+                            <span className="inline-block px-1.5 py-0.5 text-[10px] rounded bg-red-50 text-[#8f0404] border border-red-200">
                               {b.origen || 'Previo'}
                             </span>
                           </td>

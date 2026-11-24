@@ -215,13 +215,13 @@ export async function unirDocumentosPdf(
       const coverPage = mergedPdf.addPage([595.28, 841.89]); // A4 Portrait
       const { width, height } = coverPage.getSize();
 
-      // Franja superior institucional (#3258CA)
+      // Franja superior institucional (#8f0404)
       coverPage.drawRectangle({
         x: 0,
         y: height - 120,
         width,
         height: 120,
-        color: rgb(0.196, 0.345, 0.792), // #3258CA
+        color: rgb(0.196, 0.345, 0.792), // #8f0404
       });
 
       coverPage.drawText('COLEGIO DE INGENIEROS DEL PERÚ', {

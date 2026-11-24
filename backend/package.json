@@ -15,7 +15,8 @@
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:studio": "prisma studio"
+    "prisma:studio": "prisma studio",
+    "db:copiar-produccion": "node scripts/copiar-a-produccion.js"
   },
   "dependencies": {
     "@nestjs/common": "^10.3.0",

@@ -7,7 +7,7 @@ Validar que todos los componentes UI del sistema cumplan estrictamente con la pa
 
 | Token CSS          | Valor HEX  | Aplicación                                     |
 |--------------------|------------|------------------------------------------------|
-| `--color-primary`  | `#3258CA`  | Sidebar, Header, botones principales, menús    |
+| `--color-primary`  | `#8f0404`  | Sidebar, Header, botones principales, menús    |
 | `--color-white`    | `#FFFFFF`  | Contenedores, tarjetas, formularios            |
 | `--color-bg`       | `#F8FAFC`  | Fondo general del layout                       |
 | `--color-text`     | `#1E293B`  | Títulos, labels, contenido                     |

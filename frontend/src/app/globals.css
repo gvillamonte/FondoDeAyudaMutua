@@ -48,9 +48,9 @@ svg[class*="w-16"], svg[class*="h-16"] { width: 4rem !important; height: 4rem !i
 }
 
 :root {
-  --color-primary: #3258CA;
-  --color-primary-dark: #2848A8;
-  --color-primary-light: #4A6DD4;
+  --color-primary: #8f0404;
+  --color-primary-dark: #730202;
+  --color-primary-light: #ac0505;
   --color-white: #FFFFFF;
   --color-bg: #F8FAFC;
   --color-text: #1E293B;
@@ -71,7 +71,7 @@ body {
   .btn-primary {
     @apply bg-primary text-white px-4 py-2 rounded-lg font-medium
            hover:bg-primary-dark transition-colors duration-200
-           focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2;
+           focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 shadow-sm;
   }
 
   .btn-secondary {

@@ -287,18 +287,18 @@ export default function ModalRegularizarSaldo({
     >
       <div className="space-y-4 text-xs sm:text-sm">
         {/* Banner de estado */}
-        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-900">
-          <p className="font-semibold text-xs uppercase tracking-wide text-blue-800">
+        <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-[#730202]">
+          <p className="font-semibold text-xs uppercase tracking-wide text-[#730202]">
             {expedienteNumero ? `Expediente: ${expedienteNumero}` : 'Expediente FAM'}
             {colegiadoNombre ? ` — ${colegiadoNombre}` : ''}
           </p>
-          <div className="grid grid-cols-3 gap-2 mt-2 pt-2 border-t border-blue-200/60 text-xs">
+          <div className="grid grid-cols-3 gap-2 mt-2 pt-2 border-t border-red-200/60 text-xs">
             <div>
-              <span className="text-blue-700 block">Monto actual:</span>
+              <span className="text-[#8f0404] block">Monto actual:</span>
               <span className="font-semibold">{fmt(montoTotalAsignado)}</span>
             </div>
             <div>
-              <span className="text-blue-700 block">Monto mínimo:</span>
+              <span className="text-[#8f0404] block">Monto mínimo:</span>
               <span className="font-semibold">{fmt(montoMinimoNormativo)}</span>
             </div>
             <div>
@@ -351,7 +351,7 @@ export default function ModalRegularizarSaldo({
                   <button
                     type="button"
                     onClick={() => completarMontoExactoFila(nuevosBeneficiarios[nuevosBeneficiarios.length - 1].key)}
-                    className="px-2.5 py-1 text-xs font-semibold text-[#3258CA] bg-blue-50 border border-[#3258CA]/40 rounded hover:bg-blue-100 transition-colors inline-flex items-center gap-1 shadow-2xs"
+                    className="px-2.5 py-1 text-xs font-semibold text-[#8f0404] bg-red-50 border border-[#8f0404]/40 rounded hover:bg-red-100 transition-colors inline-flex items-center gap-1 shadow-2xs"
                     title="Asignar el saldo restante exacto al último beneficiario"
                   >
                     ⚡ Completar saldo exacto (S/ {saldoFaltanteEnModal.toFixed(2)})

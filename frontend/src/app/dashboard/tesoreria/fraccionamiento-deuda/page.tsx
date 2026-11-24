@@ -262,7 +262,7 @@ export default function FraccionamientoDeudaPage() {
             className="animate-spin w-8 h-8 text-primary"
             width="32"
             height="32"
-            style={{ width: '32px', height: '32px', color: '#3258CA' }}
+            style={{ width: '32px', height: '32px', color: '#8f0404' }}
             fill="none"
             viewBox="0 0 24 24"
           >

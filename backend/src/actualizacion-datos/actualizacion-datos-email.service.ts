@@ -69,7 +69,7 @@ export const CONFIG_EMAIL_DEFAULT: ActualizacionEmailConfig = {
   colorAlertaBg: '#FEF2F2',
   colorAlertaTexto: '#991B1B',
   tituloInstitucional: 'COLEGIO DE INGENIEROS DEL PERÚ',
-  subtituloInstitucional: 'Consejo Departamental Cusco — Fondo de Ayuda Mutua',
+  subtituloInstitucional: 'Consejo Departamental Cusco',
   mensajeBienvenida:
     'Le confirmamos que sus datos de contacto, residencia y filiación han sido actualizados satisfactoriamente en el padrón del Colegio de Ingenieros del Perú. A continuación, se detalla el resumen de la información registrada:',
   avisoSeguridad:
@@ -136,10 +136,17 @@ export class ActualizacionDatosEmailService {
         });
         if (item?.valor) {
           const parsed = JSON.parse(item.valor);
-          return {
+          const config: ActualizacionEmailConfig = {
             ...CONFIG_EMAIL_DEFAULT,
             ...parsed,
           };
+          if (config.subtituloInstitucional && config.subtituloInstitucional.includes('Fondo de Ayuda Mutua')) {
+            config.subtituloInstitucional = config.subtituloInstitucional
+              .replace(/\s*[—–-]\s*Fondo de Ayuda Mutua/gi, '')
+              .replace(/Fondo de Ayuda Mutua/gi, '')
+              .trim();
+          }
+          return config;
         }
       } catch (err: any) {
         this.logger.warn(`Error al leer configuración de correo: ${err.message}`);

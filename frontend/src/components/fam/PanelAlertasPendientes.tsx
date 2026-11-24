@@ -44,7 +44,7 @@ type TabAlerta = 'vencidos' | 'porVencer' | 'docsIncompletos' | 'saldoPendiente'
 
 const ESTADO_BADGE_STYLE: Record<string, string> = {
   PENDIENTE: 'bg-amber-50 text-amber-700 border-amber-200',
-  EN_REVISION: 'bg-blue-50 text-blue-700 border-blue-200',
+  EN_REVISION: 'bg-red-50 text-[#8f0404] border-red-200',
   APROBADA: 'bg-indigo-50 text-indigo-700 border-indigo-200',
   PAGADA: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   RECHAZADA: 'bg-red-50 text-red-700 border-red-200',
@@ -131,10 +131,10 @@ export const PanelAlertasPendientes: React.FC<PanelAlertasPendientesProps> = ({
       key: 'docsIncompletos' as TabAlerta,
       label: 'Documentos Incompletos',
       count: alertas.docsIncompletosCount,
-      badgeColor: 'bg-blue-100 text-[#3258CA] border-blue-200',
-      activeTabClass: 'border-[#3258CA] text-[#3258CA] bg-blue-50/50',
+      badgeColor: 'bg-red-100 text-[#8f0404] border-red-200',
+      activeTabClass: 'border-[#8f0404] text-[#8f0404] bg-red-50/50',
       icon: (
-        <svg className="w-4 h-4 text-[#3258CA]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-4 h-4 text-[#8f0404]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
         </svg>
       ),
@@ -181,7 +181,7 @@ export const PanelAlertasPendientes: React.FC<PanelAlertasPendientesProps> = ({
         <button
           type="button"
           onClick={() => setColapsado(!colapsado)}
-          className="text-xs font-semibold text-[#3258CA] hover:text-[#2846a3] p-1.5 rounded-lg hover:bg-slate-200/60 transition-colors inline-flex items-center gap-1"
+          className="text-xs font-semibold text-[#8f0404] hover:text-[#730202] p-1.5 rounded-lg hover:bg-slate-200/60 transition-colors inline-flex items-center gap-1"
         >
           <span>{colapsado ? 'Mostrar panel' : 'Minimizar'}</span>
           <svg
@@ -262,7 +262,7 @@ export const PanelAlertasPendientes: React.FC<PanelAlertasPendientesProps> = ({
               <tbody className="divide-y divide-border-main text-slate-700 bg-white">
                 {itemsFiltrados.map((item) => (
                   <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="py-2 px-3 font-semibold text-[#3258CA]">
+                    <td className="py-2 px-3 font-semibold text-[#8f0404]">
                       {item.expedienteNumero || 'S/N'}
                     </td>
                     <td className="py-2 px-3">
@@ -314,7 +314,7 @@ export const PanelAlertasPendientes: React.FC<PanelAlertasPendientesProps> = ({
                       <div className="flex items-center justify-center gap-1.5">
                         <Link
                           href={`/dashboard/fam/expedientes/${item.id}`}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium text-white bg-[#3258CA] rounded hover:bg-[#2846a3] transition-colors"
+                          className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium text-white bg-[#8f0404] rounded hover:bg-[#730202] transition-colors"
                         >
                           Ver Exp.
                         </Link>

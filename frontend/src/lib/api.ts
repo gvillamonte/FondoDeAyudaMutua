@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api',
+  baseURL: process.env.NEXT_PUBLIC_API_URL || '/api',
   headers: {
     'Content-Type': 'application/json',
   },
@@ -31,6 +31,26 @@ function processQueue(error: any, token: string | null) {
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
+    // Si no hay respuesta del servidor (error de red, conexión rechazada o caída)
+    if (!error.response) {
+      const baseUrl = error.config?.baseURL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+      const requestedUrl = error.config?.url || '';
+      const fullUrl = requestedUrl.startsWith('http')
+        ? requestedUrl
+        : `${baseUrl.replace(/\/$/, '')}/${requestedUrl.replace(/^\//, '')}`;
+
+      error.isConnectionError = true;
+      error.targetUrl = fullUrl;
+      error.friendlyMessage = `No se pudo conectar con el servidor en ${fullUrl}. Verifique que el backend esté activo y que la red/puerto sean accesibles.`;
+      if (typeof console !== 'undefined') {
+        console.error(`[API Conexión Fallida]`, {
+          url: fullUrl,
+          code: error.code,
+          message: error.message,
+        });
+      }
+    }
+
     const originalRequest = error.config;
 
     if (error.response?.status === 401 && !originalRequest._retry) {
@@ -58,8 +78,9 @@ api.interceptors.response.use(
       isRefreshing = true;
 
       try {
+        const refreshUrl = `${(process.env.NEXT_PUBLIC_API_URL || '/api').replace(/\/$/, '')}/auth/refresh`;
         const { data } = await axios.post(
-          `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/auth/refresh`,
+          refreshUrl,
           { refreshToken },
         );
 

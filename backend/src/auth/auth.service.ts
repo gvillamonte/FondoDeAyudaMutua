@@ -55,6 +55,7 @@ export class AuthService {
     if (this.prisma.databaseAvailable) {
       usuario = await this.prisma.usuario.findUnique({
         where: { username: dto.username },
+        include: { rolInfo: true },
       });
     } else {
       usuario = MOCK_USERS[dto.username] || null;
@@ -81,6 +82,21 @@ export class AuthService {
       });
     }
 
+    const defaultAllModulos = [
+      'dashboard', 'colegiados', 'actualizacion-datos', 'beneficios', 'pagos',
+      'caja', 'tesoreria', 'fam', 'reportes', 'configuraciones', 'auditoria', 'usuarios'
+    ];
+    let modulos: string[] = [];
+    if (usuario.rolInfo?.modulos) {
+      try {
+        modulos = JSON.parse(usuario.rolInfo.modulos);
+      } catch {
+        modulos = defaultAllModulos;
+      }
+    } else if (usuario.rol === 'ADMINISTRADOR' || usuario.rol === 'SUPER_ADMINISTRADOR') {
+      modulos = defaultAllModulos;
+    }
+
     const tokens = await this.generateTokens(usuario.id, usuario.username, usuario.rol);
 
     return {
@@ -90,8 +106,56 @@ export class AuthService {
         email: usuario.email,
         nombreCompleto: usuario.nombreCompleto,
         rol: usuario.rol,
+        modulos,
       },
       ...tokens,
+    };
+  }
+
+  async getProfile(userId: string) {
+    const defaultAllModulos = [
+      'dashboard', 'colegiados', 'actualizacion-datos', 'beneficios', 'pagos',
+      'caja', 'tesoreria', 'fam', 'reportes', 'configuraciones', 'auditoria', 'usuarios'
+    ];
+
+    if (!this.prisma.databaseAvailable) {
+      return {
+        id: userId,
+        username: 'admin',
+        email: 'admin@sistemacip.pe',
+        nombreCompleto: 'Administrador del Sistema',
+        rol: 'ADMINISTRADOR',
+        modulos: defaultAllModulos,
+      };
+    }
+
+    const usuario = await this.prisma.usuario.findUnique({
+      where: { id: userId },
+      include: { rolInfo: true },
+    });
+
+    if (!usuario) {
+      throw new UnauthorizedException('Usuario no encontrado');
+    }
+
+    let modulos: string[] = [];
+    if (usuario.rolInfo?.modulos) {
+      try {
+        modulos = JSON.parse(usuario.rolInfo.modulos);
+      } catch {
+        modulos = defaultAllModulos;
+      }
+    } else if (usuario.rol === 'ADMINISTRADOR' || usuario.rol === 'SUPER_ADMINISTRADOR') {
+      modulos = defaultAllModulos;
+    }
+
+    return {
+      id: usuario.id,
+      username: usuario.username,
+      email: usuario.email,
+      nombreCompleto: usuario.nombreCompleto,
+      rol: usuario.rol,
+      modulos,
     };
   }
 

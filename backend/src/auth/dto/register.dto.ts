@@ -1,5 +1,8 @@
-import { IsString, IsEmail, MinLength, MaxLength, IsIn } from 'class-validator';
+import { IsString, IsEmail, MinLength, MaxLength, Matches } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+
+export const PASSWORD_REGEX = /^(?=.*[a-zA-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]).{8,}$/;
+export const PASSWORD_MESSAGE = 'La contraseña debe tener al menos 8 caracteres e incluir letras, números y al menos un símbolo especial (!@#$%&*...)';
 
 export class RegisterDto {
   @ApiProperty({ example: 'nuevo_usuario' })
@@ -16,6 +19,7 @@ export class RegisterDto {
   @IsString()
   @MinLength(8)
   @MaxLength(128)
+  @Matches(PASSWORD_REGEX, { message: PASSWORD_MESSAGE })
   password: string;
 
   @ApiProperty({ example: 'Juan Pérez López' })
@@ -24,8 +28,9 @@ export class RegisterDto {
   @MaxLength(200)
   nombreCompleto: string;
 
-  @ApiProperty({ enum: ['SUPER_ADMINISTRADOR', 'ADMINISTRADOR', 'OPERADOR_PAGOS', 'AUDITOR'] })
+  @ApiProperty({ example: 'OPERADOR_PAGOS' })
   @IsString()
-  @IsIn(['SUPER_ADMINISTRADOR', 'ADMINISTRADOR', 'OPERADOR_PAGOS', 'AUDITOR'])
+  @MinLength(2)
+  @MaxLength(50)
   rol: string;
 }

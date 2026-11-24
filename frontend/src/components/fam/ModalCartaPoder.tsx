@@ -278,8 +278,8 @@ export default function ModalCartaPoder({
       width="sm:w-[44rem]"
     >
       <div className="space-y-4">
-        <div className="bg-blue-50/70 border border-blue-200 rounded-lg p-3.5 text-xs text-slate-700 leading-relaxed">
-          <p className="font-bold text-[#3258CA] uppercase tracking-wider mb-1">
+        <div className="bg-red-50/70 border border-red-200 rounded-lg p-3.5 text-xs text-slate-700 leading-relaxed">
+          <p className="font-bold text-[#8f0404] uppercase tracking-wider mb-1">
             📋 Trazabilidad de Delegación de Cobro (Hijo / Beneficiario / Titular → Apoderado)
           </p>
           Permite registrar cuando el titular del beneficio o su beneficiario directo (por ejemplo, el{' '}
@@ -291,7 +291,7 @@ export default function ModalCartaPoder({
             type="checkbox"
             checked={conCartaPoder}
             onChange={(e) => setConCartaPoder(e.target.checked)}
-            className="w-4 h-4 accent-[#3258CA] rounded"
+            className="w-4 h-4 accent-[#8f0404] rounded"
           />
           <span className="text-xs font-bold text-amber-900">
             Habilitar cobro / entrega mediante Carta Poder en este expediente
@@ -332,8 +332,8 @@ export default function ModalCartaPoder({
                           onClick={() => seleccionarOtorgante(b)}
                           className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
                             activo
-                              ? 'bg-[#3258CA] text-white border-[#3258CA]'
-                              : 'bg-white text-slate-700 border-slate-300 hover:bg-blue-50'
+                              ? 'bg-[#8f0404] text-white border-[#8f0404]'
+                              : 'bg-white text-slate-700 border-slate-300 hover:bg-red-50'
                           }`}
                         >
                           👤 {b.nombre} {b.parentesco ? `(${b.parentesco})` : ''}{' '}
@@ -353,8 +353,8 @@ export default function ModalCartaPoder({
                         }
                         className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
                           poderOtorganteNombre === colegiadoNombre
-                            ? 'bg-[#3258CA] text-white border-[#3258CA]'
-                            : 'bg-white text-slate-700 border-slate-300 hover:bg-blue-50'
+                            ? 'bg-[#8f0404] text-white border-[#8f0404]'
+                            : 'bg-white text-slate-700 border-slate-300 hover:bg-red-50'
                         }`}
                       >
                         🎓 {colegiadoNombre} (Colegiado Titular)
@@ -554,7 +554,7 @@ export default function ModalCartaPoder({
                     <button
                       type="button"
                       onClick={verCartaPoderActual}
-                      className="text-xs font-semibold text-[#3258CA] hover:underline"
+                      className="text-xs font-semibold text-[#8f0404] hover:underline"
                     >
                       Ver Carta Poder actual
                     </button>
@@ -563,7 +563,7 @@ export default function ModalCartaPoder({
                   )}
                 </div>
 
-                <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-50 text-[#3258CA] border border-blue-200 hover:bg-blue-100">
+                <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-50 text-[#8f0404] border border-red-200 hover:bg-red-100">
                   <span>{cartaPoderBase64 || tieneCartaPoderDoc ? 'Reemplazar archivo' : 'Adjuntar Carta Poder'}</span>
                   <input
                     type="file"
@@ -592,7 +592,7 @@ export default function ModalCartaPoder({
             type="button"
             onClick={guardar}
             disabled={guardando}
-            className="px-4 py-2 text-xs font-semibold text-white bg-[#3258CA] rounded-lg hover:bg-[#2847A6] disabled:opacity-50"
+            className="px-4 py-2 text-xs font-semibold text-white bg-[#8f0404] rounded-lg hover:bg-[#2847A6] disabled:opacity-50"
           >
             {guardando ? 'Guardando trazabilidad…' : 'Guardar Carta Poder y Trazabilidad'}
           </button>

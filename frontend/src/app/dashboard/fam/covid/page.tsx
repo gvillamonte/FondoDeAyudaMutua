@@ -371,7 +371,7 @@ export default function AyudaCovidPage() {
                   {sugerencias.map((s) => (
                     <button key={s.COLEGIADO_ID}
                       onClick={() => seleccionarColegiado(s)}
-                      className="w-full text-left px-4 py-2.5 hover:bg-blue-50 border-b border-border/50 last:border-0">
+                      className="w-full text-left px-4 py-2.5 hover:bg-red-50 border-b border-border/50 last:border-0">
                       <span className="text-sm font-medium text-text-main">{s.NUM_COLEGIATURA}</span>
                       <span className="text-sm text-text-sec ml-2">{s.NOMBRE_COLEGIADO}</span>
                       <span className="text-xs text-text-sec ml-2">DNI: {s.DNI}</span>
@@ -381,7 +381,7 @@ export default function AyudaCovidPage() {
               )}
             </div>
             {colegiado && (
-              <div className="mt-3 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2.5 flex items-center gap-3">
+              <div className="mt-3 bg-red-50 border border-red-200 rounded-lg px-4 py-2.5 flex items-center gap-3">
                 <svg className="w-5 h-5 text-primary flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
@@ -404,7 +404,7 @@ export default function AyudaCovidPage() {
                 <div className="flex gap-3">
                   {MODALIDAD_OPTIONS.map((m) => (
                     <button key={m.value} onClick={() => setModalidad(m.value)}
-                      className={`flex-1 border rounded-lg px-4 py-3 text-left transition-colors ${modalidad === m.value ? 'border-primary bg-blue-50 ring-1 ring-primary/20' : 'border-border hover:border-gray-300'}`}>
+                      className={`flex-1 border rounded-lg px-4 py-3 text-left transition-colors ${modalidad === m.value ? 'border-primary bg-red-50 ring-1 ring-primary/20' : 'border-border hover:border-gray-300'}`}>
                       <span className="text-sm font-medium text-text-main block">{m.label}</span>
                       <span className="text-xs text-text-sec">{m.desc}</span>
                     </button>
@@ -424,11 +424,11 @@ export default function AyudaCovidPage() {
                     const corresponde = (porcentaje / 100) * Number(monto || 0);
                     return (
                       <div key={f.key}
-                        className={`grid grid-cols-12 gap-2 items-center border rounded-lg p-3 transition-colors ${esSolicitante ? 'border-primary bg-blue-50/60' : 'border-border bg-white'}`}>
+                        className={`grid grid-cols-12 gap-2 items-center border rounded-lg p-3 transition-colors ${esSolicitante ? 'border-primary bg-red-50/60' : 'border-border bg-white'}`}>
                         <label className="col-span-12 sm:col-span-4 flex items-center gap-2.5 cursor-pointer min-w-0" title="Marcar como solicitante">
                           <input type="radio" name="solicitante-covid" checked={esSolicitante}
                             onChange={() => setSolicitanteKey(f.key)}
-                            className="w-4 h-4 accent-[#3258CA]" />
+                            className="w-4 h-4 accent-[#8f0404]" />
                           <span className="text-sm font-medium text-text-main truncate">{f.nombre}</span>
                         </label>
                         <span className="col-span-2 text-xs text-text-sec">{f.dni || '—'}</span>

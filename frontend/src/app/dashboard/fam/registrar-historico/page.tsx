@@ -460,7 +460,7 @@ function RegistrarHistoricoContent() {
           className="animate-spin w-6 h-6 text-primary"
           width={24}
           height={24}
-          style={{ width: '24px', height: '24px', color: '#3258CA', flexShrink: 0 }}
+          style={{ width: '24px', height: '24px', color: '#8f0404', flexShrink: 0 }}
           fill="none"
           viewBox="0 0 24 24"
         >
@@ -531,7 +531,7 @@ function RegistrarHistoricoContent() {
                     ✓ Se permite registrar beneficios en vida previos
                   </span>
                   {expedienteFallecimientoPrevio?.expedienteNumero && (
-                    <span className="px-2 py-0.5 text-[11px] font-semibold rounded-full bg-blue-100 text-blue-700">
+                    <span className="px-2 py-0.5 text-[11px] font-semibold rounded-full bg-red-100 text-[#8f0404]">
                       Exp. Previo: {expedienteFallecimientoPrevio.expedienteNumero}
                     </span>
                   )}
@@ -623,7 +623,7 @@ function RegistrarHistoricoContent() {
                       <td className="px-3 py-2">{h.solicitanteNombre || '—'}</td>
                       <td className="px-3 py-2 font-mono">{h.expedienteNumero || '—'}</td>
                       <td className="px-3 py-2 text-center">
-                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${h.estado === 'PAGADA' ? 'bg-green-100 text-green-700' : h.estado === 'APROBADA' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>{h.estado}</span>
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${h.estado === 'PAGADA' ? 'bg-green-100 text-green-700' : h.estado === 'APROBADA' ? 'bg-red-100 text-[#8f0404]' : 'bg-amber-100 text-amber-700'}`}>{h.estado}</span>
                       </td>
                     </tr>
                   ))}
@@ -706,7 +706,7 @@ function RegistrarHistoricoContent() {
 
             {!esFallecimiento && tipoSeleccionado && (
               <div className="mt-4 pt-4 border-t border-border space-y-3">
-                <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2.5">
+                <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-lg px-4 py-2.5">
                   <input
                     type="checkbox"
                     id="chk-titular-hist"
@@ -715,7 +715,7 @@ function RegistrarHistoricoContent() {
                       setBeneficiarioEsTitular(e.target.checked);
                       if (!e.target.checked) setConCartaPoder(false);
                     }}
-                    className="w-4 h-4 rounded text-primary accent-[#3258CA] cursor-pointer"
+                    className="w-4 h-4 rounded text-primary accent-[#8f0404] cursor-pointer"
                   />
                   <label htmlFor="chk-titular-hist" className="text-sm font-medium text-text-main cursor-pointer">
                     El colegiado recibe el beneficio para él mismo (Titular 100%)
@@ -821,7 +821,7 @@ function RegistrarHistoricoContent() {
                             <span className="text-xs text-text-sec">Adjunte PDF o imagen de la Carta Poder</span>
                           )}
                         </div>
-                        <label className="cursor-pointer inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-primary bg-blue-50 hover:bg-blue-100 rounded-lg">
+                        <label className="cursor-pointer inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-primary bg-red-50 hover:bg-red-100 rounded-lg">
                           <span>{cartaPoderDoc ? 'Reemplazar' : '+ Subir Carta Poder'}</span>
                           <input type="file" accept="application/pdf,image/png,image/jpeg,image/jpg,image/webp" className="hidden" onChange={(e) => { if (e.target.files?.[0]) handleCartaPoderUpload(e.target.files[0]); }} />
                         </label>
@@ -944,7 +944,7 @@ function RegistrarHistoricoContent() {
                 type="button"
                 onClick={verExpedienteCompletoPdf}
                 disabled={totalDocsCargados === 0 || uniendoDocs}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-[#3258CA] hover:bg-[#2846a3] disabled:opacity-40 disabled:cursor-not-allowed rounded-lg shadow-xs transition-colors shrink-0 self-start sm:self-auto"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-[#8f0404] hover:bg-[#730202] disabled:opacity-40 disabled:cursor-not-allowed rounded-lg shadow-xs transition-colors shrink-0 self-start sm:self-auto"
                 title="Ver todos los documentos en un solo PDF"
               >
                 {uniendoDocs ? (
@@ -1245,7 +1245,7 @@ export default function RegistrarHistoricoPage() {
           className="animate-spin w-6 h-6 text-primary"
           width={24}
           height={24}
-          style={{ width: '24px', height: '24px', color: '#3258CA', flexShrink: 0 }}
+          style={{ width: '24px', height: '24px', color: '#8f0404', flexShrink: 0 }}
           fill="none"
           viewBox="0 0 24 24"
         >

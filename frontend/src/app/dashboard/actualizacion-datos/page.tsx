@@ -67,7 +67,7 @@ export default function QuiénesActualizaronPage() {
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(25);
+  const [limit, setLimit] = useState(10);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -244,7 +244,7 @@ export default function QuiénesActualizaronPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 text-xs text-slate-500 mb-1">
-            <Link href="/dashboard" className="hover:text-blue-700 transition-colors">
+            <Link href="/dashboard" className="hover:text-[#8f0404] transition-colors">
               Inicio
             </Link>
             <span>/</span>
@@ -264,7 +264,7 @@ export default function QuiénesActualizaronPage() {
         <div className="flex flex-wrap items-center gap-2">
           <Link
             href="/dashboard/actualizacion-datos/correo"
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold text-white bg-[#3258CA] hover:bg-[#2846a3] transition-colors shadow-sm"
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold text-white bg-[#8f0404] hover:bg-[#730202] transition-colors shadow-sm"
             title="Personalizar colores, logo, textos y plantilla del correo de actualización"
           >
             <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -277,12 +277,12 @@ export default function QuiénesActualizaronPage() {
             type="button"
             onClick={handleReenviarPendientes}
             disabled={reenviandoPendientes || loading}
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold text-blue-800 bg-blue-50 border border-blue-200 hover:bg-blue-100 disabled:opacity-50 transition-colors shadow-sm"
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold text-[#730202] bg-red-50 border border-red-200 hover:bg-red-100 disabled:opacity-50 transition-colors shadow-sm"
             title="Reenviar constancias por correo a todos los colegiados que aún no lo recibieron"
           >
             {reenviandoPendientes ? (
               <>
-                <svg className="animate-spin h-3.5 w-3.5 text-blue-700" viewBox="0 0 24 24" fill="none">
+                <svg className="animate-spin h-3.5 w-3.5 text-[#8f0404]" viewBox="0 0 24 24" fill="none">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
@@ -290,7 +290,7 @@ export default function QuiénesActualizaronPage() {
               </>
             ) : (
               <>
-                <svg className="w-4 h-4 text-blue-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-4 h-4 text-[#8f0404]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                 </svg>
                 <span>Reenviar Correos Pendientes</span>
@@ -328,7 +328,7 @@ export default function QuiénesActualizaronPage() {
       <div className="flex border-b border-slate-200 gap-4 sm:gap-6 text-xs sm:text-sm overflow-x-auto">
         <Link
           href="/dashboard/actualizacion-datos"
-          className="pb-3 border-b-2 border-[#3258CA] font-semibold text-[#3258CA] flex items-center gap-2 whitespace-nowrap"
+          className="pb-3 border-b-2 border-[#8f0404] font-semibold text-[#8f0404] flex items-center gap-2 whitespace-nowrap"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
@@ -392,7 +392,7 @@ export default function QuiénesActualizaronPage() {
             <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
               Colegiados Actualizados
             </span>
-            <span className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-xs">
+            <span className="w-8 h-8 rounded-lg bg-red-50 text-[#8f0404] flex items-center justify-center font-bold text-xs">
               CIP
             </span>
           </div>
@@ -483,7 +483,7 @@ export default function QuiénesActualizaronPage() {
             <button
               type="submit"
               className="px-4 py-2 rounded-lg text-white text-xs font-semibold shadow-sm transition-colors duration-150 flex-1 md:flex-none"
-              style={{ backgroundColor: '#3258CA' }}
+              style={{ backgroundColor: '#8f0404' }}
             >
               Filtrar
             </button>
@@ -538,7 +538,7 @@ export default function QuiénesActualizaronPage() {
                 <tr>
                   <td colSpan={9} className="py-12 text-center text-slate-500">
                     <div className="flex items-center justify-center gap-2">
-                      <svg className="animate-spin h-5 w-5 text-blue-600" viewBox="0 0 24 24" fill="none">
+                      <svg className="animate-spin h-5 w-5 text-[#8f0404]" viewBox="0 0 24 24" fill="none">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                       </svg>
@@ -571,7 +571,7 @@ export default function QuiénesActualizaronPage() {
                   return (
                     <tr
                       key={row.id}
-                      className="hover:bg-blue-50/40 transition-colors duration-150 cursor-pointer"
+                      className="hover:bg-red-50/40 transition-colors duration-150 cursor-pointer"
                       onClick={() => setSelectedItem(row)}
                     >
                       {/* Colegiado */}
@@ -579,7 +579,7 @@ export default function QuiénesActualizaronPage() {
                         <button
                           type="button"
                           onClick={(e) => { e.stopPropagation(); setSelectedItem(row); }}
-                          className="text-left font-bold text-slate-900 hover:text-blue-700 transition-colors group"
+                          className="text-left font-bold text-slate-900 hover:text-[#8f0404] transition-colors group"
                         >
                           <span className="group-hover:underline block leading-tight">{row.nombres}</span>
                           <span className="text-[11px] text-slate-500 font-normal">
@@ -660,7 +660,7 @@ export default function QuiénesActualizaronPage() {
                             type="button"
                             onClick={(e) => { e.stopPropagation(); setSelectedItem(row); }}
                             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-white shadow-sm hover:opacity-95 transition-opacity"
-                            style={{ backgroundColor: '#3258CA' }}
+                            style={{ backgroundColor: '#8f0404' }}
                             title="Ver Detalle de Modificación"
                           >
                             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -680,13 +680,13 @@ export default function QuiénesActualizaronPage() {
                             className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
                               esCorreoEnviado
                                 ? 'text-slate-700 bg-white border-slate-200 hover:bg-slate-50'
-                                : 'text-blue-700 bg-blue-50 border-blue-200 hover:bg-blue-100 font-bold'
+                                : 'text-[#8f0404] bg-red-50 border-red-200 hover:bg-red-100 font-bold'
                             } disabled:opacity-50`}
                             title={`Reenviar correo de constancia a ${row.emailNuevo}`}
                           >
                             {reenviandoId === row.id ? (
                               <>
-                                <svg className="animate-spin h-3.5 w-3.5 text-blue-600" viewBox="0 0 24 24" fill="none">
+                                <svg className="animate-spin h-3.5 w-3.5 text-[#8f0404]" viewBox="0 0 24 24" fill="none">
                                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                                 </svg>
@@ -756,7 +756,7 @@ export default function QuiénesActualizaronPage() {
             {/* Header del Modal */}
             <div
               className="px-6 py-4 border-b flex items-center justify-between"
-              style={{ backgroundColor: '#3258CA' }}
+              style={{ backgroundColor: '#8f0404' }}
             >
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-white border border-white/20">
@@ -768,7 +768,7 @@ export default function QuiénesActualizaronPage() {
                   <h3 className="font-bold text-base sm:text-lg text-white">
                     Última Modificación de Datos del Colegiado
                   </h3>
-                  <p className="text-xs text-blue-100">
+                  <p className="text-xs text-rose-100">
                     Ficha oficial con los datos vigentes y estado de envío de constancia
                   </p>
                 </div>
@@ -796,7 +796,7 @@ export default function QuiénesActualizaronPage() {
                       {selectedItem.nombres}
                     </h4>
                     <div className="flex flex-wrap items-center gap-2 mt-2 text-xs">
-                      <span className="px-2.5 py-0.5 rounded font-mono font-bold bg-blue-50 text-blue-800 border border-blue-200">
+                      <span className="px-2.5 py-0.5 rounded font-mono font-bold bg-red-50 text-[#730202] border border-red-200">
                         CIP: {selectedItem.cip}
                       </span>
                       <span className="px-2.5 py-0.5 rounded font-mono font-bold bg-slate-100 text-slate-700 border border-slate-200">
@@ -892,7 +892,7 @@ export default function QuiénesActualizaronPage() {
                   disabled={reenviandoId === selectedItem.id}
                   onClick={() => handleReenviarCorreo(selectedItem.id, selectedItem.cip, selectedItem.emailNuevo)}
                   className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold text-white shadow-sm hover:opacity-95 transition-opacity disabled:opacity-50 shrink-0"
-                  style={{ backgroundColor: '#3258CA' }}
+                  style={{ backgroundColor: '#8f0404' }}
                 >
                   {reenviandoId === selectedItem.id ? (
                     <>
@@ -933,7 +933,7 @@ export default function QuiénesActualizaronPage() {
                       <tr>
                         <td className="py-2.5 px-3 font-semibold text-slate-600">Correo Electrónico</td>
                         <td className="py-2.5 px-3 text-slate-500">{selectedItem.emailAnterior || '(Vacío)'}</td>
-                        <td className="py-2.5 px-3 font-bold text-blue-700 bg-blue-50/30">
+                        <td className="py-2.5 px-3 font-bold text-[#8f0404] bg-red-50/30">
                           {selectedItem.emailNuevo}
                         </td>
                       </tr>
@@ -980,7 +980,7 @@ export default function QuiénesActualizaronPage() {
                         <td className="py-2.5 px-3 text-slate-500">
                           {[selectedItem.distritoAnterior, selectedItem.provinciaAnterior, selectedItem.departamentoAnterior].filter(Boolean).join(' - ') || '(Vacío)'}
                         </td>
-                        <td className="py-2.5 px-3 font-bold text-slate-900 bg-blue-50/20">
+                        <td className="py-2.5 px-3 font-bold text-slate-900 bg-red-50/20">
                           {[selectedItem.distritoNuevo, selectedItem.provinciaNuevo, selectedItem.departamentoNuevo].filter(Boolean).join(' - ') || '(Sin cambios)'}
                         </td>
                       </tr>
@@ -1024,7 +1024,7 @@ export default function QuiénesActualizaronPage() {
                 type="button"
                 onClick={() => setSelectedItem(null)}
                 className="px-4 py-2 rounded-lg text-xs font-semibold text-white shadow-sm transition-colors"
-                style={{ backgroundColor: '#3258CA' }}
+                style={{ backgroundColor: '#8f0404' }}
               >
                 Cerrar Detalle
               </button>

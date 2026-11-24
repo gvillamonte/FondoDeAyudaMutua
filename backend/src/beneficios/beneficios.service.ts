@@ -31,7 +31,9 @@ export class BeneficiosService {
     activo?: boolean;
     search?: string;
   }) {
-    const { page = 1, limit = 25, tipo, activo, search } = params;
+    const page = Number(params?.page) > 0 ? Number(params.page) : 1;
+    const limit = Number(params?.limit) > 0 ? Number(params.limit) : 25;
+    const { tipo, activo, search } = params;
     const skip = (page - 1) * limit;
 
     const where: any = {};

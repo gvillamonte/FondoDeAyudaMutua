@@ -413,7 +413,7 @@ export default function HistorialExpediente({ expedienteId, onUpdated }: Props) 
                                 e.stopPropagation();
                                 verDocumento(doc);
                               }}
-                              className="text-[#3258CA] font-medium hover:underline text-[9px] ml-0.5"
+                              className="text-[#8f0404] font-medium hover:underline text-[9px] ml-0.5"
                               title="Ver documento en PDF"
                             >
                               PDF

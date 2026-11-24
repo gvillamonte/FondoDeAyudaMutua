@@ -1,5 +1,9 @@
 /** @type {import('next').NextConfig} */
-const internalApi = process.env.INTERNAL_API_URL || 'http://localhost:3001';
+const internalApi =
+  process.env.INTERNAL_API_URL ||
+  (process.env.NEXT_PUBLIC_API_URL && process.env.NEXT_PUBLIC_API_URL.startsWith('http')
+    ? process.env.NEXT_PUBLIC_API_URL.replace(/\/api\/?$/, '')
+    : 'http://localhost:3001');
 
 const nextConfig = {
   reactStrictMode: true,

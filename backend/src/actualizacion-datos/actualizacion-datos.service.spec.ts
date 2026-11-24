@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { NotFoundException, ForbiddenException } from '@nestjs/common';
 import { ActualizacionDatosService } from './actualizacion-datos.service';
 
 describe('ActualizacionDatosService', () => {
@@ -172,6 +172,54 @@ describe('ActualizacionDatosService', () => {
       expect(res.celular).toBe('999888777');
       expect(res.fechaNacimiento).toBe('1985-05-20');
       expect(res.tieneActualizacionPrevia).toBe(true);
+    });
+
+    it('debe bloquear con ForbiddenException si el colegiado figura como FALLECIDO', async () => {
+      legacyServiceMock.getColegiadoByCipAndDni.mockResolvedValue({
+        COLEGIADO_ID: 10443,
+        NUM_COLEGIATURA: '10443',
+        DNI: '24949223',
+        NOMBRES: 'AQUILINO',
+        APELLIDO_PATERNO: 'VILLA',
+        ESTADO_COLEGIADO_COD: '5',
+        ESTADO_COLEGIADO: 'Fallecido',
+      });
+
+      await expect(
+        service.consultarPorCipYDni({ cip: '10443', dni: '24949223' }),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('debe bloquear con ForbiddenException si el colegiado figura como TEMPORAL', async () => {
+      legacyServiceMock.getColegiadoByCipAndDni.mockResolvedValue({
+        COLEGIADO_ID: 21818,
+        NUM_COLEGIATURA: '330087',
+        DNI: '70134547',
+        NOMBRES: 'THALIA',
+        APELLIDO_PATERNO: 'MOSQUEIRA',
+        ESTADO_COLEGIADO_COD: '2',
+        ESTADO_COLEGIADO: 'Temporal',
+      });
+
+      await expect(
+        service.consultarPorCipYDni({ cip: '330087', dni: '70134547' }),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('debe bloquear con ForbiddenException si el colegiado figura como TRANSFERIDO', async () => {
+      legacyServiceMock.getColegiadoByCipAndDni.mockResolvedValue({
+        COLEGIADO_ID: 2323,
+        NUM_COLEGIATURA: '10018',
+        DNI: '10271409',
+        NOMBRES: 'PELAYO',
+        APELLIDO_PATERNO: 'MIRANDA',
+        ESTADO_COLEGIADO_COD: '3',
+        ESTADO_COLEGIADO: 'Transferido',
+      });
+
+      await expect(
+        service.consultarPorCipYDni({ cip: '10018', dni: '10271409' }),
+      ).rejects.toThrow(ForbiddenException);
     });
   });
 

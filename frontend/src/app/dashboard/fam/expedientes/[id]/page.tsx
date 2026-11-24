@@ -178,7 +178,7 @@ const DOCS_LABELS: Record<string, string> = {
 
 const ESTADO_BADGE_STYLE: Record<string, string> = {
   PENDIENTE: 'bg-amber-100 text-amber-800 border-amber-200',
-  EN_REVISION: 'bg-blue-100 text-blue-800 border-blue-200',
+  EN_REVISION: 'bg-red-100 text-[#730202] border-red-200',
   APROBADA: 'bg-emerald-100 text-emerald-800 border-emerald-200',
   RECHAZADA: 'bg-rose-100 text-rose-800 border-rose-200',
   PAGADA: 'bg-emerald-100 text-emerald-800 border-emerald-200',
@@ -717,10 +717,10 @@ export default function DetalleExpedientePage() {
     return (
       <div className="flex items-center justify-center py-24 min-h-[50vh]">
         <svg
-          className="animate-spin w-8 h-8 text-[#3258CA]"
+          className="animate-spin w-8 h-8 text-[#8f0404]"
           width="32"
           height="32"
-          style={{ width: '32px', height: '32px', color: '#3258CA' }}
+          style={{ width: '32px', height: '32px', color: '#8f0404' }}
           fill="none"
           viewBox="0 0 24 24"
         >
@@ -744,7 +744,7 @@ export default function DetalleExpedientePage() {
         <p className="text-slate-500 text-xs sm:text-sm mt-1">El expediente solicitado no existe o fue eliminado.</p>
         <button
           onClick={() => router.push('/dashboard/fam/expedientes')}
-          className="mt-5 inline-flex items-center px-4 py-2 text-xs font-semibold text-white bg-[#3258CA] rounded-lg hover:bg-[#2846a3] transition-colors"
+          className="mt-5 inline-flex items-center px-4 py-2 text-xs font-semibold text-white bg-[#8f0404] rounded-lg hover:bg-[#730202] transition-colors"
         >
           Volver a Expedientes
         </button>
@@ -871,7 +871,7 @@ export default function DetalleExpedientePage() {
             <button
               onClick={() => setRegularizarOpen(true)}
               type="button"
-              className="px-4 py-2 bg-[#3258CA] text-white text-xs font-semibold rounded-lg hover:bg-[#2846a3] transition-colors shrink-0 shadow-xs inline-flex items-center gap-1.5 self-start sm:self-center"
+              className="px-4 py-2 bg-[#8f0404] text-white text-xs font-semibold rounded-lg hover:bg-[#730202] transition-colors shrink-0 shadow-xs inline-flex items-center gap-1.5 self-start sm:self-center"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -916,7 +916,7 @@ export default function DetalleExpedientePage() {
               <div>
                 <div className="flex items-center gap-2">
                   <h3 className="font-bold text-sm text-amber-800">Próximo a Vencer el Plazo de SLA</h3>
-                  <span className="px-2 py-0.5 text-[10px] font-bold bg-amber-600 text-white rounded-full">
+                  <span className="px-2 py-0.5 text-[10px] font-bold bg-[#8f0404] text-white rounded-full">
                     Restan {Math.max(1, Math.floor(horasRestantes))}h
                   </span>
                 </div>
@@ -931,16 +931,16 @@ export default function DetalleExpedientePage() {
 
       {/* Alerta de Documentación Incompleta */}
       {!detalle.documentacionCompleta && detalle.estado !== 'PAGADA' && detalle.estado !== 'RECHAZADA' && (
-        <div className="w-full p-4 bg-blue-50 border border-blue-200 rounded-xl shadow-2xs flex items-center justify-between gap-3 text-slate-800">
+        <div className="w-full p-4 bg-red-50 border border-red-200 rounded-xl shadow-2xs flex items-center justify-between gap-3 text-slate-800">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-100 text-[#3258CA] rounded-lg shrink-0">
+            <div className="p-2 bg-red-100 text-[#8f0404] rounded-lg shrink-0">
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="font-bold text-sm text-[#3258CA]">Requisitos y Documentación Incompleta</h3>
+                <h3 className="font-bold text-sm text-[#8f0404]">Requisitos y Documentación Incompleta</h3>
                 <span className="px-2 py-0.5 text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200 rounded-full">
                   Pendiente de carga
                 </span>
@@ -977,7 +977,7 @@ export default function DetalleExpedientePage() {
         <div className="flex items-center gap-2 text-xs sm:text-sm">
           <button
             onClick={() => router.push('/dashboard/fam/expedientes')}
-            className="text-slate-500 hover:text-[#3258CA] transition-colors font-medium flex items-center gap-1"
+            className="text-slate-500 hover:text-[#8f0404] transition-colors font-medium flex items-center gap-1"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -996,7 +996,7 @@ export default function DetalleExpedientePage() {
             onClick={() => verExpedienteCompletoPdf(id)}
             type="button"
             disabled={uniendoDocs}
-            className="inline-flex items-center px-3 py-1.5 text-xs font-semibold text-white bg-[#3258CA] hover:bg-[#2846a3] disabled:opacity-50 rounded-lg shadow-xs transition-colors"
+            className="inline-flex items-center px-3 py-1.5 text-xs font-semibold text-white bg-[#8f0404] hover:bg-[#730202] disabled:opacity-50 rounded-lg shadow-xs transition-colors"
             title="Ver todos los documentos del expediente unificados en un solo PDF"
           >
             <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1018,10 +1018,10 @@ export default function DetalleExpedientePage() {
             <button
               onClick={() => setEditHistorialId(id)}
               type="button"
-              className="inline-flex items-center px-3 py-1.5 text-xs font-semibold text-[#3258CA] bg-white border border-[#3258CA]/40 hover:bg-blue-50 rounded-lg shadow-xs transition-colors"
+              className="inline-flex items-center px-3 py-1.5 text-xs font-semibold text-[#8f0404] bg-white border border-[#8f0404]/40 hover:bg-red-50 rounded-lg shadow-xs transition-colors"
               title="Editar datos del expediente (solo Administrador)"
             >
-              <svg className="w-4 h-4 mr-1 text-[#3258CA]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 mr-1 text-[#8f0404]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
               </svg>
               Editar expediente
@@ -1047,7 +1047,7 @@ export default function DetalleExpedientePage() {
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 sm:gap-6 pb-5 sm:pb-6 border-b border-slate-100">
           {/* Identificación del Colegiado */}
           <div className="flex items-start sm:items-center space-x-3 sm:space-x-4 min-w-0">
-            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0 text-[#3258CA] font-bold text-lg sm:text-xl">
+            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl bg-red-50 border border-red-100 flex items-center justify-center shrink-0 text-[#8f0404] font-bold text-lg sm:text-xl">
               {detalle.NOMBRE_COLEGIADO?.charAt(0) || 'C'}
             </div>
             <div className="min-w-0 flex-1">
@@ -1109,7 +1109,7 @@ export default function DetalleExpedientePage() {
           </div>
           <div className="space-y-1">
             <span className="text-[10px] sm:text-xs font-medium text-slate-400 uppercase tracking-wider">N° Expediente</span>
-            <p className="text-xs sm:text-sm font-bold text-[#3258CA]"># {detalle.expedienteNumero || detalle.id.slice(0, 6)}</p>
+            <p className="text-xs sm:text-sm font-bold text-[#8f0404]"># {detalle.expedienteNumero || detalle.id.slice(0, 6)}</p>
           </div>
           <div className="space-y-1">
             <span className="text-[10px] sm:text-xs font-medium text-slate-400 uppercase tracking-wider">F. Recepción</span>
@@ -1126,7 +1126,7 @@ export default function DetalleExpedientePage() {
                 <button
                   onClick={() => abrirPdf(id, sustentoDocCampo)}
                   disabled={pdfLoadingKey === `${id}:${sustentoDocCampo}`}
-                  className="inline-flex items-center text-xs font-semibold text-[#3258CA] hover:text-[#2846a3] bg-blue-50 hover:bg-blue-100 px-2 sm:px-2.5 py-1 rounded-md transition-colors disabled:opacity-50 max-w-full truncate"
+                  className="inline-flex items-center text-xs font-semibold text-[#8f0404] hover:text-[#730202] bg-red-50 hover:bg-red-100 px-2 sm:px-2.5 py-1 rounded-md transition-colors disabled:opacity-50 max-w-full truncate"
                   type="button"
                 >
                   <svg className="w-3.5 h-3.5 mr-1 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1137,7 +1137,7 @@ export default function DetalleExpedientePage() {
               ) : isAdmin ? (
                 <button
                   onClick={() => pedirDocumento(id, detalle.tipoBeneficio?.codigo === 'FALLECIMIENTO' ? 'actaDefuncion' : 'solicitudAsignacion')}
-                  className="inline-flex items-center text-xs font-semibold text-[#3258CA] hover:underline"
+                  className="inline-flex items-center text-xs font-semibold text-[#8f0404] hover:underline"
                   type="button"
                 >
                   + Cargar Sustento
@@ -1260,7 +1260,7 @@ export default function DetalleExpedientePage() {
                   <button
                     type="button"
                     onClick={() => setCartaPoderOpen(true)}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-white bg-[#3258CA] rounded-lg hover:bg-[#2846a3] transition-colors"
+                    className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-white bg-[#8f0404] rounded-lg hover:bg-[#730202] transition-colors"
                   >
                     Editar Carta Poder
                   </button>
@@ -1280,8 +1280,8 @@ export default function DetalleExpedientePage() {
                 </p>
               </div>
 
-              <div className="bg-white/90 border border-blue-200 rounded-lg p-2.5">
-                <span className="block text-[10px] font-bold uppercase tracking-wider text-[#3258CA]">
+              <div className="bg-white/90 border border-red-200 rounded-lg p-2.5">
+                <span className="block text-[10px] font-bold uppercase tracking-wider text-[#8f0404]">
                   2. Beneficiario / Quien otorga el Poder
                 </span>
                 <p className="text-xs font-bold text-slate-900 mt-0.5">
@@ -1378,7 +1378,7 @@ export default function DetalleExpedientePage() {
             {detalle.estado !== 'PAGADA' && puedeOperar && (
               <button
                 onClick={() => setCompletarOpen(true)}
-                className="inline-flex items-center px-3 py-1.5 text-xs font-semibold text-[#3258CA] bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 transition-colors"
+                className="inline-flex items-center px-3 py-1.5 text-xs font-semibold text-[#8f0404] bg-red-50 hover:bg-red-100 rounded-lg border border-red-200 transition-colors"
                 type="button"
               >
                 <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1417,7 +1417,7 @@ export default function DetalleExpedientePage() {
               {detalle.estado !== 'PAGADA' && puedeOperar && (
                 <button
                   onClick={() => setCompletarOpen(true)}
-                  className="mt-4 inline-flex items-center px-4 py-2 text-xs font-semibold text-white bg-[#3258CA] rounded-lg hover:bg-[#2846a3] transition-colors"
+                  className="mt-4 inline-flex items-center px-4 py-2 text-xs font-semibold text-white bg-[#8f0404] rounded-lg hover:bg-[#730202] transition-colors"
                   type="button"
                 >
                   + Asignar Beneficiarios
@@ -1462,14 +1462,14 @@ export default function DetalleExpedientePage() {
                     );
                     return (
                       <Fragment key={b.id || index}>
-                        <tr className={abierto ? 'bg-blue-50/40' : 'hover:bg-slate-50/70'}>
+                        <tr className={abierto ? 'bg-red-50/40' : 'hover:bg-slate-50/70'}>
                           <td className="px-4 py-3.5 text-slate-400 font-semibold">{index + 1}</td>
                           <td className="px-4 py-3.5">
                             <p className="font-bold text-slate-900">{b.nombre}</p>
                             <p className="text-xs text-slate-500 font-mono">DNI {b.dni || '—'}</p>
                             <div className="flex flex-wrap gap-1 mt-1">
                               {esColegiado !== null && (
-                                <span className={`px-2 py-0.5 text-[10px] font-semibold rounded-full ${esColegiado ? 'bg-[#3258CA]/10 text-[#3258CA]' : 'border border-slate-200 text-slate-500'}`}>
+                                <span className={`px-2 py-0.5 text-[10px] font-semibold rounded-full ${esColegiado ? 'bg-[#8f0404]/10 text-[#8f0404]' : 'border border-slate-200 text-slate-500'}`}>
                                   {esColegiado ? 'Es el colegiado' : 'No es el colegiado'}
                                 </span>
                               )}
@@ -1519,7 +1519,7 @@ export default function DetalleExpedientePage() {
                             <button
                               type="button"
                               onClick={() => setBenefAbierto(abierto ? null : b.id)}
-                              className="px-3 py-1.5 text-xs font-semibold text-white bg-[#3258CA] hover:bg-[#2846a3] rounded-lg transition-colors whitespace-nowrap"
+                              className="px-3 py-1.5 text-xs font-semibold text-white bg-[#8f0404] hover:bg-[#730202] rounded-lg transition-colors whitespace-nowrap"
                             >
                               {abierto ? 'Ocultar' : 'Ver documentación'}
                             </button>
@@ -1546,12 +1546,12 @@ export default function DetalleExpedientePage() {
                                         </div>
                                         <div className="flex items-center gap-2 shrink-0">
                                           {doc.ok ? (
-                                            <button type="button" onClick={doc.ver} className="px-2.5 py-1 text-xs font-semibold text-[#3258CA] border border-[#3258CA]/30 rounded-lg hover:bg-[#3258CA]/5">
+                                            <button type="button" onClick={doc.ver} className="px-2.5 py-1 text-xs font-semibold text-[#8f0404] border border-[#8f0404]/30 rounded-lg hover:bg-[#8f0404]/5">
                                               Ver documento
                                             </button>
                                           ) : (
                                             puedeOperar && (
-                                              <button type="button" onClick={() => setCompletarOpen(true)} className="px-2.5 py-1 text-xs font-bold text-white bg-[#3258CA] hover:bg-[#2846a3] rounded-lg">
+                                              <button type="button" onClick={() => setCompletarOpen(true)} className="px-2.5 py-1 text-xs font-bold text-white bg-[#8f0404] hover:bg-[#730202] rounded-lg">
                                                 + Cargar
                                               </button>
                                             )
@@ -1575,7 +1575,7 @@ export default function DetalleExpedientePage() {
                                     )}
                                     <p>F. Pago: <strong className="text-slate-800">{fmt(dep?.fechaPago || detalle.fechaPago || detalle.fechaSolicitud)}</strong></p>
                                     {dep && puedeOperar && (
-                                      <button type="button" onClick={() => setDepositoEdit(dep)} className="mt-1.5 text-[#3258CA] hover:underline font-semibold">
+                                      <button type="button" onClick={() => setDepositoEdit(dep)} className="mt-1.5 text-[#8f0404] hover:underline font-semibold">
                                         ✎ Editar cobro/cheque
                                       </button>
                                     )}
@@ -1627,7 +1627,7 @@ export default function DetalleExpedientePage() {
               {horasRestantes <= 0 ? `Vencido hace ${Math.abs(Math.floor(horasRestantes))}h` : `${Math.floor(horasRestantes)}h restantes`}
             </span>
           ) : (
-            <span className="text-xs font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+            <span className="text-xs font-semibold text-[#8f0404] bg-red-50 px-2 py-0.5 rounded border border-red-200">
               En Evaluación
             </span>
           )}
@@ -1648,7 +1648,7 @@ export default function DetalleExpedientePage() {
                   actual && estado === 'PAGADA'
                     ? 'bg-emerald-50 border-emerald-300 ring-2 ring-emerald-500/20'
                     : actual
-                    ? 'bg-blue-50 border-blue-300 ring-2 ring-[#3258CA]/15'
+                    ? 'bg-red-50 border-red-300 ring-2 ring-[#8f0404]/15'
                     : completado
                     ? 'bg-slate-50 border-slate-200'
                     : 'bg-slate-50/60 border-slate-200/80'
@@ -1659,14 +1659,14 @@ export default function DetalleExpedientePage() {
                     completado || (actual && estado === 'PAGADA')
                       ? 'bg-emerald-500 text-white'
                       : actual
-                      ? 'bg-[#3258CA] text-white'
+                      ? 'bg-[#8f0404] text-white'
                       : 'bg-slate-200 text-slate-500'
                   }`}
                 >
                   {completado || (actual && estado === 'PAGADA') ? '✓' : idx + 1}
                 </div>
                 <div className="ml-2.5 sm:ml-3 min-w-0 flex-1">
-                  <p className={`text-[10px] sm:text-xs uppercase font-semibold truncate ${actual ? (estado === 'PAGADA' ? 'text-emerald-700' : 'text-[#3258CA]') : 'text-slate-400'}`}>
+                  <p className={`text-[10px] sm:text-xs uppercase font-semibold truncate ${actual ? (estado === 'PAGADA' ? 'text-emerald-700' : 'text-[#8f0404]') : 'text-slate-400'}`}>
                     {labelPaso}
                   </p>
                   <p className={`text-xs sm:text-sm font-semibold truncate ${actual ? 'text-slate-900 font-bold' : 'text-slate-800'}`}>
@@ -1695,12 +1695,12 @@ export default function DetalleExpedientePage() {
                 className="inline-flex items-center px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-300 rounded-lg transition-colors"
                 type="button"
               >
-                <span className="mr-1 text-[#3258CA] font-bold">+</span> {nombre}
+                <span className="mr-1 text-[#8f0404] font-bold">+</span> {nombre}
               </button>
             ))}
             <button
               onClick={() => router.push(`/dashboard/fam/registrar-historico?colegiadoId=${detalle.colegiadoId}`)}
-              className="text-xs font-semibold text-[#3258CA] hover:text-[#2846a3] ml-1 hover:underline"
+              className="text-xs font-semibold text-[#8f0404] hover:text-[#730202] ml-1 hover:underline"
               type="button"
             >
               Ver todos →
@@ -1738,7 +1738,7 @@ export default function DetalleExpedientePage() {
               <div className="h-1.5 rounded-full bg-slate-200 overflow-hidden mt-2">
                 <div className={`h-full ${barra}`} style={{ width: `${r.porcentaje}%` }} />
               </div>
-              <button type="button" onClick={() => setActiveTab('docs')} className="mt-2 text-xs font-semibold text-[#3258CA] hover:underline">
+              <button type="button" onClick={() => setActiveTab('docs')} className="mt-2 text-xs font-semibold text-[#8f0404] hover:underline">
                 {r.faltantes.length === 0 ? 'Documentación completa' : `Faltan ${r.faltantes.length} · Ver documentos`}
               </button>
             </div>
@@ -1748,7 +1748,7 @@ export default function DetalleExpedientePage() {
               <p className="text-xs text-slate-500 mt-1">
                 {r.benefTotal === 0 ? 'Sin beneficiarios vinculados' : `${r.completos} con documentación completa`}
               </p>
-              <button type="button" onClick={() => setActiveTab('benef')} className="mt-2 text-xs font-semibold text-[#3258CA] hover:underline">
+              <button type="button" onClick={() => setActiveTab('benef')} className="mt-2 text-xs font-semibold text-[#8f0404] hover:underline">
                 Ver beneficiarios
               </button>
             </div>
@@ -1792,19 +1792,19 @@ export default function DetalleExpedientePage() {
             <button
               onClick={() => setActiveTab('benef')}
               className={`px-3.5 py-2 text-xs sm:text-sm font-semibold rounded-t-lg flex items-center gap-1.5 transition-colors shrink-0 ${
-                activeTab === 'benef' ? 'bg-white border border-slate-200 border-b-white text-[#3258CA]' : 'border border-transparent text-slate-500 hover:text-slate-800 hover:bg-white/60'
+                activeTab === 'benef' ? 'bg-white border border-slate-200 border-b-white text-[#8f0404]' : 'border border-transparent text-slate-500 hover:text-slate-800 hover:bg-white/60'
               }`}
               type="button"
             >
               Beneficiarios
-              <span className="bg-blue-50 text-[#3258CA] border border-blue-100 text-[10px] sm:text-xs px-2 py-0.5 rounded-full font-bold">
+              <span className="bg-red-50 text-[#8f0404] border border-red-100 text-[10px] sm:text-xs px-2 py-0.5 rounded-full font-bold">
                 {detalle.beneficiariosVinculados.length}
               </span>
             </button>
             <button
               onClick={() => setActiveTab('montos')}
               className={`px-3.5 py-2 text-xs sm:text-sm font-semibold rounded-t-lg flex items-center transition-colors shrink-0 ${
-                activeTab === 'montos' ? 'bg-white border border-slate-200 border-b-white text-[#3258CA]' : 'border border-transparent text-slate-500 hover:text-slate-800 hover:bg-white/60'
+                activeTab === 'montos' ? 'bg-white border border-slate-200 border-b-white text-[#8f0404]' : 'border border-transparent text-slate-500 hover:text-slate-800 hover:bg-white/60'
               }`}
               type="button"
             >
@@ -1812,8 +1812,9 @@ export default function DetalleExpedientePage() {
             </button>
             <button
               onClick={() => setActiveTab('docs')}
+              aria-label="Documentos"
               className={`px-3.5 py-2 text-xs sm:text-sm font-semibold rounded-t-lg flex items-center transition-colors shrink-0 ${
-                activeTab === 'docs' ? 'bg-white border border-slate-200 border-b-white text-[#3258CA]' : 'border border-transparent text-slate-500 hover:text-slate-800 hover:bg-white/60'
+                activeTab === 'docs' ? 'bg-white border border-slate-200 border-b-white text-primary' : 'border border-transparent text-slate-500 hover:text-slate-800 hover:bg-white/60'
               }`}
               type="button"
             >
@@ -1824,7 +1825,7 @@ export default function DetalleExpedientePage() {
             <button
               onClick={() => setActiveTab('historial')}
               className={`px-3.5 py-2 text-xs sm:text-sm font-semibold rounded-t-lg flex items-center transition-colors shrink-0 ${
-                activeTab === 'historial' ? 'bg-white border border-slate-200 border-b-white text-[#3258CA]' : 'border border-transparent text-slate-500 hover:text-slate-800 hover:bg-white/60'
+                activeTab === 'historial' ? 'bg-white border border-slate-200 border-b-white text-[#8f0404]' : 'border border-transparent text-slate-500 hover:text-slate-800 hover:bg-white/60'
               }`}
               type="button"
             >
@@ -1834,7 +1835,7 @@ export default function DetalleExpedientePage() {
               <button
                 onClick={() => setActiveTab('admin')}
                 className={`px-3.5 py-2 text-xs sm:text-sm font-semibold rounded-t-lg flex items-center transition-colors shrink-0 ${
-                  activeTab === 'admin' ? 'bg-white border border-slate-200 border-b-white text-[#3258CA]' : 'border border-transparent text-slate-500 hover:text-slate-800 hover:bg-white/60'
+                  activeTab === 'admin' ? 'bg-white border border-slate-200 border-b-white text-[#8f0404]' : 'border border-transparent text-slate-500 hover:text-slate-800 hover:bg-white/60'
                 }`}
                 type="button"
               >
@@ -1868,18 +1869,18 @@ export default function DetalleExpedientePage() {
                       return (
                         <tr
                           key={fila.codigo}
-                          className={`${esActualFila ? 'bg-blue-50/20 hover:bg-blue-50/40' : 'hover:bg-slate-50/60'} transition-colors`}
+                          className={`${esActualFila ? 'bg-red-50/20 hover:bg-red-50/40' : 'hover:bg-slate-50/60'} transition-colors`}
                         >
                           <td className="py-3.5 pr-4">
                             <div className="flex items-center space-x-2">
                               <span
                                 onClick={() => { if (fila.historial.length > 0) irADocumentacion(fila.esActual ? id : fila.historial[fila.historial.length - 1].id); }}
-                                className={`font-bold text-slate-900 ${fila.historial.length > 0 ? 'cursor-pointer hover:text-[#3258CA]' : ''}`}
+                                className={`font-bold text-slate-900 ${fila.historial.length > 0 ? 'cursor-pointer hover:text-[#8f0404]' : ''}`}
                               >
                                 {fila.label}
                               </span>
                               {esActualFila && (
-                                <span className="bg-[#3258CA] text-white text-[9px] sm:text-[10px] font-bold px-1.5 py-0.5 rounded tracking-wide uppercase">
+                                <span className="bg-[#8f0404] text-white text-[9px] sm:text-[10px] font-bold px-1.5 py-0.5 rounded tracking-wide uppercase">
                                   ACTUAL
                                 </span>
                               )}
@@ -1922,7 +1923,7 @@ export default function DetalleExpedientePage() {
                                 )}
                                 <button
                                   onClick={() => irADocumentacion(fila.esActual ? id : fila.historial[0]?.id)}
-                                  className="text-[#3258CA] hover:text-[#2846a3] font-semibold inline-flex items-center ml-1"
+                                  className="text-[#8f0404] hover:text-[#730202] font-semibold inline-flex items-center ml-1"
                                   type="button"
                                 >
                                   <svg className="w-3.5 h-3.5 mr-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2035,7 +2036,7 @@ export default function DetalleExpedientePage() {
                     type="button"
                     onClick={() => verExpedienteCompletoPdf(id)}
                     disabled={uniendoDocs}
-                    className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-white bg-[#3258CA] hover:bg-[#2846a3] disabled:opacity-50 rounded-lg shadow-xs transition-colors shrink-0 self-start sm:self-auto"
+                    className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-white bg-[#8f0404] hover:bg-[#730202] disabled:opacity-50 rounded-lg shadow-xs transition-colors shrink-0 self-start sm:self-auto"
                   >
                     {uniendoDocs ? (
                       <>
@@ -2069,7 +2070,7 @@ export default function DetalleExpedientePage() {
                         key={g.tipo}
                         onClick={() => setDocsGrupoSel(g.tipo)}
                         className={`px-3 sm:px-4 py-2 text-xs font-semibold border-b-2 transition-colors shrink-0 ${
-                          grupoDocsSel?.tipo === g.tipo ? 'border-[#3258CA] text-[#3258CA]' : 'border-transparent text-slate-500 hover:text-slate-800'
+                          grupoDocsSel?.tipo === g.tipo ? 'border-[#8f0404] text-[#8f0404]' : 'border-transparent text-slate-500 hover:text-slate-800'
                         }`}
                         type="button"
                       >
@@ -2086,7 +2087,7 @@ export default function DetalleExpedientePage() {
                     <div key={reg.id} className="rounded-xl p-3.5 sm:p-4 border border-slate-200 bg-slate-50/50">
                       {grupoDocsSel.registros.length > 1 && (
                         <div className="flex items-center gap-2 mb-3 flex-wrap">
-                          <span className="inline-flex px-2 py-0.5 text-xs font-bold rounded bg-[#3258CA] text-white">
+                          <span className="inline-flex px-2 py-0.5 text-xs font-bold rounded bg-[#8f0404] text-white">
                             {reg.expediente || 'S/N'}
                           </span>
                           <span className="text-xs text-slate-500">{fmt(reg.fecha)}</span>
@@ -2151,17 +2152,17 @@ export default function DetalleExpedientePage() {
                                     <button
                                       onClick={() => abrirPdf(reg.id, campo)}
                                       disabled={pdfLoadingKey === loadKey}
-                                      className="px-2.5 py-1 text-xs font-semibold text-[#3258CA] border border-[#3258CA]/30 rounded-lg hover:bg-[#3258CA]/5 disabled:opacity-50"
+                                      className="px-2.5 py-1 text-xs font-semibold text-[#8f0404] border border-[#8f0404]/30 rounded-lg hover:bg-[#8f0404]/5 disabled:opacity-50"
                                       type="button"
                                     >
-                                      {pdfLoadingKey === loadKey ? 'Abriendo...' : 'Ver documento'}
+                                      {pdfLoadingKey === loadKey ? 'Abriendo...' : 'Ver PDF'}
                                     </button>
                                   )}
                                   {isAdmin ? (
                                     <button
                                       onClick={() => pedirDocumento(reg.id, campo)}
                                       disabled={subiendoDoc === loadKey}
-                                      className={`text-xs font-medium hover:underline disabled:opacity-50 ${disponible ? 'text-slate-500' : 'text-[#3258CA]'}`}
+                                      className={`text-xs font-medium hover:underline disabled:opacity-50 ${disponible ? 'text-slate-500' : 'text-[#8f0404]'}`}
                                       type="button"
                                     >
                                       {subiendoDoc === loadKey ? 'Subiendo...' : disponible ? 'Reemplazar' : 'Subir PDF'}
@@ -2188,7 +2189,7 @@ export default function DetalleExpedientePage() {
                 <div className="flex justify-end">
                   <button
                     onClick={() => setCompletarOpen(true)}
-                    className="px-3.5 py-1.5 text-xs font-semibold text-white bg-[#3258CA] rounded-lg hover:bg-[#2846a3] transition-colors"
+                    className="px-3.5 py-1.5 text-xs font-semibold text-white bg-[#8f0404] rounded-lg hover:bg-[#730202] transition-colors"
                     type="button"
                   >
                     + Agregar / Editar Beneficiarios
@@ -2378,7 +2379,7 @@ export default function DetalleExpedientePage() {
                   <button
                     onClick={guardarAdmin}
                     disabled={guardandoAdmin}
-                    className="flex-1 sm:flex-initial px-5 py-2 text-xs font-semibold text-white bg-[#3258CA] rounded-lg hover:bg-[#2846a3] transition-colors disabled:opacity-50 text-center"
+                    className="flex-1 sm:flex-initial px-5 py-2 text-xs font-semibold text-white bg-[#8f0404] rounded-lg hover:bg-[#730202] transition-colors disabled:opacity-50 text-center"
                     type="button"
                   >
                     {guardandoAdmin ? 'Guardando...' : 'Guardar Cambios'}
@@ -2413,7 +2414,7 @@ export default function DetalleExpedientePage() {
                 {ben && <p className="text-slate-500">Reparto: {ben.porcentajeAsignado}%</p>}
                 <div className="mt-2 flex flex-wrap gap-1">
                   {esColegiado !== null && (
-                    <span className={`px-2 py-0.5 text-[10px] font-semibold rounded-full ${esColegiado ? 'bg-[#3258CA]/10 text-[#3258CA]' : 'border border-slate-200 text-slate-500'}`}>
+                    <span className={`px-2 py-0.5 text-[10px] font-semibold rounded-full ${esColegiado ? 'bg-[#8f0404]/10 text-[#8f0404]' : 'border border-slate-200 text-slate-500'}`}>
                       {esColegiado ? 'Es el colegiado' : 'No es el colegiado'}
                     </span>
                   )}

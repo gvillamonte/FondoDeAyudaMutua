@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import api from '@/lib/api';
 
 interface MenuItem {
+  id: string;
   label: string;
   href?: string;
   icon: React.ReactNode;
@@ -14,6 +16,7 @@ interface MenuItem {
 
 const menuItems: MenuItem[] = [
   {
+    id: 'dashboard',
     label: 'Dashboard',
     href: '/dashboard',
     icon: (
@@ -23,6 +26,7 @@ const menuItems: MenuItem[] = [
     ),
   },
   {
+    id: 'colegiados',
     label: 'Colegiados',
     href: '/dashboard/colegiados',
     icon: (
@@ -32,6 +36,7 @@ const menuItems: MenuItem[] = [
     ),
   },
   {
+    id: 'actualizacion-datos',
     label: 'Act. de Datos',
     icon: (
       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -45,6 +50,7 @@ const menuItems: MenuItem[] = [
     ],
   },
   {
+    id: 'beneficios',
     label: 'Beneficios',
     href: '/dashboard/beneficios',
     icon: (
@@ -54,6 +60,7 @@ const menuItems: MenuItem[] = [
     ),
   },
   {
+    id: 'pagos',
     label: 'Pagos',
     href: '/dashboard/pagos',
     icon: (
@@ -63,6 +70,7 @@ const menuItems: MenuItem[] = [
     ),
   },
   {
+    id: 'caja',
     label: 'Caja',
     icon: (
       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -77,6 +85,7 @@ const menuItems: MenuItem[] = [
     ],
   },
   {
+    id: 'tesoreria',
     label: 'Tesorería',
     icon: (
       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -88,6 +97,7 @@ const menuItems: MenuItem[] = [
     ],
   },
   {
+    id: 'fam',
     label: 'FAM',
     icon: (
       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -105,6 +115,7 @@ const menuItems: MenuItem[] = [
     ],
   },
   {
+    id: 'reportes',
     label: 'Reportes',
     icon: (
       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -116,8 +127,8 @@ const menuItems: MenuItem[] = [
     ],
   },
   {
+    id: 'configuraciones',
     label: 'Configuraciones',
-    adminOnly: true,
     icon: (
       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -135,6 +146,17 @@ const menuItems: MenuItem[] = [
     ],
   },
   {
+    id: 'usuarios',
+    label: 'Usuarios y Roles',
+    href: '/dashboard/usuarios',
+    icon: (
+      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+      </svg>
+    ),
+  },
+  {
+    id: 'auditoria',
     label: 'Auditoría',
     href: '/dashboard/auditoria',
     icon: (
@@ -145,28 +167,87 @@ const menuItems: MenuItem[] = [
   },
 ];
 
-export default function Sidebar({ mobileOpen = false, onClose }: { mobileOpen?: boolean; onClose?: () => void }) {
+export default function Sidebar({
+  mobileOpen = false,
+  onClose,
+  collapsed = false,
+  onToggleCollapse,
+}: {
+  mobileOpen?: boolean;
+  onClose?: () => void;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
+}) {
   const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState(false);
   const [openGroups, setOpenGroups] = useState<string[]>([]);
+  const [hoveredGroup, setHoveredGroup] = useState<string | null>(null);
   const [rol, setRol] = useState<string | null>(null);
+  const [modulos, setModulos] = useState<string[] | null>(null);
 
-  useEffect(() => {
+  // Carga inicial y sincronización con el backend
+  const syncProfile = async () => {
     try {
       const stored = localStorage.getItem('user');
-      if (stored) setRol(JSON.parse(stored).rol || null);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.rol) setRol(parsed.rol);
+        if (Array.isArray(parsed.modulos)) setModulos(parsed.modulos);
+      }
+
+      // Consulta al endpoint oficial para obtener permisos actualizados en tiempo real
+      const token = localStorage.getItem('accessToken');
+      if (token) {
+        const res = await api.get('/auth/me');
+        if (res.data) {
+          setRol(res.data.rol || null);
+          if (Array.isArray(res.data.modulos)) {
+            setModulos(res.data.modulos);
+            // Actualizar localStorage para mantener consistencia
+            const current = stored ? JSON.parse(stored) : {};
+            current.rol = res.data.rol;
+            current.modulos = res.data.modulos;
+            localStorage.setItem('user', JSON.stringify(current));
+          }
+        }
+      }
     } catch {}
+  };
+
+  useEffect(() => {
+    syncProfile();
+
+    const handleAuthChange = () => syncProfile();
+    window.addEventListener('auth-updated', handleAuthChange);
+    window.addEventListener('storage', handleAuthChange);
+    return () => {
+      window.removeEventListener('auth-updated', handleAuthChange);
+      window.removeEventListener('storage', handleAuthChange);
+    };
   }, []);
 
-  // Auto-expandir solo el grupo de la ruta activa
+  // Auto-expandir el grupo de la ruta activa cuando no está colapsado
   useEffect(() => {
     const grupo = menuItems.find((item) => item.children?.some((c) => c.href === pathname));
-    if (grupo) {
+    if (grupo && !collapsed) {
       setOpenGroups((prev) => (prev.includes(grupo.label) ? prev : [...prev, grupo.label]));
     }
-  }, [pathname]);
+  }, [pathname, collapsed]);
 
-  const visibleItems = menuItems.filter((item) => !item.adminOnly || rol === 'ADMINISTRADOR');
+  // Filtrado de módulos según rol y permisos activos
+  const visibleItems = useMemo(() => {
+    // Administrador principal tiene acceso completo
+    if (rol === 'ADMINISTRADOR' || rol === 'SUPER_ADMINISTRADOR') {
+      return menuItems;
+    }
+
+    // Si tiene lista de módulos configurada para su rol
+    if (Array.isArray(modulos)) {
+      return menuItems.filter((item) => modulos.includes(item.id));
+    }
+
+    // Fallback por defecto si no ha terminado de cargar permisos
+    return menuItems.filter((item) => !item.adminOnly);
+  }, [rol, modulos]);
 
   const toggleGroup = (label: string) => {
     setOpenGroups((prev) =>
@@ -176,52 +257,104 @@ export default function Sidebar({ mobileOpen = false, onClose }: { mobileOpen?: 
 
   return (
     <aside
-      className={`bg-primary text-white transition-transform lg:transition-all duration-300 flex flex-col flex-shrink-0
-        fixed inset-y-0 left-0 z-50 w-64
+      className={`bg-[#8f0404] text-white transition-all duration-300 flex flex-col flex-shrink-0
+        fixed inset-y-0 left-0 z-50
         lg:static lg:z-auto lg:translate-x-0 lg:inset-auto
-        ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}
-        ${collapsed ? 'lg:w-16' : 'lg:w-64'}`}
+        ${mobileOpen ? 'translate-x-0 w-64' : '-translate-x-full lg:translate-x-0'}
+        ${collapsed ? 'lg:w-16' : 'lg:w-64'} shadow-xl border-r border-[#730202]`}
     >
-      <div className="flex items-center justify-between p-4 border-b border-primary-dark">
-        <span className={`text-lg font-semibold ${collapsed ? 'lg:hidden' : ''}`}>Sistema CIP</span>
-        <div className="flex items-center gap-1">
-          <button onClick={onClose} className="lg:hidden p-1 rounded hover:bg-primary-dark transition-colors" aria-label="Cerrar menú">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          <button onClick={() => setCollapsed(!collapsed)} className="p-1 rounded hover:bg-primary-dark transition-colors hidden lg:block" aria-label={collapsed ? 'Expandir menú' : 'Colapsar menú'}>
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              {collapsed ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /> : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />}
+      {/* Header del Sidebar */}
+      <div className="flex items-center justify-between p-3.5 border-b border-[#730202] bg-black/10">
+        <div className={`flex items-center gap-2.5 overflow-hidden ${collapsed ? 'lg:justify-center lg:w-full' : ''}`}>
+          <div className="w-8 h-8 rounded-lg bg-white text-[#8f0404] font-black flex items-center justify-center text-sm shadow-md flex-shrink-0">
+            CIP
+          </div>
+          <div className={`${collapsed ? 'lg:hidden' : 'block'} truncate`}>
+            <span className="text-sm font-bold tracking-tight text-white block leading-tight truncate">
+              Sistema ERP
+            </span>
+            <span className="text-[10px] font-semibold text-rose-200 uppercase tracking-wider block truncate">
+              Colegio de Ingenieros
+            </span>
+          </div>
+        </div>
+
+        {/* Botón de cierre en móvil */}
+        <button
+          onClick={onClose}
+          className="lg:hidden p-1.5 rounded hover:bg-black/20 text-rose-200 hover:text-white transition-colors"
+          aria-label="Cerrar menú"
+        >
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+
+        {/* Botón de alternar colapso en desktop */}
+        {onToggleCollapse && (
+          <button
+            onClick={onToggleCollapse}
+            className={`hidden lg:flex p-1 rounded hover:bg-black/20 text-rose-200 hover:text-white transition-colors ${
+              collapsed ? 'hidden' : 'block'
+            }`}
+            title="Colapsar barra lateral"
+            aria-label="Colapsar barra lateral"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </button>
-        </div>
+        )}
       </div>
 
-      <nav className="flex-1 py-4 overflow-y-auto">
+      {/* Navegación Principal */}
+      <nav className="flex-1 py-3 overflow-y-auto overflow-x-hidden">
         {visibleItems.map((item) => {
+          // Opción con Submenú (Grupos)
           if (item.children) {
             const isGroupOpen = openGroups.includes(item.label);
             const isChildActive = item.children.some((c) => pathname === c.href);
+
             return (
-              <div key={item.label}>
+              <div
+                key={item.id}
+                className="relative"
+                onMouseEnter={() => collapsed && setHoveredGroup(item.id)}
+                onMouseLeave={() => collapsed && setHoveredGroup(null)}
+              >
                 <button
-                  onClick={() => toggleGroup(item.label)}
-                  className={`w-full flex items-center px-4 py-3 text-sm font-medium transition-colors ${
-                    isChildActive ? 'bg-primary-dark text-white' : 'text-blue-100 hover:bg-primary-dark hover:text-white'
-                  }`}
+                  onClick={() => {
+                    if (collapsed && onToggleCollapse) {
+                      onToggleCollapse();
+                    }
+                    toggleGroup(item.label);
+                  }}
+                  className={`w-full flex items-center px-4 py-2.5 text-sm font-medium transition-colors ${
+                    isChildActive
+                      ? 'bg-black/30 text-white border-l-4 border-white font-semibold shadow-inner'
+                      : 'text-rose-100 hover:bg-black/20 hover:text-white'
+                  } ${collapsed ? 'lg:justify-center lg:px-2' : ''}`}
                   title={collapsed ? item.label : undefined}
                 >
                   <span className="flex-shrink-0">{item.icon}</span>
-                  <>
-                    <span className={`ml-3 flex-1 text-left ${collapsed ? 'lg:hidden' : ''}`}>{item.label}</span>
-                    <svg className={`w-4 h-4 transition-transform ${isGroupOpen ? 'rotate-90' : ''} ${collapsed ? 'lg:hidden' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </>
+                  {!collapsed && (
+                    <>
+                      <span className="ml-3 flex-1 text-left truncate">{item.label}</span>
+                      <svg
+                        className={`w-4 h-4 transition-transform ${isGroupOpen ? 'rotate-90 text-white' : 'text-rose-200'}`}
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </>
+                  )}
                 </button>
-                {isGroupOpen && (
-                  <div className={`bg-primary-dark/30 ${collapsed ? 'lg:hidden' : ''}`}>
+
+                {/* Submenú en modo Expandido */}
+                {!collapsed && isGroupOpen && (
+                  <div className="bg-black/25 border-l border-white/20 py-1">
                     {item.children.map((child) => {
                       const isActive = pathname === child.href;
                       return (
@@ -229,40 +362,117 @@ export default function Sidebar({ mobileOpen = false, onClose }: { mobileOpen?: 
                           key={child.href}
                           href={child.href}
                           onClick={onClose}
-                          className={`flex items-center pl-14 pr-4 py-2 text-sm transition-colors ${
-                            isActive ? 'bg-primary-dark text-white font-medium' : 'text-blue-200 hover:bg-primary-dark/50 hover:text-white'
+                          className={`flex items-center pl-12 pr-4 py-2 text-xs transition-colors ${
+                            isActive
+                              ? 'bg-black/40 text-white font-semibold'
+                              : 'text-rose-200/90 hover:bg-white/10 hover:text-white'
                           }`}
                         >
-                          <span>{child.label}</span>
+                          <span className="truncate">{child.label}</span>
                         </Link>
                       );
                     })}
+                  </div>
+                )}
+
+                {/* Flyout flotante en modo Colapsado (Desktop) */}
+                {collapsed && hoveredGroup === item.id && (
+                  <div
+                    className="hidden lg:block absolute left-full top-0 ml-1.5 w-56 bg-[#730202] border border-white/20 rounded-md shadow-2xl py-2 z-50 animate-fadeIn text-white"
+                  >
+                    <div className="px-3 py-1.5 border-b border-white/20 text-xs font-bold text-white uppercase tracking-wider">
+                      {item.label}
+                    </div>
+                    <div className="py-1">
+                      {item.children.map((child) => {
+                        const isActive = pathname === child.href;
+                        return (
+                          <Link
+                            key={child.href}
+                            href={child.href}
+                            onClick={onClose}
+                            className={`block px-3 py-1.5 text-xs transition-colors ${
+                              isActive
+                                ? 'bg-black/35 text-white font-semibold border-l-2 border-white'
+                                : 'text-rose-100 hover:bg-white/10 hover:text-white'
+                            }`}
+                          >
+                            {child.label}
+                          </Link>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
               </div>
             );
           }
 
+          // Opción de Enlace Directo
           const isActive = pathname === item.href;
           return (
-            <Link
-              key={item.href}
-              href={item.href!}
-              onClick={onClose}
-              className={`flex items-center px-4 py-3 text-sm font-medium transition-colors ${
-                isActive ? 'bg-primary-dark text-white' : 'text-blue-100 hover:bg-primary-dark hover:text-white'
-              }`}
-              title={collapsed ? item.label : undefined}
+            <div
+              key={item.id}
+              className="relative"
+              onMouseEnter={() => collapsed && setHoveredGroup(item.id)}
+              onMouseLeave={() => collapsed && setHoveredGroup(null)}
             >
-              <span className="flex-shrink-0">{item.icon}</span>
-              <span className={`ml-3 ${collapsed ? 'lg:hidden' : ''}`}>{item.label}</span>
-            </Link>
+              <Link
+                href={item.href!}
+                onClick={onClose}
+                className={`flex items-center px-4 py-2.5 text-sm font-medium transition-colors ${
+                  isActive
+                    ? 'bg-black/30 text-white border-l-4 border-white font-semibold shadow-inner'
+                    : 'text-rose-100 hover:bg-black/20 hover:text-white'
+                } ${collapsed ? 'lg:justify-center lg:px-2' : ''}`}
+                title={collapsed ? item.label : undefined}
+              >
+                <span className="flex-shrink-0">{item.icon}</span>
+                {!collapsed && <span className="ml-3 truncate">{item.label}</span>}
+              </Link>
+
+              {/* Tooltip simple en modo Colapsado para enlace directo */}
+              {collapsed && hoveredGroup === item.id && (
+                <div
+                  className="hidden lg:block absolute left-full top-1/2 -translate-y-1/2 ml-2 px-3 py-1.5 bg-[#730202] border border-white/20 rounded shadow-xl text-xs font-medium text-white whitespace-nowrap z-50 pointer-events-none"
+                >
+                  {item.label}
+                </div>
+              )}
+            </div>
           );
         })}
       </nav>
 
-      <div className="p-4 border-t border-primary-dark">
-        <p className={`text-xs text-blue-200 text-center ${collapsed ? 'lg:hidden' : ''}`}>v1.0.0 - Sistema CIP</p>
+      {/* Footer del Sidebar con botón de expandir si está colapsado */}
+      <div className="p-3 border-t border-[#730202] bg-black/10 flex items-center justify-between">
+        <div className={`overflow-hidden ${collapsed ? 'lg:hidden' : 'block'}`}>
+          <p className="text-[11px] text-rose-200/80 font-medium truncate">
+            ERP CIP Cusco v2.0
+          </p>
+          <p className="text-[10px] text-rose-200/60 truncate">
+            {rol || 'Usuario'}
+          </p>
+        </div>
+
+        {onToggleCollapse && (
+          <button
+            onClick={onToggleCollapse}
+            className={`hidden lg:flex p-1.5 rounded hover:bg-black/20 text-rose-200 hover:text-white transition-colors ${
+              collapsed ? 'w-full justify-center' : ''
+            }`}
+            title={collapsed ? 'Expandir barra lateral' : 'Colapsar barra lateral'}
+            aria-label={collapsed ? 'Expandir barra lateral' : 'Colapsar barra lateral'}
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              {collapsed ? (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+              ) : (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+              )}
+            </svg>
+          </button>
+        )}
       </div>
     </aside>
   );

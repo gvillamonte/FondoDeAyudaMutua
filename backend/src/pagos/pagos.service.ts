@@ -67,7 +67,9 @@ export class PagosService {
     colegiadoId?: string;
     search?: string;
   }) {
-    const { page = 1, limit = 25, estado, colegiadoId, search } = params;
+    const page = Number(params?.page) > 0 ? Number(params.page) : 1;
+    const limit = Number(params?.limit) > 0 ? Number(params.limit) : 25;
+    const { estado, colegiadoId, search } = params;
     const skip = (page - 1) * limit;
 
     const where: any = {};
@@ -189,7 +191,9 @@ export class PagosService {
   }
 
   async findAllPagos(params: FiltrarPagosDto) {
-    const { colegiadoId, estado, fechaDesde, fechaHasta, page = 1, limit = 25 } = params;
+    const page = Number(params?.page) > 0 ? Number(params.page) : 1;
+    const limit = Number(params?.limit) > 0 ? Number(params.limit) : 25;
+    const { colegiadoId, estado, fechaDesde, fechaHasta } = params;
     const skip = (page - 1) * limit;
 
     const where: any = {};
@@ -259,6 +263,12 @@ export class PagosService {
       solicitudesPagadas,
       totalPagosCompletados,
       montoTotalPagado,
+      famTotal,
+      famPendientes,
+      famAprobadas,
+      famRechazadas,
+      famPagadas,
+      famMontoPagado,
     ] = await Promise.all([
       this.prisma.solicitudBeneficio.count(),
       this.prisma.solicitudBeneficio.count({ where: { estado: 'PENDIENTE' } }),
@@ -271,20 +281,40 @@ export class PagosService {
         _sum: { montoPagado: true },
         _avg: { montoPagado: true },
       }),
+      this.prisma.famSolicitudBeneficio.count(),
+      this.prisma.famSolicitudBeneficio.count({ where: { estado: 'PENDIENTE' } }),
+      this.prisma.famSolicitudBeneficio.count({ where: { estado: 'APROBADA' } }),
+      this.prisma.famSolicitudBeneficio.count({ where: { estado: 'RECHAZADA' } }),
+      this.prisma.famSolicitudBeneficio.count({ where: { estado: 'PAGADA' } }),
+      this.prisma.famSolicitudBeneficio.aggregate({
+        where: { estado: 'PAGADA' },
+        _sum: { monto: true },
+      }),
     ]);
+
+    const totalSol = totalSolicitudes + famTotal;
+    const pendientes = solicitudesPendientes + famPendientes;
+    const aprobadas = solicitudesAprobadas + famAprobadas;
+    const rechazadas = solicitudesRechazadas + famRechazadas;
+    const pagadas = solicitudesPagadas + famPagadas;
+    const totalPagos = totalPagosCompletados + famPagadas;
+    const sumPagos =
+      Number(montoTotalPagado._sum.montoPagado || 0) +
+      Number(famMontoPagado._sum.monto || 0);
+    const avgPagos = totalPagos > 0 ? sumPagos / totalPagos : 0;
 
     return {
       solicitudes: {
-        total: totalSolicitudes,
-        pendientes: solicitudesPendientes,
-        aprobadas: solicitudesAprobadas,
-        rechazadas: solicitudesRechazadas,
-        pagadas: solicitudesPagadas,
+        total: totalSol,
+        pendientes,
+        aprobadas,
+        rechazadas,
+        pagadas,
       },
       pagos: {
-        total: totalPagosCompletados,
-        montoTotal: montoTotalPagado._sum.montoPagado || 0,
-        promedio: montoTotalPagado._avg.montoPagado || 0,
+        total: totalPagos,
+        montoTotal: sumPagos,
+        promedio: avgPagos,
       },
     };
   }

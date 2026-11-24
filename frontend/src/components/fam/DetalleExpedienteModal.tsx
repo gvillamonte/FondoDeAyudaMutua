@@ -112,7 +112,7 @@ const DOCS_LABELS: Record<string, string> = {
 
 const ESTADO_COLORS: Record<string, string> = {
   PENDIENTE: 'bg-amber-100 text-amber-700',
-  EN_REVISION: 'bg-blue-100 text-blue-700',
+  EN_REVISION: 'bg-red-100 text-[#8f0404]',
   APROBADA: 'bg-green-100 text-green-700',
   RECHAZADA: 'bg-red-100 text-red-700',
   PAGADA: 'bg-emerald-600 text-white',
@@ -520,7 +520,7 @@ export default function DetalleExpedienteModal({ id, onClose, onDelete }: { id: 
                   type="button"
                   onClick={verTodosLosDocumentosEnPdf}
                   disabled={uniendoDocs || totalDocsDisponibles === 0}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-white bg-[#3258CA] hover:bg-[#2846a3] disabled:opacity-40 rounded-lg shadow-xs transition-colors shrink-0"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-white bg-[#8f0404] hover:bg-[#730202] disabled:opacity-40 rounded-lg shadow-xs transition-colors shrink-0"
                   title="Ver todos los documentos adjuntos en un solo PDF"
                 >
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -705,7 +705,7 @@ export default function DetalleExpedienteModal({ id, onClose, onDelete }: { id: 
                                     <div className="flex flex-col gap-1">
                                       {fila.historial.map((h: any) => (
                                         <div key={h.id} className="flex items-center gap-1.5">
-                                          <span className={`inline-flex px-1.5 py-0.5 text-[10px] font-bold rounded ${h.estado === 'PAGADA' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
+                                          <span className={`inline-flex px-1.5 py-0.5 text-[10px] font-bold rounded ${h.estado === 'PAGADA' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-[#8f0404]'}`}>
                                             {h.expediente || 'S/N'}
                                           </span>
                                           <span className="text-[10px] text-text-sec truncate max-w-[120px]">
@@ -790,7 +790,7 @@ export default function DetalleExpedienteModal({ id, onClose, onDelete }: { id: 
                         type="button"
                         onClick={verTodosLosDocumentosEnPdf}
                         disabled={uniendoDocs || totalDocsDisponibles === 0}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-[#3258CA] hover:bg-[#2846a3] disabled:opacity-40 rounded-lg shadow-xs transition-colors shrink-0 self-start sm:self-auto"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-[#8f0404] hover:bg-[#730202] disabled:opacity-40 rounded-lg shadow-xs transition-colors shrink-0 self-start sm:self-auto"
                       >
                         {uniendoDocs ? (
                           <>
@@ -815,7 +815,7 @@ export default function DetalleExpedienteModal({ id, onClose, onDelete }: { id: 
                           <span className="text-text-sec inline-flex items-center gap-2">
                             {label}
                             {campo === 'declaracionJurada' && detalle.declaracionJuradaDni && (
-                              <span className="text-[10px] font-medium bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">DNI {detalle.declaracionJuradaDni}</span>
+                              <span className="text-[10px] font-medium bg-red-50 text-[#8f0404] px-1.5 py-0.5 rounded">DNI {detalle.declaracionJuradaDni}</span>
                             )}
                           </span>
                           {detalle.documentosDisponibles?.[campo] ? (
@@ -909,7 +909,7 @@ export default function DetalleExpedienteModal({ id, onClose, onDelete }: { id: 
                                 <td className="px-4 py-3 text-sm text-right font-semibold text-green-700">{fmtMonto(corresponde)}</td>
                                 <td className="px-4 py-3 text-sm">
                                   {b.tieneDeclaracionJurada ? (
-                                    <button type="button" onClick={() => abrirDeclaracionBeneficiario(b.id)} className="text-xs font-semibold text-[#3258CA] hover:underline">
+                                    <button type="button" onClick={() => abrirDeclaracionBeneficiario(b.id)} className="text-xs font-semibold text-[#8f0404] hover:underline">
                                       📄 Ver DJ (PDF)
                                     </button>
                                   ) : (
@@ -1086,7 +1086,7 @@ export default function DetalleExpedienteModal({ id, onClose, onDelete }: { id: 
                                   <td className="px-2 py-1.5">{h.solicitanteNombre || '—'}</td>
                                   <td className="px-2 py-1.5 font-mono">{h.expediente || '—'}</td>
                                   <td className="px-2 py-1.5 text-center">
-                                    <span className={`inline-flex px-1.5 py-0.5 text-[10px] font-bold rounded ${h.estado === 'PAGADA' ? 'bg-green-100 text-green-700' : h.estado === 'APROBADA' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
+                                    <span className={`inline-flex px-1.5 py-0.5 text-[10px] font-bold rounded ${h.estado === 'PAGADA' ? 'bg-green-100 text-green-700' : h.estado === 'APROBADA' ? 'bg-red-100 text-[#8f0404]' : 'bg-gray-100 text-gray-600'}`}>
                                       {h.estado}
                                     </span>
                                     {h.esActual && <span className="ml-1 text-[10px] font-bold text-primary">ACTUAL</span>}

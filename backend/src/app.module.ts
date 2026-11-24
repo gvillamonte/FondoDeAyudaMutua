@@ -20,6 +20,7 @@ import { TesoreriaModule } from './tesoreria/tesoreria.module';
 import { ReportesModule } from './reportes/reportes.module';
 import { HealthModule } from './health/health.module';
 import { ActualizacionDatosModule } from './actualizacion-datos/actualizacion-datos.module';
+import { UsuariosModule } from './usuarios/usuarios.module';
 import { AuditInterceptor } from './audit/audit.interceptor';
 
 @Module({
@@ -47,6 +48,7 @@ import { AuditInterceptor } from './audit/audit.interceptor';
     ReportesModule,
     HealthModule,
     ActualizacionDatosModule,
+    UsuariosModule,
   ],
   providers: [
     { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },

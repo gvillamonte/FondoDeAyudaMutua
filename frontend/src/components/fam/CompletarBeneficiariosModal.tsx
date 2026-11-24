@@ -361,7 +361,7 @@ export default function CompletarBeneficiariosModal({
                     checked={todosIncluidos}
                     disabled={(!isAdmin && pagada) || filas.length === 0}
                     onChange={(e) => seleccionarTodos(e.target.checked)}
-                    className="w-4 h-4 accent-[#3258CA]"
+                    className="w-4 h-4 accent-[#8f0404]"
                   />
                   Seleccionar todos
                 </label>
@@ -383,7 +383,7 @@ export default function CompletarBeneficiariosModal({
                       <button
                         type="button"
                         onClick={agregarFilaManual}
-                        className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-white bg-[#3258CA] hover:bg-[#2846a2] rounded-lg transition-colors shadow-sm"
+                        className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-white bg-[#8f0404] hover:bg-[#730202] rounded-lg transition-colors shadow-sm"
                       >
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -407,7 +407,7 @@ export default function CompletarBeneficiariosModal({
                     <div className="flex items-start gap-3">
                       <input type="checkbox" checked={f.incluido} disabled={(!isAdmin && pagada) || (f.yaVinculado && !isAdmin && pagada)}
                         onChange={(e) => actualizar(f.key, { incluido: e.target.checked })}
-                        className="mt-1 w-4 h-4 accent-[#3258CA]" />
+                        className="mt-1 w-4 h-4 accent-[#8f0404]" />
                       <div className="flex-1 min-w-0 space-y-2">
                         <div className="flex items-center justify-between gap-2 flex-wrap">
                           {f.esNuevoManual ? (

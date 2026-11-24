@@ -63,7 +63,7 @@ export default function ModalNuevaCarta({ open, onClose, onSuccess }: ModalNueva
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-slate-50/50">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-[#3258CA]/10 text-[#3258CA] flex items-center justify-center">
+            <div className="w-9 h-9 rounded-lg bg-[#8f0404]/10 text-[#8f0404] flex items-center justify-center">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   strokeLinecap="round"
@@ -116,7 +116,7 @@ export default function ModalNuevaCarta({ open, onClose, onSuccess }: ModalNueva
               onChange={(e) => setNumero(e.target.value)}
               placeholder="Ej. CART-0123-2026"
               required
-              className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#3258CA]/30 focus:border-[#3258CA]"
+              className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#8f0404]/30 focus:border-[#8f0404]"
             />
           </div>
 
@@ -128,7 +128,7 @@ export default function ModalNuevaCarta({ open, onClose, onSuccess }: ModalNueva
               type="date"
               value={fecha}
               onChange={(e) => setFecha(e.target.value)}
-              className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#3258CA]/30 focus:border-[#3258CA]"
+              className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#8f0404]/30 focus:border-[#8f0404]"
             />
           </div>
 
@@ -141,7 +141,7 @@ export default function ModalNuevaCarta({ open, onClose, onSuccess }: ModalNueva
               value={referencia}
               onChange={(e) => setReferencia(e.target.value)}
               placeholder="Ej. Remisión de expediente FAM a Gerencia"
-              className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#3258CA]/30 focus:border-[#3258CA]"
+              className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#8f0404]/30 focus:border-[#8f0404]"
             />
           </div>
 
@@ -158,7 +158,7 @@ export default function ModalNuevaCarta({ open, onClose, onSuccess }: ModalNueva
             <button
               type="submit"
               disabled={guardando}
-              className="px-4 py-2 text-sm font-medium text-white bg-[#3258CA] hover:bg-[#2846a2] rounded-lg inline-flex items-center gap-2 transition-colors disabled:opacity-50"
+              className="px-4 py-2 text-sm font-medium text-white bg-[#8f0404] hover:bg-[#730202] rounded-lg inline-flex items-center gap-2 transition-colors disabled:opacity-50"
             >
               {guardando && (
                 <svg

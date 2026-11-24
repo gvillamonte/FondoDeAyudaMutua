@@ -316,7 +316,7 @@ export default function PagoExpedienteModal({
                         Beneficiario: {f.nombre}
                       </p>
                       {f.parentesco && (
-                        <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-blue-50 text-[#3258CA] border border-blue-200">
+                        <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-red-50 text-[#8f0404] border border-red-200">
                           {f.parentesco}
                         </span>
                       )}
@@ -356,7 +356,7 @@ export default function PagoExpedienteModal({
                       type="checkbox"
                       checked={f.conCartaPoder}
                       onChange={(e) => actualizar(i, { conCartaPoder: e.target.checked })}
-                      className="w-3.5 h-3.5 accent-[#3258CA] rounded"
+                      className="w-3.5 h-3.5 accent-[#8f0404] rounded"
                     />
                     <span className="text-xs font-semibold text-amber-800">
                       📋 ¿Otorga Carta Poder a otra persona para cobrar el cheque / recibir el beneficio?
@@ -425,7 +425,7 @@ export default function PagoExpedienteModal({
                           ) : (
                             <span className="text-xs text-amber-800">Opcional</span>
                           )}
-                          <label className="cursor-pointer text-xs font-semibold text-[#3258CA] hover:underline">
+                          <label className="cursor-pointer text-xs font-semibold text-[#8f0404] hover:underline">
                             {cartasPoder[key] ? 'Reemplazar PDF' : 'Subir Carta Poder'}
                             <input
                               type="file"

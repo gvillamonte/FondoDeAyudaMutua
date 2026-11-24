@@ -684,7 +684,7 @@ export default function RegistroWizard() {
           </div>
 
           {solicitud.tipoBeneficioConfigId && (
-            <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
+            <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
               <button
                 type="button"
                 onClick={() => {
@@ -711,7 +711,7 @@ export default function RegistroWizard() {
               <div className="flex flex-col sm:flex-row sm:items-center justify-between w-full gap-1">
                 <span className="text-sm text-text-main font-medium">¿El titular del colegiado es el beneficiario?</span>
                 {beneficiarioEsTitular && (
-                  <span className="text-[11px] text-blue-700 font-semibold bg-blue-100/60 px-2 py-0.5 rounded">
+                  <span className="text-[11px] text-[#8f0404] font-semibold bg-red-100/60 px-2 py-0.5 rounded">
                     ✓ Titular asignado como beneficiario único (100%)
                   </span>
                 )}

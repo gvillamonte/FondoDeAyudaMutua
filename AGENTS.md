@@ -23,7 +23,7 @@
 ### Paleta de Colores
 | Elemento           | Color     | Uso                                          |
 |--------------------|-----------|----------------------------------------------|
-| Primario Institucional | `#3258CA` | Sidebar, Header, botones principales, menús activos |
+| Primario Institucional | `#8f0404` | Sidebar, Header, botones principales (.btn-primary), menús activos |
 | Blanco             | `#FFFFFF` | Contenedores, tarjetas, formularios           |
 | Gris Claro         | `#F8FAFC` | Fondo general del layout                      |
 | Texto Principal    | `#1E293B` | Títulos, labels, contenido                    |
@@ -151,6 +151,7 @@ Sistema CIP/
 │   ├── 012_fam_covid_asignaciones.sql
 │   └── 013_reembolso_comprobantes.sql
 ├── skills/                      # Reglas para el agente de IA (CRÍTICAS — evitar regresiones)
+│   ├── css_preservation_policy.md # PROHIBICIÓN: No tocar CSS global, preservar estilos y Tailwind JIT
 │   ├── db_connection_manager.md # Dual datasource, Request sharing, fusión legacy+APP_DB
 │   ├── color_palette_checker.md # Paleta #3258CA
 │   ├── audit_logger_interceptor.md # Campos exactos AuditLog, snapshot solicitante

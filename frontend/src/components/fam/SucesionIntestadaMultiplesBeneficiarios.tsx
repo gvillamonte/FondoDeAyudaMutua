@@ -403,12 +403,12 @@ export default function SucesionIntestadaMultiplesBeneficiarios({
   };
 
   return (
-    <div className="border border-blue-200 bg-blue-50/40 rounded-xl p-4 sm:p-5 space-y-5">
+    <div className="border border-red-200 bg-red-50/40 rounded-xl p-4 sm:p-5 space-y-5">
       {/* Cabecera Informativa */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-blue-200/80 pb-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-red-200/80 pb-3">
         <div>
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-blue-100 text-[#3258CA]">
+            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-[#8f0404]">
               Sucesión Intestada (Múltiples Beneficiarios)
             </span>
             <span className="text-xs text-text-sec">
@@ -432,7 +432,7 @@ export default function SucesionIntestadaMultiplesBeneficiarios({
           <button
             type="button"
             onClick={repartirEquitativamente}
-            className="px-2.5 py-1 text-xs font-medium text-[#3258CA] bg-white border border-[#3258CA]/40 rounded-lg hover:bg-blue-50 transition-colors"
+            className="px-2.5 py-1 text-xs font-medium text-[#8f0404] bg-white border border-[#8f0404]/40 rounded-lg hover:bg-red-50 transition-colors"
             title="Dividir en partes iguales con ajuste de centavos"
           >
             ⚖️ Repartir equitativamente
@@ -440,7 +440,7 @@ export default function SucesionIntestadaMultiplesBeneficiarios({
           <button
             type="button"
             onClick={() => setMostrarModalResumen(true)}
-            className="px-2.5 py-1 text-xs font-medium text-white bg-[#3258CA] rounded-lg hover:bg-[#25439b] transition-colors"
+            className="px-2.5 py-1 text-xs font-medium text-white bg-[#8f0404] rounded-lg hover:bg-[#730202] transition-colors"
           >
             📋 Ver Resumen
           </button>
@@ -468,7 +468,7 @@ export default function SucesionIntestadaMultiplesBeneficiarios({
               }}
               className={`px-3 py-1.5 rounded-md transition-all ${
                 cuentaConSucesion !== false
-                  ? 'bg-white text-[#3258CA] font-semibold shadow-sm'
+                  ? 'bg-white text-[#8f0404] font-semibold shadow-sm'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -481,7 +481,7 @@ export default function SucesionIntestadaMultiplesBeneficiarios({
               }}
               className={`px-3 py-1.5 rounded-md transition-all ${
                 cuentaConSucesion === false
-                  ? 'bg-amber-600 text-white font-semibold shadow-sm'
+                  ? 'bg-[#8f0404] text-white font-semibold shadow-sm'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -511,7 +511,7 @@ export default function SucesionIntestadaMultiplesBeneficiarios({
                   <button
                     type="button"
                     onClick={() => onAbrirPdf(sucesionPdf.base64, 'Sustento de Sucesión Intestada')}
-                    className="text-xs font-semibold text-[#3258CA] hover:underline"
+                    className="text-xs font-semibold text-[#8f0404] hover:underline"
                   >
                     Ver PDF
                   </button>
@@ -527,7 +527,7 @@ export default function SucesionIntestadaMultiplesBeneficiarios({
               ) : (
                 <label
                   htmlFor={sustentoInputId}
-                  className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-[#3258CA] hover:bg-[#25439b] rounded-lg transition-colors shadow-sm"
+                  className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-[#8f0404] hover:bg-[#730202] rounded-lg transition-colors shadow-sm"
                 >
                   📄 Subir Sustento Legal (PDF o Imagen)
                   <input
@@ -612,7 +612,7 @@ export default function SucesionIntestadaMultiplesBeneficiarios({
                 onClick={() => setModoEdicion('porcentaje')}
                 className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
                   modoEdicion === 'porcentaje'
-                    ? 'bg-white text-[#3258CA] shadow-sm font-semibold'
+                    ? 'bg-white text-[#8f0404] shadow-sm font-semibold'
                     : 'text-text-sec hover:text-text-main'
                 }`}
               >
@@ -623,7 +623,7 @@ export default function SucesionIntestadaMultiplesBeneficiarios({
                 onClick={() => setModoEdicion('monto')}
                 className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
                   modoEdicion === 'monto'
-                    ? 'bg-white text-[#3258CA] shadow-sm font-semibold'
+                    ? 'bg-white text-[#8f0404] shadow-sm font-semibold'
                     : 'text-text-sec hover:text-text-main'
                 }`}
               >
@@ -633,7 +633,7 @@ export default function SucesionIntestadaMultiplesBeneficiarios({
           </div>
 
           <div className="text-xs text-text-main font-semibold">
-            Monto Total a Repartir: <span className="text-[#3258CA] text-sm font-bold">S/ {montoTotal.toFixed(2)}</span>
+            Monto Total a Repartir: <span className="text-[#8f0404] text-sm font-bold">S/ {montoTotal.toFixed(2)}</span>
           </div>
         </div>
 
@@ -696,12 +696,12 @@ export default function SucesionIntestadaMultiplesBeneficiarios({
               className={`bg-white border rounded-xl p-3 sm:p-4 space-y-3 transition-colors ${
                 esDuplicado
                   ? 'border-red-400 bg-red-50/20 shadow-sm'
-                  : 'border-border hover:border-blue-300'
+                  : 'border-border hover:border-red-300'
               }`}
             >
               <div className="flex items-center justify-between gap-2 border-b border-gray-100 pb-2">
-                <span className="text-xs font-bold text-[#3258CA] flex items-center gap-1.5">
-                  <span className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center text-[11px]">
+                <span className="text-xs font-bold text-[#8f0404] flex items-center gap-1.5">
+                  <span className="w-5 h-5 rounded-full bg-red-100 flex items-center justify-center text-[11px]">
                     {idx + 1}
                   </span>
                   Heredero Legal #{idx + 1}: {h.nombres && h.apellidos ? `${h.nombres} ${h.apellidos}` : 'Nuevo'}
@@ -844,7 +844,7 @@ export default function SucesionIntestadaMultiplesBeneficiarios({
                     <button
                       type="button"
                       onClick={() => completarMontoExactoHeredero(h.key)}
-                      className="text-[9px] text-[#3258CA] font-bold hover:underline"
+                      className="text-[9px] text-[#8f0404] font-bold hover:underline"
                       title="Completar el monto restante exacto"
                     >
                       ⚡ Exacto
@@ -916,7 +916,7 @@ export default function SucesionIntestadaMultiplesBeneficiarios({
                     <button
                       type="button"
                       onClick={() => generarDjHeredero(h)}
-                      className="px-2 py-1 text-[11px] font-medium text-[#3258CA] bg-white border border-[#3258CA]/40 rounded hover:bg-blue-50 transition-colors"
+                      className="px-2 py-1 text-[11px] font-medium text-[#8f0404] bg-white border border-[#8f0404]/40 rounded hover:bg-red-50 transition-colors"
                       title="Generar la declaración jurada oficial en PDF con los datos actuales"
                     >
                       {tieneDj ? '🔄 Regenerar DJ' : '⚡ Generar DJ Oficial'}
@@ -964,7 +964,7 @@ export default function SucesionIntestadaMultiplesBeneficiarios({
                         ✓ Voucher listo
                       </span>
                     ) : (
-                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-100 text-[#3258CA]">
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-100 text-[#8f0404]">
                         Asignado: S/ {h.monto.toFixed(2)}
                       </span>
                     )}
@@ -974,7 +974,7 @@ export default function SucesionIntestadaMultiplesBeneficiarios({
                     <button
                       type="button"
                       onClick={() => generarVoucherHeredero(h)}
-                      className="px-2 py-1 text-[11px] font-medium text-[#3258CA] bg-white border border-[#3258CA]/40 rounded hover:bg-blue-50 transition-colors"
+                      className="px-2 py-1 text-[11px] font-medium text-[#8f0404] bg-white border border-[#8f0404]/40 rounded hover:bg-red-50 transition-colors"
                       title="Generar la orden de pago/voucher oficial en PDF"
                     >
                       {tieneVoucher ? '🔄 Regenerar Voucher' : '⚡ Generar Voucher'}
@@ -1020,7 +1020,7 @@ export default function SucesionIntestadaMultiplesBeneficiarios({
           <button
             type="button"
             onClick={agregarHeredero}
-            className="w-full py-2.5 border-2 border-dashed border-[#3258CA]/40 hover:border-[#3258CA] text-[#3258CA] hover:bg-blue-50/60 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-sm"
+            className="w-full py-2.5 border-2 border-dashed border-[#8f0404]/40 hover:border-[#8f0404] text-[#8f0404] hover:bg-red-50/60 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-sm"
           >
             <span>+</span> Agregar otro beneficiario heredero (hasta 20)
           </button>
@@ -1124,7 +1124,7 @@ export default function SucesionIntestadaMultiplesBeneficiarios({
                     </tr>
                   ))}
                 </tbody>
-                <tfoot className="bg-blue-50/50 font-bold border-t border-border">
+                <tfoot className="bg-red-50/50 font-bold border-t border-border">
                   <tr>
                     <td colSpan={4} className="p-2 text-right">
                       Totales:
@@ -1161,7 +1161,7 @@ export default function SucesionIntestadaMultiplesBeneficiarios({
               <button
                 type="button"
                 onClick={() => setMostrarModalResumen(false)}
-                className="px-4 py-2 bg-[#3258CA] hover:bg-[#25439b] text-white text-xs font-semibold rounded-lg"
+                className="px-4 py-2 bg-[#8f0404] hover:bg-[#730202] text-white text-xs font-semibold rounded-lg"
               >
                 Cerrar y Continuar Edición
               </button>

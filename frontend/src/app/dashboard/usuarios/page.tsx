@@ -13,6 +13,98 @@ interface PasswordValidation {
   isValid: boolean;
 }
 
+const AREAS_SISTEMA = [
+  { id: 'TODAS', label: 'Todas las Áreas', icon: '🏛️' },
+  { id: 'FAM', label: 'Fondo Asistencia Mutua (FAM)', icon: '👥' },
+  { id: 'CAJA', label: 'Caja y Cobranzas', icon: '💰' },
+  { id: 'TESORERIA', label: 'Tesorería y Finanzas', icon: '📈' },
+  { id: 'ATENCION', label: 'Atención / Mesa de Partes', icon: '📋' },
+  { id: 'PAGOS', label: 'Pagos y Beneficios', icon: '💳' },
+  { id: 'AUDITORIA', label: 'Auditoría y Control', icon: '🔍' },
+  { id: 'DIRECCION', label: 'Decanato y Dirección', icon: '⚖️' },
+  { id: 'TI', label: 'Sistemas / TI', icon: '💻' },
+];
+
+const getAreaFromRol = (rolId: string, desc?: string | null): { area: string; label: string; icon: string; badgeClass: string } => {
+  const upper = rolId.toUpperCase();
+  const d = (desc || '').toUpperCase();
+  if (upper.includes('FAM')) return { area: 'FAM', label: 'Fondo Asistencia Mutua', icon: '👥', badgeClass: 'bg-emerald-50 text-emerald-800 border-emerald-200' };
+  if (upper.includes('CAJA') || upper.includes('CAJERO')) return { area: 'CAJA', label: 'Caja y Cobranzas', icon: '💰', badgeClass: 'bg-amber-50 text-amber-800 border-amber-200' };
+  if (upper.includes('TESORER')) return { area: 'TESORERIA', label: 'Tesorería y Finanzas', icon: '📈', badgeClass: 'bg-blue-50 text-blue-800 border-blue-200' };
+  if (upper.includes('MESA') || upper.includes('ATENCION') || upper.includes('PARTES')) return { area: 'ATENCION', label: 'Mesa de Partes / Atención', icon: '📋', badgeClass: 'bg-purple-50 text-purple-800 border-purple-200' };
+  if (upper.includes('AUDIT')) return { area: 'AUDITORIA', label: 'Auditoría y Control', icon: '🔍', badgeClass: 'bg-indigo-50 text-indigo-800 border-indigo-200' };
+  if (upper.includes('DIRECT') || upper.includes('DECAN')) return { area: 'DIRECCION', label: 'Decanato y Dirección', icon: '⚖️', badgeClass: 'bg-rose-50 text-rose-800 border-rose-200' };
+  if (upper.includes('PAGO')) return { area: 'PAGOS', label: 'Pagos y Beneficios', icon: '💳', badgeClass: 'bg-teal-50 text-teal-800 border-teal-200' };
+  if (upper.includes('TI') || upper.includes('SOPORTE')) return { area: 'TI', label: 'Sistemas / TI', icon: '💻', badgeClass: 'bg-cyan-50 text-cyan-800 border-cyan-200' };
+  return { area: 'TI', label: 'Administración General', icon: '⚙️', badgeClass: 'bg-slate-100 text-slate-800 border-slate-300' };
+};
+
+const PLANTILLAS_ROLES = [
+  {
+    area: 'FAM',
+    id: 'OPERADOR_FAM',
+    nombre: 'Operador FAM',
+    descripcion: 'Área FAM: Registro y seguimiento de beneficiarios, subsidios y expedientes',
+    modulos: ['dashboard', 'colegiados', 'fam', 'beneficios', 'reportes'],
+  },
+  {
+    area: 'FAM',
+    id: 'SUPERVISOR_FAM',
+    nombre: 'Supervisor / Jefatura FAM',
+    descripcion: 'Jefatura FAM: Aprobación, fiscalización, configuración SLA y reportes de expedientes',
+    modulos: ['dashboard', 'colegiados', 'fam', 'beneficios', 'pagos', 'reportes', 'configuraciones'],
+  },
+  {
+    area: 'CAJA',
+    id: 'CAJERO',
+    nombre: 'Cajero / Cobranzas',
+    descripcion: 'Área de Caja: Cobro de aportaciones ordinarias, IEPI, derechos y consulta de pagos',
+    modulos: ['dashboard', 'colegiados', 'caja', 'pagos'],
+  },
+  {
+    area: 'TESORERIA',
+    id: 'TESORERIA',
+    nombre: 'Tesorería y Finanzas',
+    descripcion: 'Área de Tesorería: Fraccionamiento de deudas, convenios de pago y control financiero',
+    modulos: ['dashboard', 'colegiados', 'tesoreria', 'caja', 'pagos', 'reportes'],
+  },
+  {
+    area: 'ATENCION',
+    id: 'MESA_PARTES',
+    nombre: 'Atención al Colegiado / Mesa de Partes',
+    descripcion: 'Atención: Recepción de solicitudes, actualización de datos y verificación de habilidad',
+    modulos: ['dashboard', 'colegiados', 'actualizacion-datos', 'reportes'],
+  },
+  {
+    area: 'AUDITORIA',
+    id: 'AUDITOR',
+    nombre: 'Auditoría y Control Interno',
+    descripcion: 'Control Interno: Supervisión de trazabilidad, logs inmutables y reportes globales',
+    modulos: ['dashboard', 'colegiados', 'beneficios', 'pagos', 'reportes', 'auditoria'],
+  },
+  {
+    area: 'DIRECCION',
+    id: 'DIRECTORIO',
+    nombre: 'Decanato y Junta Directiva',
+    descripcion: 'Alta Dirección: Consulta ejecutiva de indicadores, recaudación, estados y padrón',
+    modulos: ['dashboard', 'colegiados', 'fam', 'caja', 'tesoreria', 'reportes', 'auditoria'],
+  },
+  {
+    area: 'TI',
+    id: 'SOPORTE_TI',
+    nombre: 'Soporte y Sistemas TI',
+    descripcion: 'Área de TI: Administración técnica de usuarios, roles, configuraciones y auditoría',
+    modulos: ['dashboard', 'configuraciones', 'auditoria', 'usuarios'],
+  },
+  {
+    area: 'PAGOS',
+    id: 'OPERADOR_PAGOS',
+    nombre: 'Operador de Pagos y Beneficios',
+    descripcion: 'Área de Pagos: Gestión operativa de pagos, órdenes de desembolso y beneficios',
+    modulos: ['dashboard', 'colegiados', 'beneficios', 'pagos', 'caja', 'fam'],
+  },
+];
+
 export default function UsuariosPage() {
   const [activeTab, setActiveTab] = useState<'usuarios' | 'roles'>('usuarios');
   const [loading, setLoading] = useState(true);
@@ -23,6 +115,7 @@ export default function UsuariosPage() {
   const [usuarios, setUsuarios] = useState<UsuarioAdmin[]>([]);
   const [roles, setRoles] = useState<Rol[]>([]);
   const [modulosCatalogo, setModulosCatalogo] = useState<ModuloSistema[]>([]);
+  const [filtroAreaRol, setFiltroAreaRol] = useState('TODAS');
 
   // Filtros de usuarios
   const [searchTerm, setSearchTerm] = useState('');
@@ -742,31 +835,74 @@ export default function UsuariosPage() {
             </div>
           </div>
 
+          {/* Filtro por Áreas */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+            {AREAS_SISTEMA.map((area) => {
+              const isSelected = filtroAreaRol === area.id;
+              const count = area.id === 'TODAS'
+                ? roles.length
+                : roles.filter((r) => getAreaFromRol(r.id, r.descripcion).area === area.id).length;
+
+              return (
+                <button
+                  key={area.id}
+                  onClick={() => setFiltroAreaRol(area.id)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 border ${
+                    isSelected
+                      ? 'bg-[#8f0404] text-white border-[#8f0404] shadow-sm'
+                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  <span>{area.icon}</span>
+                  <span>{area.label}</span>
+                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                    isSelected ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+                  }`}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
           {/* Grilla de Roles */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {roles.map((rol) => (
-              <div
-                key={rol.id}
-                className={`bg-white border rounded-lg p-5 shadow-sm flex flex-col justify-between transition-shadow hover:shadow-md ${
-                  rol.activo ? 'border-[#E2E8F0]' : 'border-red-200 bg-red-50/20'
-                }`}
-              >
-                <div>
-                  <div className="flex items-start justify-between gap-2">
+            {roles
+              .filter((r) => {
+                if (filtroAreaRol === 'TODAS') return true;
+                return getAreaFromRol(r.id, r.descripcion).area === filtroAreaRol;
+              })
+              .map((rol) => {
+                const areaInfo = getAreaFromRol(rol.id, rol.descripcion);
+                return (
+                  <div
+                    key={rol.id}
+                    className={`bg-white border rounded-lg p-5 shadow-sm flex flex-col justify-between transition-shadow hover:shadow-md ${
+                      rol.activo ? 'border-[#E2E8F0]' : 'border-red-200 bg-red-50/20'
+                    }`}
+                  >
                     <div>
-                      <h3 className="font-bold text-[#1E293B] text-base">{rol.nombre}</h3>
-                      <span className="text-xs font-mono text-[#64748B] block mt-0.5">ID: {rol.id}</span>
-                    </div>
-                    {rol.activo ? (
-                      <span className="px-2 py-0.5 rounded text-xs font-medium bg-green-50 text-[#16A34A] border border-green-200">
-                        Activo
-                      </span>
-                    ) : (
-                      <span className="px-2 py-0.5 rounded text-xs font-medium bg-red-50 text-[#DC2626] border border-red-200">
-                        Inactivo
-                      </span>
-                    )}
-                  </div>
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="font-bold text-[#1E293B] text-base">{rol.nombre}</h3>
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold border ${areaInfo.badgeClass}`}>
+                              <span>{areaInfo.icon}</span>
+                              <span>{areaInfo.label}</span>
+                            </span>
+                          </div>
+                          <span className="text-xs font-mono text-[#64748B] block mt-1">ID: {rol.id}</span>
+                        </div>
+                        {rol.activo ? (
+                          <span className="px-2 py-0.5 rounded text-xs font-medium bg-green-50 text-[#16A34A] border border-green-200">
+                            Activo
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded text-xs font-medium bg-red-50 text-[#DC2626] border border-red-200">
+                            Inactivo
+                          </span>
+                        )}
+                      </div>
 
                   <p className="text-xs text-[#64748B] mt-3 line-clamp-2">
                     {rol.descripcion || 'Sin descripción asignada.'}
@@ -834,7 +970,8 @@ export default function UsuariosPage() {
                   </div>
                 </div>
               </div>
-            ))}
+            );
+          })}
           </div>
         </div>
       )}
@@ -912,11 +1049,14 @@ export default function UsuariosPage() {
                     onChange={(e) => setFormRol(e.target.value)}
                     className="w-full px-3 py-2 border border-[#E2E8F0] rounded-md text-sm text-[#1E293B] focus:outline-none focus:border-[#8f0404]"
                   >
-                    {roles.map((r) => (
-                      <option key={r.id} value={r.id} disabled={!r.activo}>
-                        {r.nombre} {!r.activo ? '(Desactivado)' : ''}
-                      </option>
-                    ))}
+                    {roles.map((r) => {
+                      const info = getAreaFromRol(r.id, r.descripcion);
+                      return (
+                        <option key={r.id} value={r.id} disabled={!r.activo}>
+                          [{info.label}] {r.nombre} {!r.activo ? '(Desactivado)' : ''}
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
 
@@ -1128,6 +1268,41 @@ export default function UsuariosPage() {
             </div>
 
             <form onSubmit={handleSaveRole} className="p-6 space-y-5">
+              {!editingRole && (
+                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-lg">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                      <span>⚡</span> Plantillas Rápidas por Área (1-Clic)
+                    </span>
+                    <span className="text-[11px] text-slate-500">Autocompleta código, nombre y módulos</span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {PLANTILLAS_ROLES.map((plantilla) => {
+                      const info = getAreaFromRol(plantilla.id, plantilla.descripcion);
+                      return (
+                        <button
+                          key={plantilla.id}
+                          type="button"
+                          onClick={() => {
+                            setFormRoleId(plantilla.id);
+                            setFormRoleNombre(plantilla.nombre);
+                            setFormRoleDesc(plantilla.descripcion);
+                            setFormRoleModulos(plantilla.modulos);
+                          }}
+                          className="p-2 bg-white border border-slate-200 rounded-md text-left hover:border-[#8f0404] hover:bg-red-50/40 transition-all text-xs group"
+                        >
+                          <div className="flex items-center gap-1">
+                            <span>{info.icon}</span>
+                            <span className="font-semibold text-slate-800 truncate group-hover:text-[#8f0404]">{plantilla.nombre}</span>
+                          </div>
+                          <span className="text-[10px] text-slate-500 block truncate mt-0.5">{plantilla.modulos.length} módulos habilitados</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-[#1E293B] uppercase tracking-wider mb-1">

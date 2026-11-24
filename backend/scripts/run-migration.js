@@ -219,7 +219,59 @@ async function run() {
        AND s.orden_pago_fecha IS NULL
        AND s.fecha_pago IS NOT NULL
        AND CAST(s.fecha_pago AS DATE) = CAST(s.created_at AS DATE)
-       AND NOT EXISTS (SELECT 1 FROM fam_depositos_beneficiario d WHERE d.solicitud_id = s.id)`
+       AND NOT EXISTS (SELECT 1 FROM fam_depositos_beneficiario d WHERE d.solicitud_id = s.id)`,
+    `IF OBJECT_ID('roles', 'U') IS NULL
+     BEGIN
+       CREATE TABLE roles (
+         id VARCHAR(50) PRIMARY KEY,
+         nombre VARCHAR(100) NOT NULL,
+         descripcion NVARCHAR(500) NULL,
+         modulos NVARCHAR(MAX) NOT NULL DEFAULT '[]',
+         activo BIT NOT NULL DEFAULT 1,
+         created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
+         updated_at DATETIME2 NOT NULL DEFAULT GETDATE()
+       );
+     END`,
+    `IF NOT EXISTS (SELECT 1 FROM roles WHERE id = 'ADMINISTRADOR')
+       INSERT INTO roles (id, nombre, descripcion, modulos, activo) VALUES ('ADMINISTRADOR', 'Administrador General', 'Acceso total y configuración integral de todos los módulos del sistema', '["dashboard","colegiados","actualizacion-datos","beneficios","pagos","caja","tesoreria","fam","reportes","configuraciones","auditoria","usuarios"]', 1);
+     ELSE
+       UPDATE roles SET nombre = 'Administrador General', descripcion = 'Acceso total y configuración integral de todos los módulos del sistema', modulos = '["dashboard","colegiados","actualizacion-datos","beneficios","pagos","caja","tesoreria","fam","reportes","configuraciones","auditoria","usuarios"]' WHERE id = 'ADMINISTRADOR'`,
+    `IF NOT EXISTS (SELECT 1 FROM roles WHERE id = 'OPERADOR_FAM')
+       INSERT INTO roles (id, nombre, descripcion, modulos, activo) VALUES ('OPERADOR_FAM', 'Operador FAM', 'Área FAM: Registro y seguimiento de beneficiarios, subsidios y expedientes', '["dashboard","colegiados","fam","beneficios","reportes"]', 1);
+     ELSE
+       UPDATE roles SET nombre = 'Operador FAM', descripcion = 'Área FAM: Registro y seguimiento de beneficiarios, subsidios y expedientes', modulos = '["dashboard","colegiados","fam","beneficios","reportes"]' WHERE id = 'OPERADOR_FAM'`,
+    `IF NOT EXISTS (SELECT 1 FROM roles WHERE id = 'SUPERVISOR_FAM')
+       INSERT INTO roles (id, nombre, descripcion, modulos, activo) VALUES ('SUPERVISOR_FAM', 'Supervisor / Jefatura FAM', 'Jefatura FAM: Aprobación, fiscalización, configuración SLA y reportes de expedientes', '["dashboard","colegiados","fam","beneficios","pagos","reportes","configuraciones"]', 1);
+     ELSE
+       UPDATE roles SET nombre = 'Supervisor / Jefatura FAM', descripcion = 'Jefatura FAM: Aprobación, fiscalización, configuración SLA y reportes de expedientes', modulos = '["dashboard","colegiados","fam","beneficios","pagos","reportes","configuraciones"]' WHERE id = 'SUPERVISOR_FAM'`,
+    `IF NOT EXISTS (SELECT 1 FROM roles WHERE id = 'CAJERO')
+       INSERT INTO roles (id, nombre, descripcion, modulos, activo) VALUES ('CAJERO', 'Cajero / Cobranzas', 'Área de Caja: Cobro de aportaciones ordinarias, IEPI, derechos y consulta de pagos', '["dashboard","colegiados","caja","pagos"]', 1);
+     ELSE
+       UPDATE roles SET nombre = 'Cajero / Cobranzas', descripcion = 'Área de Caja: Cobro de aportaciones ordinarias, IEPI, derechos y consulta de pagos', modulos = '["dashboard","colegiados","caja","pagos"]' WHERE id = 'CAJERO'`,
+    `IF NOT EXISTS (SELECT 1 FROM roles WHERE id = 'TESORERIA')
+       INSERT INTO roles (id, nombre, descripcion, modulos, activo) VALUES ('TESORERIA', 'Tesorería y Finanzas', 'Área de Tesorería: Fraccionamiento de deudas, convenios de pago y control financiero', '["dashboard","colegiados","tesoreria","caja","pagos","reportes"]', 1);
+     ELSE
+       UPDATE roles SET nombre = 'Tesorería y Finanzas', descripcion = 'Área de Tesorería: Fraccionamiento de deudas, convenios de pago y control financiero', modulos = '["dashboard","colegiados","tesoreria","caja","pagos","reportes"]' WHERE id = 'TESORERIA'`,
+    `IF NOT EXISTS (SELECT 1 FROM roles WHERE id = 'MESA_PARTES')
+       INSERT INTO roles (id, nombre, descripcion, modulos, activo) VALUES ('MESA_PARTES', 'Atención al Colegiado / Mesa de Partes', 'Atención: Recepción de solicitudes, actualización de datos y verificación de habilidad', '["dashboard","colegiados","actualizacion-datos","reportes"]', 1);
+     ELSE
+       UPDATE roles SET nombre = 'Atención al Colegiado / Mesa de Partes', descripcion = 'Atención: Recepción de solicitudes, actualización de datos y verificación de habilidad', modulos = '["dashboard","colegiados","actualizacion-datos","reportes"]' WHERE id = 'MESA_PARTES'`,
+    `IF NOT EXISTS (SELECT 1 FROM roles WHERE id = 'AUDITOR')
+       INSERT INTO roles (id, nombre, descripcion, modulos, activo) VALUES ('AUDITOR', 'Auditoría y Control Interno', 'Control Interno: Supervisión de trazabilidad, logs inmutables y reportes globales', '["dashboard","colegiados","beneficios","pagos","reportes","auditoria"]', 1);
+     ELSE
+       UPDATE roles SET nombre = 'Auditoría y Control Interno', descripcion = 'Control Interno: Supervisión de trazabilidad, logs inmutables y reportes globales', modulos = '["dashboard","colegiados","beneficios","pagos","reportes","auditoria"]' WHERE id = 'AUDITOR'`,
+    `IF NOT EXISTS (SELECT 1 FROM roles WHERE id = 'DIRECTORIO')
+       INSERT INTO roles (id, nombre, descripcion, modulos, activo) VALUES ('DIRECTORIO', 'Decanato y Junta Directiva', 'Alta Dirección: Consulta ejecutiva de indicadores, recaudación, estados y padrón', '["dashboard","colegiados","fam","caja","tesoreria","reportes","auditoria"]', 1);
+     ELSE
+       UPDATE roles SET nombre = 'Decanato y Junta Directiva', descripcion = 'Alta Dirección: Consulta ejecutiva de indicadores, recaudación, estados y padrón', modulos = '["dashboard","colegiados","fam","caja","tesoreria","reportes","auditoria"]' WHERE id = 'DIRECTORIO'`,
+    `IF NOT EXISTS (SELECT 1 FROM roles WHERE id = 'SOPORTE_TI')
+       INSERT INTO roles (id, nombre, descripcion, modulos, activo) VALUES ('SOPORTE_TI', 'Soporte y Sistemas TI', 'Área de TI: Administración técnica de usuarios, roles, configuraciones y auditoría', '["dashboard","configuraciones","auditoria","usuarios"]', 1);
+     ELSE
+       UPDATE roles SET nombre = 'Soporte y Sistemas TI', descripcion = 'Área de TI: Administración técnica de usuarios, roles, configuraciones y auditoría', modulos = '["dashboard","configuraciones","auditoria","usuarios"]' WHERE id = 'SOPORTE_TI'`,
+    `IF NOT EXISTS (SELECT 1 FROM roles WHERE id = 'OPERADOR_PAGOS')
+       INSERT INTO roles (id, nombre, descripcion, modulos, activo) VALUES ('OPERADOR_PAGOS', 'Operador de Pagos y Beneficios', 'Área de Pagos: Gestión operativa de pagos, órdenes de desembolso y beneficios', '["dashboard","colegiados","beneficios","pagos","caja","fam"]', 1);
+     ELSE
+       UPDATE roles SET nombre = 'Operador de Pagos y Beneficios', descripcion = 'Área de Pagos: Gestión operativa de pagos, órdenes de desembolso y beneficios', modulos = '["dashboard","colegiados","beneficios","pagos","caja","fam"]' WHERE id = 'OPERADOR_PAGOS'`
   ];
 
   for (const q of queries) {

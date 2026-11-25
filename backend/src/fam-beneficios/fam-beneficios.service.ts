@@ -2027,7 +2027,7 @@ export class FamBeneficiosService {
   }
 
   private puedeSubirDocumentos(estado: string, userRole?: string) {
-    if (!['ADMINISTRADOR', 'OPERADOR_PAGOS'].includes(userRole || '')) return false;
+    if (!['ADMINISTRADOR', 'OPERADOR_PAGOS', 'SUPERVISOR_FAM', 'OPERADOR_FAM'].includes(userRole || '')) return false;
     if (estado === 'PAGADA') return userRole === 'ADMINISTRADOR';
     return true;
   }
@@ -2712,6 +2712,14 @@ export class FamBeneficiosService {
           ? 'Solo el ADMINISTRADOR puede subir documentos de un expediente pagado'
           : 'No tiene permiso para subir documentos de este expediente',
       );
+    }
+    if (userRole === 'OPERADOR_FAM') {
+      const DOCS_OPERADOR_FAM = ['fichaAdmisibilidad', 'solicitudAsignacion', 'cartaRemision', 'cartaPoder'];
+      if (!DOCS_OPERADOR_FAM.includes(campo)) {
+        throw new ForbiddenException(
+          'El rol Operador FAM solo tiene autorización para cargar la Solicitud, Ficha de Admisibilidad y Carta.',
+        );
+      }
     }
 
     await this.prisma.famSolicitudBeneficio.update({
@@ -4129,6 +4137,26 @@ export class FamBeneficiosService {
     const existing = await this.prisma.famSolicitudBeneficio.findUnique({ where: { id } });
     if (!existing) {
       throw new NotFoundException('Solicitud de beneficio no encontrada');
+    }
+
+    if (userRole === 'OPERADOR_FAM') {
+      const allowedKeys = [
+        'fichaAdmisibilidad',
+        'solicitudAsignacion',
+        'cartaRemision',
+        'cartaPoder',
+        'cartaNumero',
+        'cartaFecha',
+        'expedienteNumero',
+      ];
+      const forbiddenKeys = Object.keys(dto).filter(
+        (k) => (dto as any)[k] !== undefined && !allowedKeys.includes(k),
+      );
+      if (forbiddenKeys.length > 0) {
+        throw new ForbiddenException(
+          `El rol Operador FAM solo tiene autorización para cargar la Solicitud, Ficha de Admisibilidad y Carta. No puede modificar: ${forbiddenKeys.join(', ')}`,
+        );
+      }
     }
 
     this.validarDocumentacion({

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { getCurrentUser } from '@/lib/auth';
 import api from '@/lib/api';
 import { showConfirmMessage } from '@/components/common/ConfirmCenterMessage';
 import PdfViewerModal from '@/components/common/PdfViewerModal';
@@ -71,6 +72,11 @@ const formatearClaveMonto = (clave: string) =>
 
 export default function NuevoExpedientePage() {
   const router = useRouter();
+  const [userRole, setUserRole] = useState<string>('');
+
+  useEffect(() => {
+    setUserRole(getCurrentUser()?.rol || '');
+  }, []);
   const [pdfViewer, setPdfViewer] = useState<{ base64: string; nombre: string } | null>(null);
   const abrirPdfBase64 = (base64: string, nombre: string) => setPdfViewer({ base64, nombre });
   const [uniendoDocs, setUniendoDocs] = useState(false);
@@ -375,6 +381,7 @@ export default function NuevoExpedientePage() {
   const docsRequeridos = DOCS_PDF.filter(({ key }) => {
     if (key === 'actaDefuncion' && !esFallecimiento) return false;
     if (multiplesBeneficiarios && key === 'declaracionJurada') return false;
+    if (userRole === 'OPERADOR_FAM' && !['fichaAdmisibilidad', 'solicitudAsignacion', 'cartaRemision'].includes(key)) return false;
     return true;
   });
   const esEnfermedadTerminal = getTipoNombreSeleccionado().includes('ENFERMEDAD') || getTipoNombreSeleccionado().includes('TERMINAL');
@@ -1864,6 +1871,11 @@ export default function NuevoExpedientePage() {
                 <p className="text-[11px] text-text-sec mt-0.5">
                   Suba documentos en PDF o fotos/imágenes escaneadas. Se unifican automáticamente.
                 </p>
+                {userRole === 'OPERADOR_FAM' && (
+                  <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-amber-50 text-amber-900 border border-amber-200 text-xs">
+                    ℹ️ Rol <strong>Operador FAM</strong>: Ingrese <strong>Solicitud</strong>, <strong>Ficha de Admisibilidad</strong> y <strong>Carta</strong>. El Memorando y Orden de Pago serán asignados por Jefatura FAM / Tesorería.
+                  </div>
+                )}
               </div>
               <button
                 type="button"

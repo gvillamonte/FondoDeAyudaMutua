@@ -51,14 +51,20 @@ export class AuthService {
 
   async login(dto: LoginDto) {
     let usuario: any = null;
+    const cleanIdentifier = (dto.username || '').trim();
 
     if (this.prisma.databaseAvailable) {
-      usuario = await this.prisma.usuario.findUnique({
-        where: { username: dto.username },
+      usuario = await this.prisma.usuario.findFirst({
+        where: {
+          OR: [
+            { username: cleanIdentifier },
+            { email: cleanIdentifier },
+          ],
+        },
         include: { rolInfo: true },
       });
     } else {
-      usuario = MOCK_USERS[dto.username] || null;
+      usuario = MOCK_USERS[cleanIdentifier.toLowerCase()] || null;
       if (usuario) {
         const mockPasswordHash = await bcrypt.hash('Admin123!', 10);
         usuario = { ...usuario, passwordHash: mockPasswordHash };

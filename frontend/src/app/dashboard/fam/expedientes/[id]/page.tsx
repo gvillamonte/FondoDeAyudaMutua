@@ -399,8 +399,23 @@ export default function DetalleExpedientePage() {
     } catch {}
   };
 
+  const DOCS_OPERADOR_FAM = ['fichaAdmisibilidad', 'solicitudAsignacion', 'cartaRemision', 'cartaPoder'];
+
+  const puedeSubirCampo = (campo: string) => {
+    if (isAdmin || userRole === 'SUPERVISOR_FAM' || userRole === 'OPERADOR_PAGOS') return true;
+    if (userRole === 'OPERADOR_FAM' && DOCS_OPERADOR_FAM.includes(campo)) return true;
+    return false;
+  };
+
   const pedirDocumento = (expedienteId: string, campo: string) => {
-    if (!isAdmin) return;
+    if (!puedeSubirCampo(campo)) {
+      showConfirmMessage(
+        'warning',
+        'Acceso Restringido',
+        'El rol Operador FAM solo tiene autorización para cargar Solicitud, Ficha de Admisibilidad y Carta.'
+      );
+      return;
+    }
     setDocTarget({ expedienteId, campo });
     if (docInputRef.current) docInputRef.current.value = '';
     docInputRef.current?.click();
@@ -443,7 +458,8 @@ export default function DetalleExpedientePage() {
       const previos = expedienteId === id ? (detalle?.documentosDisponibles || {}) : (docsOtros[expedienteId]?.docs || {});
       const nucleo = ['fichaAdmisibilidad', 'solicitudAsignacion', 'cartaRemision', 'memorando', 'ordenPago'];
       const tieneTodo = campo === 'otrosDocumentos' || Boolean(previos.otrosDocumentos);
-      const completa = tieneTodo || nucleo.every((c) => c === campo || Boolean(previos[c]));
+      const puedeCompletar = isAdmin || userRole === 'SUPERVISOR_FAM' || userRole === 'OPERADOR_PAGOS';
+      const completa = puedeCompletar && (tieneTodo || nucleo.every((c) => c === campo || Boolean(previos[c])));
       await api.put(`/fam-beneficios/${expedienteId}`, {
         [campo]: base64,
         ...(declaracionJuradaDni && { declaracionJuradaDni }),
@@ -2097,10 +2113,14 @@ export default function DetalleExpedientePage() {
                         </div>
                       )}
                       <div className="mb-3 text-xs text-slate-500">
-                        {isAdmin ? (
-                          <span>Como ADMINISTRADOR puede subir y reemplazar documentos.</span>
+                        {isAdmin || userRole === 'SUPERVISOR_FAM' ? (
+                          <span>Como Administrador / Jefatura FAM puede subir y autorizar todos los documentos.</span>
+                        ) : userRole === 'OPERADOR_FAM' ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-amber-50 text-amber-900 border border-amber-200">
+                            ℹ️ Rol <strong>Operador FAM</strong>: Autorizado para cargar <strong>Solicitud</strong>, <strong>Ficha de Admisibilidad</strong> y <strong>Carta</strong>. Los demás documentos corresponden a Jefatura / Tesorería.
+                          </span>
                         ) : (
-                          <span>Solo el ADMINISTRADOR puede subir documentos.</span>
+                          <span>Modo consulta de documentos.</span>
                         )}
                       </div>
                       {(() => {
@@ -2158,7 +2178,7 @@ export default function DetalleExpedientePage() {
                                       {pdfLoadingKey === loadKey ? 'Abriendo...' : 'Ver PDF'}
                                     </button>
                                   )}
-                                  {isAdmin ? (
+                                  {puedeSubirCampo(campo) ? (
                                     <button
                                       onClick={() => pedirDocumento(reg.id, campo)}
                                       disabled={subiendoDoc === loadKey}
@@ -2168,7 +2188,7 @@ export default function DetalleExpedientePage() {
                                       {subiendoDoc === loadKey ? 'Subiendo...' : disponible ? 'Reemplazar' : 'Subir PDF'}
                                     </button>
                                   ) : !disponible ? (
-                                    <span className="text-xs text-slate-400">No cargado</span>
+                                    <span className="text-[11px] text-slate-400 italic">Requiere Jefatura / Tesorería</span>
                                   ) : null}
                                 </div>
                               </div>

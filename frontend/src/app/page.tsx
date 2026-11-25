@@ -25,7 +25,7 @@ export default function LoginPage() {
         response = await fetch(targetUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password }),
+          body: JSON.stringify({ username: username.trim(), password }),
         });
       } catch (fetchErr: any) {
         showConfirmMessage('error', 'Su contraseña ha sido incorrecta.');
@@ -128,7 +128,7 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
               <label className="block text-sm font-medium mb-1.5" style={{ color: '#1E293B' }}>
-                Usuario
+                Usuario o Correo Institucional
               </label>
               <input
                 type="text"
@@ -136,7 +136,7 @@ export default function LoginPage() {
                 onChange={(e) => setUsername(e.target.value)}
                 className="w-full px-4 py-2.5 rounded-lg border text-sm transition-colors duration-200 focus:outline-none focus:ring-2 focus:border-transparent"
                 style={{ borderColor: '#E2E8F0', color: '#1E293B' }}
-                placeholder="Ingrese su usuario"
+                placeholder="Ingrese su usuario o correo"
                 required
               />
             </div>

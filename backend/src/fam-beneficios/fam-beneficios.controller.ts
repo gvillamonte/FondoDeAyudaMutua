@@ -24,14 +24,14 @@ export class FamBeneficiosController {
   constructor(private famBeneficiosService: FamBeneficiosService) {}
 
   @Post()
-  @Roles('ADMINISTRADOR', 'OPERADOR_PAGOS')
+  @Roles('ADMINISTRADOR', 'OPERADOR_PAGOS', 'SUPERVISOR_FAM', 'OPERADOR_FAM')
   @ApiOperation({ summary: 'Crear solicitud de beneficio FAM' })
   async crear(@Body() dto: CrearFamSolicitudDto, @Req() req: any) {
     return this.famBeneficiosService.crear(dto, req.user.sub);
   }
 
   @Get()
-  @Roles('ADMINISTRADOR', 'OPERADOR_PAGOS', 'AUDITOR')
+  @Roles('ADMINISTRADOR', 'OPERADOR_PAGOS', 'AUDITOR', 'OPERADOR_FAM', 'SUPERVISOR_FAM', 'TESORERIA')
   @ApiOperation({ summary: 'Listar expedientes de beneficio FAM (con filtros)' })
   async listar(
     @Query('colegiadoId') colegiadoId?: string,
@@ -68,21 +68,21 @@ export class FamBeneficiosController {
   }
 
   @Get('montos')
-  @Roles('ADMINISTRADOR', 'OPERADOR_PAGOS', 'AUDITOR')
+  @Roles('ADMINISTRADOR', 'OPERADOR_PAGOS', 'AUDITOR', 'OPERADOR_FAM', 'SUPERVISOR_FAM', 'TESORERIA')
   @ApiOperation({ summary: 'Obtener montos predeterminados FAM' })
   async obtenerMontos() {
     return this.famBeneficiosService.obtenerMontos();
   }
 
   @Get('tipos')
-  @Roles('ADMINISTRADOR', 'OPERADOR_PAGOS', 'AUDITOR')
+  @Roles('ADMINISTRADOR', 'OPERADOR_PAGOS', 'AUDITOR', 'OPERADOR_FAM', 'SUPERVISOR_FAM', 'TESORERIA')
   @ApiOperation({ summary: 'Listar tipos de beneficio FAM activos' })
   async listarTipos() {
     return this.famBeneficiosService.listarTiposBeneficio();
   }
 
   @Get('activo')
-  @Roles('ADMINISTRADOR', 'OPERADOR_PAGOS', 'AUDITOR')
+  @Roles('ADMINISTRADOR', 'OPERADOR_PAGOS', 'AUDITOR', 'OPERADOR_FAM', 'SUPERVISOR_FAM', 'TESORERIA')
   @ApiOperation({ summary: 'Obtener el expediente activo de un colegiado para un tipo de beneficio' })
   async obtenerActivo(
     @Query('colegiadoId') colegiadoId: string,
@@ -97,21 +97,21 @@ export class FamBeneficiosController {
   }
 
   @Get(':id/documento/:campo')
-  @Roles('ADMINISTRADOR', 'OPERADOR_PAGOS', 'AUDITOR')
+  @Roles('ADMINISTRADOR', 'OPERADOR_PAGOS', 'AUDITOR', 'OPERADOR_FAM', 'SUPERVISOR_FAM', 'TESORERIA')
   @ApiOperation({ summary: 'Obtener documento PDF (base64) de un expediente' })
   async obtenerDocumento(@Param('id') id: string, @Param('campo') campo: string) {
     return this.famBeneficiosService.obtenerDocumento(id, campo as any);
   }
 
   @Get(':id/historial')
-  @Roles('ADMINISTRADOR', 'OPERADOR_PAGOS', 'AUDITOR')
+  @Roles('ADMINISTRADOR', 'OPERADOR_PAGOS', 'AUDITOR', 'OPERADOR_FAM', 'SUPERVISOR_FAM', 'TESORERIA')
   @ApiOperation({ summary: 'Obtener el historial guiado de un expediente FAM' })
   async obtenerHistorial(@Param('id') id: string, @Req() req: any) {
     return this.famBeneficiosService.obtenerHistorial(id, req.user?.rol);
   }
 
   @Put(':id/historial/documento/:campo')
-  @Roles('ADMINISTRADOR', 'OPERADOR_PAGOS')
+  @Roles('ADMINISTRADOR', 'OPERADOR_PAGOS', 'SUPERVISOR_FAM', 'OPERADOR_FAM')
   @ApiOperation({ summary: 'Subir o reemplazar un documento del expediente desde el historial' })
   async subirDocumentoHistorial(
     @Param('id') id: string,
@@ -130,7 +130,7 @@ export class FamBeneficiosController {
   }
 
   @Put(':id/historial/beneficiario/:beneficiarioId/documento/:tipo')
-  @Roles('ADMINISTRADOR', 'OPERADOR_PAGOS')
+  @Roles('ADMINISTRADOR', 'OPERADOR_PAGOS', 'SUPERVISOR_FAM')
   @ApiOperation({ summary: 'Subir un documento de un beneficiario desde el historial' })
   async subirDocumentoBeneficiarioHistorial(
     @Param('id') id: string,
@@ -151,7 +151,7 @@ export class FamBeneficiosController {
   }
 
   @Put(':id/historial/deposito/:depositoId/comprobante')
-  @Roles('ADMINISTRADOR')
+  @Roles('ADMINISTRADOR', 'TESORERIA')
   @ApiOperation({ summary: 'Subir el comprobante de un depósito desde el historial' })
   async subirComprobanteDepositoHistorial(
     @Param('id') id: string,
@@ -170,7 +170,7 @@ export class FamBeneficiosController {
   }
 
   @Get(':id')
-  @Roles('ADMINISTRADOR', 'OPERADOR_PAGOS', 'AUDITOR')
+  @Roles('ADMINISTRADOR', 'OPERADOR_PAGOS', 'AUDITOR', 'OPERADOR_FAM', 'SUPERVISOR_FAM', 'TESORERIA')
   @ApiOperation({ summary: 'Obtener solicitud de beneficio FAM por ID' })
   async obtenerPorId(@Param('id') id: string) {
     return this.famBeneficiosService.obtenerPorId(id);
@@ -236,7 +236,7 @@ export class FamBeneficiosController {
   }
 
   @Get(':id/beneficiario/:beneficiarioId/declaracion')
-  @Roles('ADMINISTRADOR', 'OPERADOR_PAGOS', 'AUDITOR')
+  @Roles('ADMINISTRADOR', 'OPERADOR_PAGOS', 'AUDITOR', 'OPERADOR_FAM', 'SUPERVISOR_FAM', 'TESORERIA')
   @ApiOperation({ summary: 'Obtener la declaracion jurada de un beneficiario' })
   async obtenerDeclaracion(
     @Param('id') id: string,
@@ -246,7 +246,7 @@ export class FamBeneficiosController {
   }
 
   @Get(':id/beneficiario/:beneficiarioId/orden-pago')
-  @Roles('ADMINISTRADOR', 'OPERADOR_PAGOS', 'AUDITOR')
+  @Roles('ADMINISTRADOR', 'OPERADOR_PAGOS', 'AUDITOR', 'OPERADOR_FAM', 'SUPERVISOR_FAM', 'TESORERIA')
   @ApiOperation({ summary: 'Obtener la orden de pago de un beneficiario' })
   async obtenerOrdenPago(
     @Param('id') id: string,
@@ -256,7 +256,7 @@ export class FamBeneficiosController {
   }
 
   @Get(':id/deposito/:depositoId/comprobante')
-  @Roles('ADMINISTRADOR', 'OPERADOR_PAGOS', 'AUDITOR')
+  @Roles('ADMINISTRADOR', 'OPERADOR_PAGOS', 'AUDITOR', 'OPERADOR_FAM', 'SUPERVISOR_FAM', 'TESORERIA')
   @ApiOperation({ summary: 'Obtener el comprobante de un deposito' })
   async obtenerComprobante(
     @Param('id') id: string,
@@ -266,8 +266,8 @@ export class FamBeneficiosController {
   }
 
   @Put(':id')
-  @Roles('ADMINISTRADOR')
-  @ApiOperation({ summary: 'Actualizar solicitud de beneficio FAM (solo ADMINISTRADOR)' })
+  @Roles('ADMINISTRADOR', 'OPERADOR_PAGOS', 'SUPERVISOR_FAM', 'OPERADOR_FAM')
+  @ApiOperation({ summary: 'Actualizar solicitud de beneficio FAM' })
   async actualizar(@Param('id') id: string, @Body() dto: ActualizarFamSolicitudDto, @Req() req: any) {
     return this.famBeneficiosService.actualizar(id, dto, req.user?.rol, req.user?.sub, req.ip);
   }

@@ -32,12 +32,14 @@ export class RolesController {
   }
 
   @Get()
+  @Roles('ADMINISTRADOR', 'SUPER_ADMINISTRADOR')
   @ApiOperation({ summary: 'Listar todos los roles con sus módulos y conteo de usuarios' })
   async findAll() {
     return this.rolesService.findAll();
   }
 
   @Get(':id')
+  @Roles('ADMINISTRADOR', 'SUPER_ADMINISTRADOR')
   @ApiOperation({ summary: 'Obtener detalle de un rol por ID' })
   async findOne(@Param('id') id: string) {
     return this.rolesService.findOne(id);

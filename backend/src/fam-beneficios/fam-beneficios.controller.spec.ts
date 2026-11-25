@@ -35,29 +35,42 @@ const contextGuard = (metodo: keyof FamBeneficiosController, rol?: string) =>
 const guard = new RolesGuard(new Reflector());
 
 describe('FamBeneficiosController - control de acceso por rol', () => {
-  it('PUT /fam-beneficios/:id exige unicamente ADMINISTRADOR', () => {
-    expect(rolesDe('actualizar')).toEqual(['ADMINISTRADOR']);
+  it('PUT /fam-beneficios/:id admite roles operativos autorizados', () => {
+    expect(rolesDe('actualizar')).toEqual([
+      'ADMINISTRADOR',
+      'OPERADOR_PAGOS',
+      'SUPERVISOR_FAM',
+      'OPERADOR_FAM',
+    ]);
   });
 
   it('DELETE /fam-beneficios/:id exige unicamente ADMINISTRADOR', () => {
     expect(rolesDe('eliminar')).toEqual(['ADMINISTRADOR']);
   });
 
-  it('POST /fam-beneficios admite ADMINISTRADOR y OPERADOR_PAGOS (no AUDITOR)', () => {
-    expect(rolesDe('crear')).toEqual(['ADMINISTRADOR', 'OPERADOR_PAGOS']);
+  it('POST /fam-beneficios admite roles autorizados (no AUDITOR)', () => {
+    expect(rolesDe('crear')).toEqual([
+      'ADMINISTRADOR',
+      'OPERADOR_PAGOS',
+      'SUPERVISOR_FAM',
+      'OPERADOR_FAM',
+    ]);
   });
 
-  it('GET /fam-beneficios/:id/documento/:campo es de lectura para los 3 roles', () => {
+  it('GET /fam-beneficios/:id/documento/:campo es de lectura para los roles con acceso', () => {
     expect(rolesDe('obtenerDocumento')).toEqual([
       'ADMINISTRADOR',
       'OPERADOR_PAGOS',
       'AUDITOR',
+      'OPERADOR_FAM',
+      'SUPERVISOR_FAM',
+      'TESORERIA',
     ]);
   });
 
-  it('el guard deja subir documentos solo al ADMINISTRADOR', () => {
+  it('el guard valida permisos según rol y bloquea a AUDITOR o anónimos en actualizar', () => {
     expect(guard.canActivate(contextGuard('actualizar', 'ADMINISTRADOR'))).toBe(true);
-    expect(guard.canActivate(contextGuard('actualizar', 'OPERADOR_PAGOS'))).toBe(false);
+    expect(guard.canActivate(contextGuard('actualizar', 'OPERADOR_FAM'))).toBe(true);
     expect(guard.canActivate(contextGuard('actualizar', 'AUDITOR'))).toBe(false);
     expect(guard.canActivate(contextGuard('actualizar'))).toBe(false);
     expect(guard.canActivate(contextGuard('actualizar', 'SUPER_ADMINISTRADOR'))).toBe(true);
@@ -81,17 +94,30 @@ describe('FamBeneficiosController - control de acceso por rol', () => {
     expect(rolesDe('actualizarDeposito')).toEqual(['ADMINISTRADOR']);
   });
 
-  it('la consulta del expediente activo y los PDFs son de lectura para los 3 roles', () => {
-    expect(rolesDe('obtenerActivo')).toEqual(['ADMINISTRADOR', 'OPERADOR_PAGOS', 'AUDITOR']);
+  it('la consulta del expediente activo y los PDFs son de lectura para los roles autorizados', () => {
+    expect(rolesDe('obtenerActivo')).toEqual([
+      'ADMINISTRADOR',
+      'OPERADOR_PAGOS',
+      'AUDITOR',
+      'OPERADOR_FAM',
+      'SUPERVISOR_FAM',
+      'TESORERIA',
+    ]);
     expect(rolesDe('obtenerDeclaracion')).toEqual([
       'ADMINISTRADOR',
       'OPERADOR_PAGOS',
       'AUDITOR',
+      'OPERADOR_FAM',
+      'SUPERVISOR_FAM',
+      'TESORERIA',
     ]);
     expect(rolesDe('obtenerComprobante')).toEqual([
       'ADMINISTRADOR',
       'OPERADOR_PAGOS',
       'AUDITOR',
+      'OPERADOR_FAM',
+      'SUPERVISOR_FAM',
+      'TESORERIA',
     ]);
   });
 

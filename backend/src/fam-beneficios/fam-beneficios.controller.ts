@@ -48,6 +48,7 @@ export class FamBeneficiosController {
     @Query('ordenarPor') ordenarPor?: string,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
+    @Req() req?: any,
   ) {
     return this.famBeneficiosService.listar({
       colegiadoId,
@@ -64,6 +65,8 @@ export class FamBeneficiosController {
       ordenarPor,
       page,
       limit,
+      userId: req?.user?.sub,
+      userRol: req?.user?.rol,
     });
   }
 

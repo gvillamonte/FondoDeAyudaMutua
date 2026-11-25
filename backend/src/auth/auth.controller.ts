@@ -19,6 +19,8 @@ import { CambiarPasswordObligatorioDto } from './dto/cambiar-password-obligatori
 import { SolicitarRecuperacionDto } from './dto/solicitar-recuperacion.dto';
 import { ConfirmarRecuperacionDto } from './dto/confirmar-recuperacion.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
+import { RolesGuard } from './roles.guard';
+import { Roles } from './roles.decorator';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -35,9 +37,14 @@ export class AuthController {
   }
 
   @Post('register')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMINISTRADOR', 'SUPER_ADMINISTRADOR')
+  @ApiBearerAuth()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Registrar nuevo usuario' })
   @ApiResponse({ status: 201, description: 'Usuario registrado' })
+  @ApiResponse({ status: 401, description: 'No autenticado' })
+  @ApiResponse({ status: 403, description: 'Acceso denegado (Solo Administradores)' })
   @ApiResponse({ status: 409, description: 'Usuario o email ya existe' })
   async register(@Body() dto: RegisterDto) {
     return this.authService.register(dto);

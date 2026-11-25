@@ -19,6 +19,7 @@ model Usuario {
   debeCambiarPassword  Boolean   @default(false) @map("debe_cambiar_password") @db.Bit
   resetPasswordToken   String?   @map("reset_password_token") @db.VarChar(255)
   resetPasswordExpires DateTime? @map("reset_password_expires")
+  supervisorId         String?   @map("supervisor_id") @db.NVarChar(36)
   createdAt            DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
@@ -27,6 +28,8 @@ model Usuario {
   solicitudesResueltas     SolicitudBeneficio[]    @relation("SolicitudResueltoPor")
   pagosRegistrados         Pago[]                  @relation("PagoRegistradoPor")
   rolInfo                  Rol?                    @relation(fields: [rol], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  supervisor               Usuario?                @relation("SupervisionEquipo", fields: [supervisorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  supervisados             Usuario[]               @relation("SupervisionEquipo")
 
   @@map("usuarios")
 }

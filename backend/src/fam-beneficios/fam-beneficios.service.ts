@@ -1230,6 +1230,8 @@ export class FamBeneficiosService {
     ordenarPor?: string; // 'ingreso' | 'solicitud' | 'pago'
     page?: number;
     limit?: number;
+    userId?: string;
+    userRol?: string;
   }) {
     const {
       colegiadoId,
@@ -1246,12 +1248,26 @@ export class FamBeneficiosService {
       ordenarPor,
       page = 1,
       limit = 25,
+      userId,
+      userRol,
     } = params;
     const pageNum = Math.max(1, parseInt(String(page ?? 1), 10) || 1);
     const limitNum = Math.min(100, Math.max(1, parseInt(String(limit ?? 25), 10) || 25));
     const skip = (pageNum - 1) * limitNum;
 
     const where: any = {};
+
+    // Si es Supervisor o Jefatura FAM, filtrar solo solicitudes de su equipo supervisado + propias
+    if (userRol === 'SUPERVISOR_FAM' || userRol === 'JEFE_FAM') {
+      if (userId && this.prisma.databaseAvailable) {
+        const supervisados = await this.prisma.usuario.findMany({
+          where: { supervisorId: userId },
+          select: { id: true },
+        });
+        const equipoIds = [userId, ...supervisados.map((s) => s.id)];
+        where.registradoPor = { in: equipoIds };
+      }
+    }
     const andConditions: any[] = [];
     if (colegiadoId) where.colegiadoId = colegiadoId;
     if (estado === 'ACTIVOS') {

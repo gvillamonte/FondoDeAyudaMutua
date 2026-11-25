@@ -62,6 +62,40 @@ export function hasModuleAccess(moduleKey: string): boolean {
   return true;
 }
 
+export type AuthAction = 'create' | 'read' | 'edit' | 'delete' | 'export' | 'anular';
+
+export function can(action: AuthAction, resource?: string): boolean {
+  const user = getCurrentUser();
+  if (!user) return false;
+
+  // Superadministrador y Administrador tienen acceso total a todas las acciones
+  if (user.rol === 'ADMINISTRADOR' || user.rol === 'SUPER_ADMINISTRADOR') {
+    return true;
+  }
+
+  // Si se especifica un recurso (módulo), primero debe tener acceso al módulo
+  if (resource && !hasModuleAccess(resource)) {
+    return false;
+  }
+
+  // Rol AUDITOR: Solo lectura y exportación
+  if (user.rol === 'AUDITOR') {
+    return action === 'read' || action === 'export';
+  }
+
+  // Acciones destructivas (eliminar/anular): solo Administradores o Jefes/Supervisores
+  if (action === 'delete' || action === 'anular') {
+    return user.rol === 'SUPERVISOR_FAM' || user.rol === 'JEFE_FAM';
+  }
+
+  // Acciones de creación, edición y consulta para usuarios operativos autorizados
+  if (action === 'create' || action === 'edit' || action === 'read' || action === 'export') {
+    return true;
+  }
+
+  return false;
+}
+
 export async function refreshCurrentUser(): Promise<User | null> {
   try {
     const response = await api.get('/auth/me');

@@ -148,12 +148,15 @@ const menuItems: MenuItem[] = [
   {
     id: 'usuarios',
     label: 'Usuarios y Roles',
-    href: '/dashboard/usuarios',
     icon: (
       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
       </svg>
     ),
+    children: [
+      { label: 'Usuarios', href: '/dashboard/usuarios' },
+      { label: 'Roles y Permisos', href: '/dashboard/roles' },
+    ],
   },
   {
     id: 'auditoria',
@@ -242,7 +245,31 @@ export default function Sidebar({
 
     // Si tiene lista de módulos configurada para su rol
     if (Array.isArray(modulos)) {
-      return menuItems.filter((item) => modulos.includes(item.id));
+      return menuItems
+        .filter((item) => {
+          if (modulos.includes(item.id)) return true;
+          if (
+            item.children?.some((c) => {
+              const pathId = c.href.replace('/dashboard/', '');
+              return modulos.includes(pathId) || modulos.includes(c.href);
+            })
+          ) {
+            return true;
+          }
+          return false;
+        })
+        .map((item) => {
+          if (!item.children) return item;
+          if (modulos.includes(item.id)) return item;
+          const filteredChildren = item.children.filter((c) => {
+            const pathId = c.href.replace('/dashboard/', '');
+            return modulos.includes(pathId) || modulos.includes(c.href);
+          });
+          return {
+            ...item,
+            children: filteredChildren.length > 0 ? filteredChildren : item.children,
+          };
+        });
     }
 
     // Fallback por defecto si no ha terminado de cargar permisos

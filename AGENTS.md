@@ -151,6 +151,7 @@ Sistema CIP/
 │   ├── 012_fam_covid_asignaciones.sql
 │   └── 013_reembolso_comprobantes.sql
 ├── skills/                      # Reglas para el agente de IA (CRÍTICAS — evitar regresiones)
+│   ├── audit_fixes_cip_cusco.md   # Pruebas primero LOCAL y confirmación explícita previa a despliegue
 │   ├── css_preservation_policy.md # PROHIBICIÓN: No tocar CSS global, preservar estilos y Tailwind JIT
 │   ├── db_connection_manager.md # Dual datasource, Request sharing, fusión legacy+APP_DB
 │   ├── color_palette_checker.md # Paleta #3258CA

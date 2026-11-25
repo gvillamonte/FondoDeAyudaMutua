@@ -58,6 +58,11 @@ export class FamBeneficiosService {
   private readonly logger = new Logger(FamBeneficiosService.name);
   private montoMinimoCache: { valor: number; timestamp: number } | null = null;
   private readonly CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos
+  private readonly listarCache = new Map<string, { data: any; expiresAt: number }>();
+
+  public clearListarCache() {
+    this.listarCache.clear();
+  }
 
   constructor(
     private prisma: PrismaService,
@@ -1255,6 +1260,13 @@ export class FamBeneficiosService {
     const limitNum = Math.min(100, Math.max(1, parseInt(String(limit ?? 25), 10) || 25));
     const skip = (pageNum - 1) * limitNum;
 
+    const cacheKey = JSON.stringify(params || {});
+    const cached = this.listarCache.get(cacheKey);
+    const now = Date.now();
+    if (cached && cached.expiresAt > now) {
+      return cached.data;
+    }
+
     const where: any = {};
 
     // Si es Supervisor o Jefatura FAM, filtrar solo solicitudes de su equipo supervisado + propias
@@ -1424,7 +1436,7 @@ export class FamBeneficiosService {
       mapaColegiados = new Map();
     }
 
-    return {
+    const result = {
       data: data.map((s) => {
         const colegiado = mapaColegiados.get(s.colegiadoId);
         const montoExpediente = s.montoFinal != null ? Number(s.montoFinal) : Number(s.monto);
@@ -1643,6 +1655,8 @@ export class FamBeneficiosService {
       }),
       meta: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
     };
+    this.listarCache.set(cacheKey, { data: result, expiresAt: now + 30000 });
+    return result;
   }
 
   async obtenerPorId(id: string) {

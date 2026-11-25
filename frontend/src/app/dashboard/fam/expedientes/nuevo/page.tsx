@@ -1863,8 +1863,8 @@ export default function NuevoExpedientePage() {
 
           {/* 4. Documentación (PDF o Imagen) */}
           <section className="bg-white border border-border rounded-lg p-5 space-y-3">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border pb-3">
-              <div>
+            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 border-b border-border pb-3">
+              <div className="flex-1">
                 <h4 className="text-xs font-semibold text-text-sec uppercase tracking-wider">
                   4. Documentación (PDF o Imagen JPG/PNG, máx. {MAX_PDF_MB}MB c/u)
                 </h4>
@@ -1872,8 +1872,16 @@ export default function NuevoExpedientePage() {
                   Suba documentos en PDF o fotos/imágenes escaneadas. Se unifican automáticamente.
                 </p>
                 {userRole === 'OPERADOR_FAM' && (
-                  <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-amber-50 text-amber-900 border border-amber-200 text-xs">
-                    ℹ️ Rol <strong>Operador FAM</strong>: Ingrese <strong>Solicitud</strong>, <strong>Ficha de Admisibilidad</strong> y <strong>Carta</strong>. El Memorando y Orden de Pago serán asignados por Jefatura FAM / Tesorería.
+                  <div className="mt-2.5 flex items-start gap-2 px-3 py-2 rounded-lg bg-amber-50/90 text-amber-900 border border-amber-200 text-xs leading-relaxed max-w-2xl shadow-2xs">
+                    <svg className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <div>
+                      <span className="font-semibold text-amber-900">Rol Operador FAM:</span>{' '}
+                      <span className="text-amber-800">
+                        Ingrese <strong>Solicitud</strong>, <strong>Ficha de Admisibilidad</strong> y <strong>Carta</strong>. El Memorando y Orden de Pago serán asignados por Jefatura FAM / Tesorería.
+                      </span>
+                    </div>
                   </div>
                 )}
               </div>

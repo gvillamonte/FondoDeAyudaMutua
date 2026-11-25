@@ -2116,9 +2116,17 @@ export default function DetalleExpedientePage() {
                         {isAdmin || userRole === 'SUPERVISOR_FAM' ? (
                           <span>Como Administrador / Jefatura FAM puede subir y autorizar todos los documentos.</span>
                         ) : userRole === 'OPERADOR_FAM' ? (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-amber-50 text-amber-900 border border-amber-200">
-                            ℹ️ Rol <strong>Operador FAM</strong>: Autorizado para cargar <strong>Solicitud</strong>, <strong>Ficha de Admisibilidad</strong> y <strong>Carta</strong>. Los demás documentos corresponden a Jefatura / Tesorería.
-                          </span>
+                          <div className="mt-1 flex items-start gap-2 px-3 py-2 rounded-lg bg-amber-50/90 text-amber-900 border border-amber-200 text-xs leading-relaxed max-w-2xl shadow-2xs">
+                            <svg className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <div>
+                              <span className="font-semibold text-amber-900">Rol Operador FAM:</span>{' '}
+                              <span className="text-amber-800">
+                                Autorizado para cargar <strong>Solicitud</strong>, <strong>Ficha de Admisibilidad</strong> y <strong>Carta</strong>. Los demás documentos corresponden a Jefatura / Tesorería.
+                              </span>
+                            </div>
+                          </div>
                         ) : (
                           <span>Modo consulta de documentos.</span>
                         )}

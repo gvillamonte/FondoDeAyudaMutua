@@ -271,7 +271,19 @@ async function run() {
     `IF NOT EXISTS (SELECT 1 FROM roles WHERE id = 'OPERADOR_PAGOS')
        INSERT INTO roles (id, nombre, descripcion, modulos, activo) VALUES ('OPERADOR_PAGOS', 'Operador de Pagos y Beneficios', 'Área de Pagos: Gestión operativa de pagos, órdenes de desembolso y beneficios', '["dashboard","colegiados","beneficios","pagos","caja","fam"]', 1);
      ELSE
-       UPDATE roles SET nombre = 'Operador de Pagos y Beneficios', descripcion = 'Área de Pagos: Gestión operativa de pagos, órdenes de desembolso y beneficios', modulos = '["dashboard","colegiados","beneficios","pagos","caja","fam"]' WHERE id = 'OPERADOR_PAGOS'`
+       UPDATE roles SET nombre = 'Operador de Pagos y Beneficios', descripcion = 'Área de Pagos: Gestión operativa de pagos, órdenes de desembolso y beneficios', modulos = '["dashboard","colegiados","beneficios","pagos","caja","fam"]' WHERE id = 'OPERADOR_PAGOS'`,
+    `IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'usuarios' AND COLUMN_NAME = 'debe_cambiar_password')
+     BEGIN
+       ALTER TABLE usuarios ADD debe_cambiar_password BIT NOT NULL CONSTRAINT DF_usuarios_debe_cambiar_pass DEFAULT 0;
+     END`,
+    `IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'usuarios' AND COLUMN_NAME = 'reset_password_token')
+     BEGIN
+       ALTER TABLE usuarios ADD reset_password_token VARCHAR(255) NULL;
+     END`,
+    `IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'usuarios' AND COLUMN_NAME = 'reset_password_expires')
+     BEGIN
+       ALTER TABLE usuarios ADD reset_password_expires DATETIME2 NULL;
+     END`
   ];
 
   for (const q of queries) {

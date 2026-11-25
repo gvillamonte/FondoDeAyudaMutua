@@ -15,12 +15,11 @@ export class CreateUsuarioDto {
   @IsEmail({}, { message: 'Debe ingresar un correo electrónico válido' })
   email: string;
 
-  @ApiProperty({ example: 'Pass1234*!' })
+  @ApiPropertyOptional({ example: '123456', description: 'Opcional. Por defecto se asigna 123456 y se exige cambio obligatorio.' })
+  @IsOptional()
   @IsString()
-  @MinLength(8, { message: 'La contraseña debe tener al menos 8 caracteres' })
   @MaxLength(128)
-  @Matches(PASSWORD_REGEX, { message: PASSWORD_MESSAGE })
-  password: string;
+  password?: string;
 
   @ApiProperty({ example: 'Juan Pérez López' })
   @IsString()

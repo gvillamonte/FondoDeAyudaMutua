@@ -274,11 +274,6 @@ export default function UsuariosPage() {
   // Guardar usuario
   const handleSaveUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingUser && !userPassValidation.isValid) {
-      showToast('La contraseña debe cumplir con todos los requisitos de seguridad', true);
-      return;
-    }
-
     setSavingUser(true);
     try {
       if (editingUser) {
@@ -293,12 +288,12 @@ export default function UsuariosPage() {
         await api.post('/usuarios', {
           username: formUsername,
           email: formEmail,
-          password: formPassword,
+          password: '123456',
           nombreCompleto: formNombreCompleto,
           rol: formRol,
           activo: formActivo,
         });
-        showToast('Usuario creado exitosamente');
+        showToast('Usuario creado con clave temporal 123456');
       }
       setShowUserModal(false);
       fetchUsuarios();
@@ -1073,64 +1068,19 @@ export default function UsuariosPage() {
                 </div>
               </div>
 
-              {/* Contraseña (solo al crear) */}
+              {/* Contraseña Inicial Automática (solo al crear) */}
               {!editingUser && (
-                <div className="pt-2 border-t border-[#E2E8F0] space-y-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-[#1E293B] uppercase tracking-wider mb-1">
-                      Contraseña *
-                    </label>
-                    <input
-                      type="password"
-                      required
-                      placeholder="Ingrese contraseña segura"
-                      value={formPassword}
-                      onChange={(e) => setFormPassword(e.target.value)}
-                      className="w-full px-3 py-2 border border-[#E2E8F0] rounded-md text-sm text-[#1E293B] focus:outline-none focus:border-[#8f0404]"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-[#1E293B] uppercase tracking-wider mb-1">
-                      Confirmar Contraseña *
-                    </label>
-                    <input
-                      type="password"
-                      required
-                      placeholder="Repita la contraseña"
-                      value={formConfirmPassword}
-                      onChange={(e) => setFormConfirmPassword(e.target.value)}
-                      className="w-full px-3 py-2 border border-[#E2E8F0] rounded-md text-sm text-[#1E293B] focus:outline-none focus:border-[#8f0404]"
-                    />
-                  </div>
-
-                  {/* Checklist interactivo de requisitos de contraseña */}
-                  <div className="bg-[#F8FAFC] border border-[#E2E8F0] p-3 rounded-md text-xs space-y-1.5">
-                    <p className="font-semibold text-[#1E293B] mb-1">Requisitos obligatorios de la contraseña:</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                      <div className={`flex items-center gap-1.5 ${userPassValidation.hasMinLength ? 'text-[#16A34A] font-medium' : 'text-[#64748B]'}`}>
-                        <span>{userPassValidation.hasMinLength ? '✓' : '○'}</span>
-                        <span>Mínimo 8 caracteres</span>
-                      </div>
-                      <div className={`flex items-center gap-1.5 ${userPassValidation.hasLetter ? 'text-[#16A34A] font-medium' : 'text-[#64748B]'}`}>
-                        <span>{userPassValidation.hasLetter ? '✓' : '○'}</span>
-                        <span>Al menos una letra (a-z, A-Z)</span>
-                      </div>
-                      <div className={`flex items-center gap-1.5 ${userPassValidation.hasNumber ? 'text-[#16A34A] font-medium' : 'text-[#64748B]'}`}>
-                        <span>{userPassValidation.hasNumber ? '✓' : '○'}</span>
-                        <span>Al menos un número (0-9)</span>
-                      </div>
-                      <div className={`flex items-center gap-1.5 ${userPassValidation.hasSymbol ? 'text-[#16A34A] font-medium' : 'text-[#64748B]'}`}>
-                        <span>{userPassValidation.hasSymbol ? '✓' : '○'}</span>
-                        <span>Al menos un símbolo (!@#$%^&*...)</span>
-                      </div>
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3.5 space-y-1.5">
+                  <div className="flex items-start gap-2.5">
+                    <span className="text-amber-600 text-lg leading-none">🔐</span>
+                    <div>
+                      <p className="text-xs font-bold text-amber-900">
+                        Contraseña Inicial Automática: <span className="font-mono bg-white px-2 py-0.5 rounded border border-amber-300 text-[#8f0404] font-black text-sm">123456</span>
+                      </p>
+                      <p className="text-xs text-amber-800 mt-1 leading-relaxed">
+                        Se asignará temporalmente la contraseña por defecto <strong>123456</strong>. Por seguridad institucional, <strong>el sistema obligará al usuario a cambiarla por una contraseña personal</strong> en su primer inicio de sesión.
+                      </p>
                     </div>
-                    {formConfirmPassword && (
-                      <div className={`pt-1 border-t border-[#E2E8F0] flex items-center gap-1.5 ${userPassValidation.matchesConfirm ? 'text-[#16A34A] font-medium' : 'text-[#DC2626] font-medium'}`}>
-                        <span>{userPassValidation.matchesConfirm ? '✓' : '✕'}</span>
-                        <span>{userPassValidation.matchesConfirm ? 'Las contraseñas coinciden' : 'Las contraseñas no coinciden'}</span>
-                      </div>
-                    )}
                   </div>
                 </div>
               )}
@@ -1145,7 +1095,7 @@ export default function UsuariosPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={savingUser || (!editingUser && !userPassValidation.isValid)}
+                  disabled={savingUser}
                   className="px-5 py-2 bg-[#8f0404] text-white rounded-md text-sm font-medium hover:bg-[#730202] disabled:opacity-50 transition-colors shadow-sm"
                 >
                   {savingUser ? 'Guardando...' : editingUser ? 'Actualizar Usuario' : 'Crear Usuario'}

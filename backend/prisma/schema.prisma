@@ -13,10 +13,13 @@ model Usuario {
   email           String    @unique @db.VarChar(255)
   passwordHash    String    @map("password_hash") @db.VarChar(255)
   nombreCompleto  String    @map("nombre_completo") @db.VarChar(200)
-  rol             String    @db.VarChar(50)
-  activo          Boolean   @default(true) @db.Bit
-  ultimoAcceso    DateTime? @map("ultimo_acceso")
-  createdAt       DateTime  @default(now()) @map("created_at")
+  rol                  String    @db.VarChar(50)
+  activo               Boolean   @default(true) @db.Bit
+  ultimoAcceso         DateTime? @map("ultimo_acceso")
+  debeCambiarPassword  Boolean   @default(false) @map("debe_cambiar_password") @db.Bit
+  resetPasswordToken   String?   @map("reset_password_token") @db.VarChar(255)
+  resetPasswordExpires DateTime? @map("reset_password_expires")
+  createdAt            DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
   refreshTokens            RefreshToken[]

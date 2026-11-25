@@ -21,7 +21,7 @@ export class UsuariosService {
 
   private sanitizeUser(user: any) {
     if (!user) return null;
-    const { passwordHash, ...sanitized } = user;
+    const { passwordHash, resetPasswordToken, ...sanitized } = user;
     let modulos: string[] = [];
     if (user.rolInfo?.modulos) {
       try {
@@ -32,6 +32,7 @@ export class UsuariosService {
     }
     return {
       ...sanitized,
+      debeCambiarPassword: Boolean(user.debeCambiarPassword),
       rolNombre: user.rolInfo?.nombre || user.rol,
       modulos,
     };
@@ -145,8 +146,9 @@ export class UsuariosService {
       throw new BadRequestException(`El rol '${rol.nombre}' está desactivado`);
     }
 
-    // Hashear contraseña
-    const passwordHash = await bcrypt.hash(dto.password, 12);
+    // Contraseña inicial: '123456' por defecto si no se especifica, y forzar cambio en primer login
+    const rawPass = dto.password?.trim() || '123456';
+    const passwordHash = await bcrypt.hash(rawPass, 10);
 
     const usuario = await this.prisma.usuario.create({
       data: {
@@ -156,6 +158,7 @@ export class UsuariosService {
         nombreCompleto: dto.nombreCompleto.trim(),
         rol: dto.rol,
         activo: dto.activo ?? true,
+        debeCambiarPassword: true,
       },
       include: {
         rolInfo: true,
@@ -273,7 +276,10 @@ export class UsuariosService {
 
     await this.prisma.usuario.update({
       where: { id },
-      data: { passwordHash: newPasswordHash },
+      data: {
+        passwordHash: newPasswordHash,
+        debeCambiarPassword: false,
+      },
     });
 
     // Revocar tokens anteriores por seguridad

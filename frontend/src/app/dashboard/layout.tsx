@@ -6,6 +6,7 @@ import Sidebar from '@/components/layout/Sidebar';
 import Header from '@/components/layout/Header';
 import Breadcrumbs from '@/components/layout/Breadcrumbs';
 import ConfirmCenterMessage from '@/components/common/ConfirmCenterMessage';
+import ModalCambioPasswordObligatorio from '@/components/auth/ModalCambioPasswordObligatorio';
 
 export default function DashboardLayout({
   children,
@@ -19,6 +20,7 @@ export default function DashboardLayout({
   const [collapsed, setCollapsed] = useState(false);
   const [userRol, setUserRol] = useState<string | null>(null);
   const [userModulos, setUserModulos] = useState<string[] | null>(null);
+  const [mustChangePassword, setMustChangePassword] = useState(false);
 
   // Cargar estado inicial y preferencias de localStorage
   useEffect(() => {
@@ -40,6 +42,9 @@ export default function DashboardLayout({
         const u = JSON.parse(storedUser);
         setUserRol(u.rol || null);
         if (Array.isArray(u.modulos)) setUserModulos(u.modulos);
+        if (u.debeCambiarPassword === true) {
+          setMustChangePassword(true);
+        }
       }
     } catch {}
 
@@ -50,6 +55,11 @@ export default function DashboardLayout({
           const u = JSON.parse(stored);
           setUserRol(u.rol || null);
           if (Array.isArray(u.modulos)) setUserModulos(u.modulos);
+          if (u.debeCambiarPassword === true) {
+            setMustChangePassword(true);
+          } else {
+            setMustChangePassword(false);
+          }
         }
       } catch {}
     };
@@ -135,6 +145,10 @@ export default function DashboardLayout({
         isCollapsed={collapsed}
       />
       <ConfirmCenterMessage />
+      <ModalCambioPasswordObligatorio
+        isOpen={mustChangePassword}
+        onSuccess={() => setMustChangePassword(false)}
+      />
       <div className="flex flex-1 min-h-0">
         <Sidebar
           mobileOpen={mobileOpen}

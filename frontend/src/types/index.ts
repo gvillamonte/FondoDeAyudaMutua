@@ -6,6 +6,7 @@ export interface User {
   rol: string;
   modulos?: string[];
   activo?: boolean;
+  debeCambiarPassword?: boolean;
 }
 
 export interface Rol {
@@ -35,6 +36,7 @@ export interface UsuarioAdmin {
   rol: string;
   rolNombre?: string;
   activo: boolean;
+  debeCambiarPassword?: boolean;
   ultimoAcceso?: string | null;
   createdAt: string;
   modulos?: string[];

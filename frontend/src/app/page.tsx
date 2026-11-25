@@ -13,6 +13,39 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  // Modal Recuperar Contraseña
+  const [showForgotModal, setShowForgotModal] = useState(false);
+  const [forgotIdentifier, setForgotIdentifier] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotSuccess, setForgotSuccess] = useState(false);
+  const [forgotError, setForgotError] = useState('');
+
+  const handleForgotSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotIdentifier.trim()) return;
+
+    setForgotLoading(true);
+    setForgotError('');
+    setForgotSuccess(false);
+
+    try {
+      const res = await fetch('/api/auth/recuperar-password/solicitar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifier: forgotIdentifier.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || 'Error al procesar la solicitud');
+      }
+      setForgotSuccess(true);
+    } catch (err: any) {
+      setForgotError(err?.message || 'Error de conexión con el servidor');
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -176,6 +209,21 @@ export default function LoginPage() {
               </div>
             </div>
 
+            <div className="flex justify-end -mt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setForgotIdentifier('');
+                  setForgotError('');
+                  setForgotSuccess(false);
+                  setShowForgotModal(true);
+                }}
+                className="text-xs font-semibold text-[#8f0404] hover:text-[#730202] hover:underline"
+              >
+                ¿Olvidó su contraseña? Recuperar aquí
+              </button>
+            </div>
+
             <button
               type="submit"
               disabled={loading}
@@ -237,6 +285,103 @@ export default function LoginPage() {
           </div>
         </div>
       </div>
+
+      {/* MODAL RECUPERACIÓN DE CONTRASEÑA */}
+      {showForgotModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+            <div className="bg-[#8f0404] p-5 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-amber-400 flex items-center justify-center font-black text-[#8f0404] text-sm">
+                  CIP
+                </div>
+                <div>
+                  <h3 className="text-base font-bold leading-tight">Recuperar Contraseña</h3>
+                  <p className="text-[11px] text-amber-200">Restablecimiento seguro con token</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowForgotModal(false)}
+                className="text-white/80 hover:text-white text-lg p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-6">
+              {forgotSuccess ? (
+                <div className="text-center space-y-4 py-2">
+                  <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto text-2xl font-bold">
+                    ✓
+                  </div>
+                  <div>
+                    <h4 className="text-base font-bold text-slate-800">Enlace Enviado</h4>
+                    <p className="text-xs text-slate-600 mt-2 leading-relaxed">
+                      Si el usuario o correo institucional ingresado se encuentra registrado en el sistema, hemos enviado un enlace seguro para restablecer su contraseña.
+                    </p>
+                    <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded p-2.5 mt-3">
+                      Revise su bandeja de entrada o carpeta de spam. El enlace tiene una vigencia de <strong>60 minutos</strong>.
+                    </p>
+                  </div>
+                  <div className="pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowForgotModal(false)}
+                      className="w-full py-2 px-4 bg-[#8f0404] hover:bg-[#730202] text-white text-sm font-semibold rounded-lg transition-colors"
+                    >
+                      Entendido / Volver al Login
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <form onSubmit={handleForgotSubmit} className="space-y-4">
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    Ingrese su <strong>nombre de usuario</strong> o su <strong>correo institucional</strong>. Le enviaremos un correo con un enlace y token de seguridad para restablecer su acceso.
+                  </p>
+
+                  {forgotError && (
+                    <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-xs font-medium">
+                      {forgotError}
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                      Usuario o Correo Institucional
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={forgotIdentifier}
+                      onChange={(e) => setForgotIdentifier(e.target.value)}
+                      placeholder="Ej. bquispe o correo@cipcusco.org.pe"
+                      className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm text-slate-900 focus:outline-none focus:border-[#8f0404] focus:ring-1 focus:ring-[#8f0404]"
+                    />
+                  </div>
+
+                  <div className="pt-2 flex items-center justify-end gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setShowForgotModal(false)}
+                      className="px-4 py-2 border border-slate-200 text-slate-600 rounded-lg text-xs font-semibold hover:bg-slate-50 transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={forgotLoading || !forgotIdentifier.trim()}
+                      className="px-4 py-2 bg-[#8f0404] hover:bg-[#730202] text-white text-xs font-bold rounded-lg transition-colors shadow-sm disabled:opacity-50"
+                    >
+                      {forgotLoading ? 'Enviando enlace...' : 'Enviar Enlace de Recuperación'}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

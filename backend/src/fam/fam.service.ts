@@ -367,12 +367,30 @@ export class FamService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
+  private readonly colegiadosCache = new Map<string, { data: { NUM_COLEGIATURA: string; DNI: string; NOMBRE_COLEGIADO: string; ESTADO: string; FECHA_ULTIMO_PAGO: string | null }; expiresAt: number }>();
+
   async buscarColegiadosPorIds(ids: string[]): Promise<Map<string, { NUM_COLEGIATURA: string; DNI: string; NOMBRE_COLEGIADO: string; ESTADO: string; FECHA_ULTIMO_PAGO: string | null }>> {
     const mapa = new Map<string, { NUM_COLEGIATURA: string; DNI: string; NOMBRE_COLEGIADO: string; ESTADO: string; FECHA_ULTIMO_PAGO: string | null }>();
     if (!ids.length) return mapa;
+
+    const now = Date.now();
+    const pendientesDeBuscar: string[] = [];
+
+    for (const id of ids) {
+      const cleanId = String(id).trim();
+      if (!cleanId) continue;
+      const cached = this.colegiadosCache.get(cleanId);
+      if (cached && cached.expiresAt > now) {
+        mapa.set(cleanId, cached.data);
+      } else {
+        pendientesDeBuscar.push(cleanId);
+      }
+    }
+
+    if (!pendientesDeBuscar.length) return mapa;
     if (!(await this.ensureConnected())) return mapa;
 
-    const unicos = [...new Set(ids.map((i) => String(i).trim()).filter(Boolean))].slice(0, 500);
+    const unicos = [...new Set(pendientesDeBuscar)].slice(0, 500);
 
     const placeholders = unicos.map((_, idx) => `@id${idx}`).join(', ');
     const query = `
@@ -394,14 +412,18 @@ export class FamService implements OnModuleInit, OnModuleDestroy {
       unicos.forEach((id, idx) => request.input(`id${idx}`, sql.VarChar, id));
       return request.query(query);
     });
+    const ttl = now + 120000;
     result.recordset.forEach((r: any) => {
-      mapa.set(String(r.COLEGIADO_ID), {
+      const info = {
         NUM_COLEGIATURA: r.NUM_COLEGIATURA,
         DNI: r.DNI,
         NOMBRE_COLEGIADO: r.NOMBRE_COLEGIADO,
         ESTADO: r.ESTADO,
         FECHA_ULTIMO_PAGO: r.FECHA_ULTIMO_PAGO ? String(r.FECHA_ULTIMO_PAGO) : null,
-      });
+      };
+      const strId = String(r.COLEGIADO_ID);
+      mapa.set(strId, info);
+      this.colegiadosCache.set(strId, { data: info, expiresAt: ttl });
     });
     return mapa;
   }

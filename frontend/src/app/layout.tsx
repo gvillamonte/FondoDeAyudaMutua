@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { headers } from 'next/headers';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -19,8 +20,13 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const nonce = headers().get('x-nonce') ?? undefined;
+
   return (
     <html lang="es">
+      <head>
+        {nonce && <meta property="csp-nonce" content={nonce} />}
+      </head>
       <body>{children}</body>
     </html>
   );

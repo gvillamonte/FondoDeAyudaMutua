@@ -355,7 +355,7 @@ export default function LoginPage() {
                       required
                       value={forgotIdentifier}
                       onChange={(e) => setForgotIdentifier(e.target.value)}
-                      placeholder="Ej. bquispe o correo@cipcusco.org.pe"
+                      placeholder="Ingrese su usuario o correo"
                       className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm text-slate-900 focus:outline-none focus:border-[#8f0404] focus:ring-1 focus:ring-[#8f0404]"
                     />
                   </div>

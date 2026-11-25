@@ -995,7 +995,7 @@ export default function UsuariosPage() {
                 <input
                   type="text"
                   required
-                  placeholder="Ej. Ing. Carlos Mendoza Torres"
+                  placeholder="Nombres y apellidos completos"
                   value={formNombreCompleto}
                   onChange={(e) => setFormNombreCompleto(e.target.value)}
                   className="w-full px-3 py-2 border border-[#E2E8F0] rounded-md text-sm text-[#1E293B] focus:outline-none focus:border-[#8f0404]"
@@ -1011,7 +1011,7 @@ export default function UsuariosPage() {
                     type="text"
                     required
                     disabled={!!editingUser}
-                    placeholder="Ej. cmendoza"
+                    placeholder="Nombre de usuario"
                     value={formUsername}
                     onChange={(e) => setFormUsername(e.target.value.toLowerCase().trim())}
                     className="w-full px-3 py-2 border border-[#E2E8F0] rounded-md text-sm text-[#1E293B] disabled:bg-gray-100 disabled:text-gray-500 focus:outline-none focus:border-[#8f0404]"
@@ -1025,7 +1025,7 @@ export default function UsuariosPage() {
                   <input
                     type="email"
                     required
-                    placeholder="usuario@cipcusco.org.pe"
+                    placeholder="correo@cipcusco.org.pe"
                     value={formEmail}
                     onChange={(e) => setFormEmail(e.target.value.trim())}
                     className="w-full px-3 py-2 border border-[#E2E8F0] rounded-md text-sm text-[#1E293B] focus:outline-none focus:border-[#8f0404]"
@@ -1262,7 +1262,7 @@ export default function UsuariosPage() {
                     type="text"
                     required
                     disabled={!!editingRole}
-                    placeholder="Ej. ASISTENTE_CAJA"
+                    placeholder="CODIGO_ROL"
                     value={formRoleId}
                     onChange={(e) => setFormRoleId(e.target.value.toUpperCase().replace(/\s+/g, '_'))}
                     className="w-full px-3 py-2 border border-[#E2E8F0] rounded-md text-sm text-[#1E293B] disabled:bg-gray-100 disabled:text-gray-500 font-mono focus:outline-none focus:border-[#8f0404]"
@@ -1277,7 +1277,7 @@ export default function UsuariosPage() {
                   <input
                     type="text"
                     required
-                    placeholder="Ej. Asistente de Caja y Cobranzas"
+                    placeholder="Nombre del rol"
                     value={formRoleNombre}
                     onChange={(e) => setFormRoleNombre(e.target.value)}
                     className="w-full px-3 py-2 border border-[#E2E8F0] rounded-md text-sm text-[#1E293B] focus:outline-none focus:border-[#8f0404]"

@@ -73,7 +73,7 @@ export const CONFIG_EMAIL_DEFAULT: ActualizacionEmailConfig = {
   mensajeBienvenida:
     'Le confirmamos que sus datos de contacto, residencia y filiación han sido actualizados satisfactoriamente en el padrón del Colegio de Ingenieros del Perú. A continuación, se detalla el resumen de la información registrada:',
   avisoSeguridad:
-    'Aviso de Seguridad: Si usted no reconoció esta operación o detecta alguna inconsistencia, por favor comuníquese de inmediato con las oficinas del Colegio de Ingenieros del Perú.',
+    'Aviso de Seguridad: Si usted no reconoció esta operación o detecta alguna inconsistencia, por favor comuníquese de inmediato con las oficinas del Colegio de Ingenieros del Perú. Por motivos de seguridad y resguardo de su identidad institucional, no se podrá realizar una nueva actualización de datos dentro de las próximas 24 horas.',
   piePagina:
     'Colegio de Ingenieros del Perú — Consejo Departamental Cusco\nSistema de Gestión y Actualización de Datos de Colegiados\nEste mensaje ha sido generado automáticamente, por favor no responda a esta dirección de correo.',
   logoTipo: 'default',

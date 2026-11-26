@@ -1,6 +1,7 @@
 ﻿'use client';
 
 import { useEffect, useState, type ReactNode } from 'react';
+import { asegurarDocumentoA4Pdf, base64ToUint8Array } from '@/lib/pdf-utils';
 
 interface PdfViewerModalProps {
   base64: string;
@@ -17,15 +18,38 @@ export default function PdfViewerModal({ base64, nombre, onClose, overlay }: Pdf
   const [url, setUrl] = useState('');
 
   useEffect(() => {
-    try {
-      const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
-      const blob = new Blob([bytes], { type: 'application/pdf' });
-      const objectUrl = URL.createObjectURL(blob);
-      setUrl(objectUrl);
-      return () => URL.revokeObjectURL(objectUrl);
-    } catch {
-      return;
-    }
+    let activo = true;
+    let objectUrl = '';
+
+    const cargarDocumento = async () => {
+      try {
+        const clean = base64.includes(',') ? base64.split(',')[1].trim() : base64.trim();
+        // Optimizar y asegurar que la imagen se presente en tamaño de hoja A4 completa
+        const a4Base64 = await asegurarDocumentoA4Pdf(clean);
+        if (!activo) return;
+        const bytes = base64ToUint8Array(a4Base64);
+        const blob = new Blob([bytes as unknown as BlobPart], { type: 'application/pdf' });
+        objectUrl = URL.createObjectURL(blob);
+        setUrl(objectUrl);
+      } catch {
+        try {
+          const clean = base64.includes(',') ? base64.split(',')[1].trim() : base64.trim();
+          const bytes = base64ToUint8Array(clean);
+          const blob = new Blob([bytes as unknown as BlobPart], { type: 'application/pdf' });
+          objectUrl = URL.createObjectURL(blob);
+          if (activo) setUrl(objectUrl);
+        } catch {
+          // ignore
+        }
+      }
+    };
+
+    cargarDocumento();
+
+    return () => {
+      activo = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
   }, [base64]);
 
   useEffect(() => {
@@ -46,7 +70,7 @@ export default function PdfViewerModal({ base64, nombre, onClose, overlay }: Pdf
             </span>
             <div className="min-w-0">
               <p className="text-sm font-semibold text-text-main truncate" title={nombre}>{nombre}</p>
-              <p className="text-[10px] text-text-sec">Documento PDF</p>
+              <p className="text-[10px] text-text-sec">Documento Oficial A4 (Ajuste Automático)</p>
             </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
@@ -68,9 +92,9 @@ export default function PdfViewerModal({ base64, nombre, onClose, overlay }: Pdf
         {/* Visor */}
         <div className="flex-1 bg-gray-100 relative">
           {url ? (
-            <iframe src={url} title={nombre} className="w-full h-full border-0" />
+            <iframe src={`${url}#view=FitH&toolbar=1`} title={nombre} className="w-full h-full border-0" />
           ) : (
-            <div className="h-full flex items-center justify-center text-sm text-text-sec">Cargando documento...</div>
+            <div className="h-full flex items-center justify-center text-sm text-text-sec">Cargando documento en tamaño A4...</div>
           )}
           {overlay && <div className="absolute top-3 right-6 z-10">{overlay}</div>}
         </div>

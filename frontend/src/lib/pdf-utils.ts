@@ -119,11 +119,13 @@ export async function convertirImagenAPdf(file: File): Promise<{ base64: string;
             const pageW = isLandscape ? 841.89 : 595.28;
             const pageH = isLandscape ? 595.28 : 841.89;
 
-            const margin = 20; // 20pt de margen
+            // Margen optimizado de 10pt (~3.5mm) para que el documento ocupe la hoja A4 completa
+            const margin = 10;
             const maxW = pageW - margin * 2;
             const maxH = pageH - margin * 2;
 
-            const scale = Math.min(maxW / embeddedJpg.width, maxH / embeddedJpg.height, 1);
+            // Escala proporcional sin límite de '1' para que fotos de cualquier resolución llenen la hoja A4
+            const scale = Math.min(maxW / embeddedJpg.width, maxH / embeddedJpg.height);
             const drawW = embeddedJpg.width * scale;
             const drawH = embeddedJpg.height * scale;
             const posX = (pageW - drawW) / 2;
@@ -151,6 +153,122 @@ export async function convertirImagenAPdf(file: File): Promise<{ base64: string;
     };
     reader.readAsDataURL(file);
   });
+}
+
+/**
+ * Asegura que cualquier documento (sea imagen pura o PDF con foto pequeña)
+ * se presente en formato de hoja A4 completa (595.28 x 841.89 pt).
+ */
+export async function asegurarDocumentoA4Pdf(base64Input: string): Promise<string> {
+  if (!base64Input || typeof base64Input !== 'string') {
+    throw new Error('Contenido de documento inválido');
+  }
+
+  const cleanB64 = base64Input.includes(',') ? base64Input.split(',')[1].trim() : base64Input.trim();
+  const bytes = base64ToUint8Array(cleanB64);
+
+  // 1. Detección de imágenes puras (JPEG, PNG, WEBP, GIF)
+  const isJpg = bytes[0] === 0xff && bytes[1] === 0xd8;
+  const isPng = bytes[0] === 0x89 && bytes[1] === 0x50;
+  const isWebp = bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46; // RIFF
+  const isGif = bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46; // GIF
+
+  if (isJpg || isPng) {
+    try {
+      const newDoc = await PDFDocument.create();
+      const embedded = isJpg ? await newDoc.embedJpg(bytes) : await newDoc.embedPng(bytes);
+
+      const isLandscape = embedded.width > embedded.height;
+      const pageW = isLandscape ? 841.89 : 595.28;
+      const pageH = isLandscape ? 595.28 : 841.89;
+
+      const margin = 10;
+      const maxW = pageW - margin * 2;
+      const maxH = pageH - margin * 2;
+      const scale = Math.min(maxW / embedded.width, maxH / embedded.height);
+      const drawW = embedded.width * scale;
+      const drawH = embedded.height * scale;
+      const posX = (pageW - drawW) / 2;
+      const posY = (pageH - drawH) / 2;
+
+      const page = newDoc.addPage([pageW, pageH]);
+      page.drawImage(embedded, { x: posX, y: posY, width: drawW, height: drawH });
+
+      const pdfBytes = await newDoc.save();
+      return uint8ArrayToBase64(pdfBytes);
+    } catch {
+      // Si falla, continúa con el flujo normal
+    }
+  }
+
+  // 2. Detección de PDF (magic bytes %PDF = 0x25 0x50 0x44 0x46)
+  const isPdf = bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46;
+  if (!isPdf) {
+    return cleanB64;
+  }
+
+  // 3. Si es PDF, verificar si es un documento de 1 página con imagen reducida que deba expandirse a A4
+  try {
+    const doc = await PDFDocument.load(bytes);
+    if (doc.getPageCount() === 1) {
+      // Buscar stream de imagen embebida en objetos indirectos
+      let imgBytes: Uint8Array | null = null;
+      let imgIsJpg = false;
+      let imgIsPng = false;
+      let originalImgWidth = 0;
+      let originalImgHeight = 0;
+
+      const indirectEntries = (doc.context as any).indirectObjects?.entries?.() || [];
+      for (const [, obj] of indirectEntries) {
+        const dictStr = obj?.dict?.toString?.() || '';
+        if (dictStr.includes('/Subtype /Image') && obj.contents && obj.contents.length > 500) {
+          const raw = new Uint8Array(obj.contents);
+          if (raw[0] === 0xff && raw[1] === 0xd8) {
+            imgBytes = raw;
+            imgIsJpg = true;
+            originalImgWidth = Number(obj.dict.get({ asString: () => '/Width' })?.value || 0);
+            originalImgHeight = Number(obj.dict.get({ asString: () => '/Height' })?.value || 0);
+            break;
+          } else if (raw[0] === 0x89 && raw[1] === 0x50) {
+            imgBytes = raw;
+            imgIsPng = true;
+            originalImgWidth = Number(obj.dict.get({ asString: () => '/Width' })?.value || 0);
+            originalImgHeight = Number(obj.dict.get({ asString: () => '/Height' })?.value || 0);
+            break;
+          }
+        }
+      }
+
+      // Si encontramos la imagen y sus dimensiones originales son menores a 550 o la página tiene márgenes excesivos:
+      if (imgBytes && (imgIsJpg || imgIsPng)) {
+        const newDoc = await PDFDocument.create();
+        const embedded = imgIsJpg ? await newDoc.embedJpg(imgBytes) : await newDoc.embedPng(imgBytes);
+
+        const isLandscape = embedded.width > embedded.height;
+        const pageW = isLandscape ? 841.89 : 595.28;
+        const pageH = isLandscape ? 595.28 : 841.89;
+
+        const margin = 10;
+        const maxW = pageW - margin * 2;
+        const maxH = pageH - margin * 2;
+        const scale = Math.min(maxW / embedded.width, maxH / embedded.height);
+        const drawW = embedded.width * scale;
+        const drawH = embedded.height * scale;
+        const posX = (pageW - drawW) / 2;
+        const posY = (pageH - drawH) / 2;
+
+        const page = newDoc.addPage([pageW, pageH]);
+        page.drawImage(embedded, { x: posX, y: posY, width: drawW, height: drawH });
+
+        const pdfBytes = await newDoc.save();
+        return uint8ArrayToBase64(pdfBytes);
+      }
+    }
+  } catch {
+    // Si no se puede re-escalar, se devuelve el PDF original
+  }
+
+  return cleanB64;
 }
 
 function naturalHFix(img: HTMLImageElement): number {

@@ -742,9 +742,11 @@ export default function ActualizarDatosPage() {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showTimeoutModal, setShowTimeoutModal] = useState(false);
   const [modalBloqueoEstado, setModalBloqueoEstado] = useState<{
-    tipo: 'FALLECIDO' | 'TEMPORAL' | 'TRANSFERIDO' | string;
+    tipo: 'FALLECIDO' | 'TEMPORAL' | 'TRANSFERIDO' | 'COOLDOWN_24H' | string;
     mensaje: string;
     cip?: string;
+    proximaFechaStr?: string;
+    tiempoTexto?: string;
   } | null>(null);
   const [cuentaRegresivaRedireccion, setCuentaRegresivaRedireccion] = useState(3);
   const [resumenExito, setResumenExito] = useState<any | null>(null);
@@ -1168,7 +1170,8 @@ export default function ActualizarDatosPage() {
       const esBloqueo =
         status === 403 ||
         Boolean(errData?.bloqueado) ||
-        /fallecid|temporal|transferid/i.test(msgRaw);
+        Boolean(errData?.cooldown) ||
+        /fallecid|temporal|transferid|cooldown|24 hora/i.test(msgRaw);
 
       if (esBloqueo) {
         const tipoBloqueo =
@@ -1177,7 +1180,9 @@ export default function ActualizarDatosPage() {
             ? 'FALLECIDO'
             : /temporal/i.test(msgRaw)
             ? 'TEMPORAL'
-            : 'TRANSFERIDO');
+            : /transferid/i.test(msgRaw)
+            ? 'TRANSFERIDO'
+            : 'COOLDOWN_24H');
 
         setModalBloqueoEstado({
           tipo: tipoBloqueo,
@@ -1187,8 +1192,12 @@ export default function ActualizarDatosPage() {
               ? 'El colegiado figura como FALLECIDO en el padrón institucional. Por disposición reglamentaria del Colegio de Ingenieros del Perú, no está permitida la actualización de datos personales.'
               : tipoBloqueo === 'TEMPORAL'
               ? 'El colegiado figura con estado TEMPORAL en el padrón institucional. No está habilitado para realizar la actualización de datos a través de este portal.'
-              : 'El colegiado figura con estado TRANSFERIDO en el padrón institucional. No está habilitado para realizar la actualización de datos en el Consejo Departamental de Cusco.'),
+              : tipoBloqueo === 'TRANSFERIDO'
+              ? 'El colegiado figura con estado TRANSFERIDO en el padrón institucional. No está habilitado para realizar la actualización de datos en el Consejo Departamental de Cusco.'
+              : 'Por motivos de seguridad institucional y resguardo de identidad, sus datos fueron actualizados recientemente. Solo se permite una actualización cada 24 horas.'),
           cip: cipLimpio,
+          proximaFechaStr: errData?.proximaFechaStr,
+          tiempoTexto: errData?.tiempoTexto,
         });
         refrescarCaptcha();
         return;
@@ -1393,10 +1402,25 @@ export default function ActualizarDatosPage() {
         ...dataGuardada,
         emailEnviado: res.data?.emailEnviado,
         message: res.data?.message,
+        proximaFechaStr: res.data?.proximaFechaStr || dataGuardada?.proximaFechaStr,
+        proximaActualizacionDisponible: res.data?.proximaActualizacionDisponible || dataGuardada?.proximaActualizacionDisponible,
+        avisoSeguridad: res.data?.avisoSeguridad || dataGuardada?.avisoSeguridad,
       });
       setShowConfirmModal(false);
       setShowSuccessModal(true);
     } catch (err: any) {
+      const errData = err.response?.data;
+      if (err.response?.status === 403 && (errData?.bloqueado || errData?.cooldown || /24 hora|cooldown/i.test(errData?.message || ''))) {
+        setShowConfirmModal(false);
+        setModalBloqueoEstado({
+          tipo: 'COOLDOWN_24H',
+          mensaje: errData?.message || 'No se puede volver a actualizar datos dentro de las próximas 24 horas.',
+          cip: colegiado.cip,
+          proximaFechaStr: errData?.proximaFechaStr,
+          tiempoTexto: errData?.tiempoTexto,
+        });
+        return;
+      }
       const msg =
         err.friendlyMessage ||
         err.response?.data?.message ||
@@ -2727,6 +2751,16 @@ export default function ActualizarDatosPage() {
                 Al confirmar, se guardarán los datos en el sistema y se remitirá una copia completa de la <strong>constancia oficial con sus datos actualizados</strong> al correo electrónico: <strong className="text-[#ac0505] font-bold underline">{email}</strong>.
               </div>
 
+              <div className="bg-amber-50 border border-amber-200 p-3.5 text-xs text-amber-900 leading-relaxed font-medium shadow-sm flex items-start gap-2.5">
+                <svg className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+                <div>
+                  <strong className="text-amber-950 font-bold block mb-0.5">Aviso de Seguridad Institucional:</strong>
+                  Al confirmar, sus datos serán procesados y se activará un <strong>período de resguardo de 24 horas</strong>, durante el cual no podrá realizar nuevas modificaciones a través del portal.
+                </div>
+              </div>
+
               {errorGuardar && (
                 <div className="p-3 bg-red-50 border border-red-200 text-red-700 flex items-center gap-2">
                   <span>✕ {errorGuardar}</span>
@@ -2828,6 +2862,34 @@ export default function ActualizarDatosPage() {
                   </span>
                 </div>
               </div>
+
+              {/* ALERTA DE SEGURIDAD ESTRICTA: COOLDOWN 24 HORAS */}
+              <div className="bg-amber-50 border-2 border-amber-400 p-4 text-amber-950 space-y-2.5 shadow-sm">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-xs uppercase tracking-wider text-amber-950">
+                      Período de Seguridad Activo (24 Horas)
+                    </h4>
+                    <span className="text-[11px] text-amber-800 font-medium">Protección de identidad y resguardo institucional</span>
+                  </div>
+                </div>
+                <div className="p-2.5 bg-white border border-amber-300 text-xs text-amber-900 leading-relaxed font-semibold">
+                  ⚠️ <strong>ADVERTENCIA:</strong> Por motivos de seguridad y resguardo de su identidad institucional, <strong>no se podrá volver a actualizar datos dentro de las próximas 24 horas</strong>.
+                </div>
+                {resumenExito?.proximaFechaStr && (
+                  <div className="pt-1.5 border-t border-amber-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 text-[11px] text-amber-950">
+                    <span className="font-medium text-amber-900">Nueva actualización disponible a partir de:</span>
+                    <span className="font-mono font-bold bg-amber-100 px-2 py-0.5 border border-amber-300 text-amber-950">
+                      {resumenExito.proximaFechaStr}
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="p-4 border-t border-slate-200 bg-slate-50 flex justify-center">
@@ -2927,6 +2989,8 @@ export default function ActualizarDatosPage() {
               className={`p-5 text-white flex items-center gap-3.5 ${
                 modalBloqueoEstado.tipo === 'FALLECIDO'
                   ? 'bg-slate-900 border-b-2 border-slate-700'
+                  : modalBloqueoEstado.tipo === 'COOLDOWN_24H'
+                  ? 'bg-slate-900 border-b-2 border-amber-500'
                   : modalBloqueoEstado.tipo === 'TEMPORAL'
                   ? 'bg-[#d97706] border-b-2 border-amber-600'
                   : 'bg-[#d97706] border-b-2 border-amber-700'
@@ -2937,6 +3001,10 @@ export default function ActualizarDatosPage() {
                   <svg className="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                     <line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" strokeWidth={2} strokeLinecap="round" />
+                  </svg>
+                ) : modalBloqueoEstado.tipo === 'COOLDOWN_24H' ? (
+                  <svg className="w-7 h-7 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                   </svg>
                 ) : modalBloqueoEstado.tipo === 'TEMPORAL' ? (
                   <svg className="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -2950,11 +3018,15 @@ export default function ActualizarDatosPage() {
               </div>
               <div className="min-w-0 flex-1">
                 <span className="text-[10px] uppercase font-bold tracking-widest text-white/80 block">
-                  Acceso Restringido al Portal
+                  {modalBloqueoEstado.tipo === 'COOLDOWN_24H'
+                    ? 'Período de Seguridad Activo (24 Horas)'
+                    : 'Acceso Restringido al Portal'}
                 </span>
                 <h3 className="text-lg font-extrabold text-white leading-tight mt-0.5">
                   {modalBloqueoEstado.tipo === 'FALLECIDO'
                     ? 'Colegiado en Condición de Fallecido'
+                    : modalBloqueoEstado.tipo === 'COOLDOWN_24H'
+                    ? 'Actualización de Datos en Espera'
                     : modalBloqueoEstado.tipo === 'TEMPORAL'
                     ? 'Colegiado con Estado Temporal'
                     : 'Colegiado con Estado Transferido'}
@@ -2973,27 +3045,46 @@ export default function ActualizarDatosPage() {
 
               <div
                 className={`p-4 border text-xs sm:text-sm leading-relaxed ${
-                  modalBloqueoEstado.tipo === 'FALLECIDO'
+                  modalBloqueoEstado.tipo === 'COOLDOWN_24H'
+                    ? 'bg-amber-50 border-amber-300 text-amber-950'
+                    : modalBloqueoEstado.tipo === 'FALLECIDO'
                     ? 'bg-slate-50 border-slate-300 text-slate-800'
                     : modalBloqueoEstado.tipo === 'TEMPORAL'
                     ? 'bg-amber-50 border-amber-200 text-amber-900'
                     : 'bg-red-50 border-red-200 text-[#730202]'
                 }`}
               >
-                <p className="font-semibold mb-2">
-                  {modalBloqueoEstado.tipo === 'FALLECIDO'
+                <p className="font-bold mb-2">
+                  {modalBloqueoEstado.tipo === 'COOLDOWN_24H'
+                    ? '🔒 Sus datos ya fueron actualizados recientemente.'
+                    : modalBloqueoEstado.tipo === 'FALLECIDO'
                     ? 'El colegiado figura con estado FALLECIDO en el padrón oficial.'
                     : modalBloqueoEstado.tipo === 'TEMPORAL'
                     ? 'El colegiado figura con estado TEMPORAL en el padrón oficial.'
                     : 'El colegiado figura con estado TRANSFERIDO en el padrón oficial.'}
                 </p>
                 <p>{modalBloqueoEstado.mensaje}</p>
+
+                {modalBloqueoEstado.tipo === 'COOLDOWN_24H' && modalBloqueoEstado.proximaFechaStr && (
+                  <div className="mt-3 pt-2.5 border-t border-amber-300 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 text-xs font-semibold text-amber-950">
+                    <span className="text-amber-900">Disponible nuevamente a partir de:</span>
+                    <span className="font-mono bg-white px-2.5 py-1 border border-amber-300">
+                      {modalBloqueoEstado.proximaFechaStr}
+                    </span>
+                  </div>
+                )}
               </div>
 
               <div className="p-3 bg-gray-50 border border-gray-200 text-xs text-slate-600 space-y-1">
-                <p className="font-semibold text-slate-700">¿Requiere orientación o regularización?</p>
+                <p className="font-semibold text-slate-700">
+                  {modalBloqueoEstado.tipo === 'COOLDOWN_24H'
+                    ? '¿Por qué existe este período de seguridad?'
+                    : '¿Requiere orientación o regularización?'}
+                </p>
                 <p>
-                  Para consultas sobre este estado registral, comuníquese con Mesa de Partes o Secretaría del Consejo Departamental del CIP Cusco.
+                  {modalBloqueoEstado.tipo === 'COOLDOWN_24H'
+                    ? 'Para evitar suplantaciones y modificaciones indebidas, el sistema establece un intervalo mínimo de 24 horas entre actualizaciones. Si necesita un cambio urgente, comuníquese con el Consejo Departamental de Cusco.'
+                    : 'Para consultas sobre este estado registral, comuníquese con Mesa de Partes o Secretaría del Consejo Departamental del CIP Cusco.'}
                 </p>
               </div>
             </div>

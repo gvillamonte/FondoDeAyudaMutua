@@ -221,6 +221,34 @@ describe('ActualizacionDatosService', () => {
         service.consultarPorCipYDni({ cip: '10018', dni: '10271409' }),
       ).rejects.toThrow(ForbiddenException);
     });
+
+    it('debe bloquear con ForbiddenException (COOLDOWN_24H) si el colegiado actualizó hace menos de 24 horas', async () => {
+      legacyServiceMock.getColegiadoByCipAndDni.mockResolvedValue({
+        COLEGIADO_ID: 101,
+        NUM_COLEGIATURA: '123456',
+        DNI: '45678912',
+        NOMBRES: 'JUAN',
+        APELLIDO_PATERNO: 'PEREZ',
+      });
+      // Actualización realizada hace 2 horas
+      prismaMock.colegiadoActualizacion.findFirst.mockResolvedValue({
+        id: 'act-prev',
+        updatedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+      });
+
+      await expect(
+        service.consultarPorCipYDni({ cip: '123456', dni: '45678912' }),
+      ).rejects.toThrow(ForbiddenException);
+
+      try {
+        await service.consultarPorCipYDni({ cip: '123456', dni: '45678912' });
+      } catch (err: any) {
+        expect(err.getResponse().bloqueado).toBe(true);
+        expect(err.getResponse().estadoColegiado).toBe('COOLDOWN_24H');
+        expect(err.getResponse().cooldown).toBe(true);
+        expect(err.getResponse().message).toContain('24 horas');
+      }
+    });
   });
 
   describe('actualizarDatos', () => {
@@ -267,6 +295,9 @@ describe('ActualizacionDatosService', () => {
 
       expect(res.success).toBe(true);
       expect(res.data.email).toBe('nuevo@test.com');
+      expect(res.message).toContain('24 horas');
+      expect(res.cooldownHoras).toBe(24);
+      expect(res.avisoSeguridad).toContain('24 horas');
       expect(legacyServiceMock.actualizarDatosColegiado).toHaveBeenCalledWith(
         '123456',
         expect.objectContaining({
@@ -284,6 +315,33 @@ describe('ActualizacionDatosService', () => {
           entityId: 'act-123',
         }),
       );
+    });
+
+    it('debe bloquear con ForbiddenException si el registro existente fue modificado hace menos de 24 horas', async () => {
+      legacyServiceMock.getColegiadoByCipAndDni.mockResolvedValue({
+        COLEGIADO_ID: 101,
+        NUM_COLEGIATURA: '123456',
+        DNI: '45678912',
+        NOMBRES: 'JUAN',
+        APELLIDO_PATERNO: 'PEREZ',
+      });
+      // Primer findFirst en consultarPorCipYDni devuelve null o fecha antigua (>24h)
+      // pero el registroExistente en APP_DB tiene fecha reciente (< 24h)
+      prismaMock.colegiadoActualizacion.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({
+          id: 'act-123',
+          updatedAt: new Date(Date.now() - 30 * 60 * 1000), // Hace 30 minutos
+        });
+
+      await expect(
+        service.actualizarDatos({
+          cip: '123456',
+          dni: '45678912',
+          email: 'nuevo@test.pe',
+          celular: '984123987',
+        }),
+      ).rejects.toThrow(ForbiddenException);
     });
   });
 

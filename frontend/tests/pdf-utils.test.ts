@@ -6,6 +6,7 @@ import {
   esArchivoImagen,
   esArchivoPdf,
   unirDocumentosPdf,
+  asegurarDocumentoA4Pdf,
   DocumentoParaUnir,
 } from '../src/lib/pdf-utils';
 
@@ -61,6 +62,20 @@ describe('pdf-utils', () => {
     // Verificar que el PDF resultante contiene la carátula (1 página) + 1 página de pdf1 + 2 páginas de pdf2 = 4 páginas
     const mergedDoc = await PDFDocument.load(base64ToUint8Array(mergedBase64));
     expect(mergedDoc.getPageCount()).toBe(4);
+  });
+
+  it('asegura que documentos e imágenes se expandan a formato A4 estándar', async () => {
+    // 1. Imagen PNG mínima (1x1 pixel)
+    const png1x1 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    const a4Pdf = await asegurarDocumentoA4Pdf(png1x1);
+    expect(a4Pdf.startsWith('JVBERi')).toBe(true);
+
+    const doc = await PDFDocument.load(base64ToUint8Array(a4Pdf));
+    const page = doc.getPages()[0];
+    const { width, height } = page.getSize();
+    // Dimensiones A4 estándar en puntos
+    expect(Math.round(width)).toBe(595);
+    expect(Math.round(height)).toBe(842);
   });
 });
 

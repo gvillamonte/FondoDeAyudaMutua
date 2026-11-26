@@ -10,6 +10,9 @@ import {
   PrevisualizarEmailDto,
 } from './dto/actualizacion-datos-email-config.dto';
 
+export const COOLDOWN_ACTUALIZACION_HORAS = 24;
+export const COOLDOWN_ACTUALIZACION_MS = COOLDOWN_ACTUALIZACION_HORAS * 60 * 60 * 1000;
+
 @Injectable()
 export class ActualizacionDatosService {
   private readonly logger = new Logger(ActualizacionDatosService.name);
@@ -96,6 +99,55 @@ export class ActualizacionDatosService {
     }
 
     return { bloqueado: false };
+  }
+
+  /**
+   * Verifica si el colegiado tiene una actualización reciente (< 24 horas).
+   * Por motivos de seguridad institucional y resguardo de identidad,
+   * se bloquean nuevas actualizaciones dentro de las 24 horas posteriores.
+   */
+  verificarCooldownActualizacion(ultimaActualizacion: any) {
+    if (!ultimaActualizacion) return null;
+    const fechaModificacion = new Date(ultimaActualizacion.updatedAt || ultimaActualizacion.createdAt);
+    if (isNaN(fechaModificacion.getTime())) return null;
+
+    const ahora = Date.now();
+    const tiempoTranscurrido = ahora - fechaModificacion.getTime();
+
+    if (tiempoTranscurrido >= 0 && tiempoTranscurrido < COOLDOWN_ACTUALIZACION_MS) {
+      const tiempoRestanteMs = COOLDOWN_ACTUALIZACION_MS - tiempoTranscurrido;
+      const horasRestantes = Math.floor(tiempoRestanteMs / (1000 * 60 * 60));
+      const minutosRestantes = Math.ceil((tiempoRestanteMs % (1000 * 60 * 60)) / (1000 * 60));
+      const proximaFechaDisponible = new Date(fechaModificacion.getTime() + COOLDOWN_ACTUALIZACION_MS);
+
+      const proximaFechaStr = proximaFechaDisponible.toLocaleString('es-PE', {
+        timeZone: 'America/Lima',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+      });
+
+      const tiempoTexto =
+        horasRestantes > 0
+          ? `${horasRestantes} hora${horasRestantes > 1 ? 's' : ''} y ${minutosRestantes} minuto${minutosRestantes > 1 ? 's' : ''}`
+          : `${minutosRestantes} minuto${minutosRestantes > 1 ? 's' : ''}`;
+
+      return {
+        bloqueado: true,
+        tipo: 'COOLDOWN_24H' as const,
+        horasRestantes,
+        minutosRestantes,
+        tiempoTexto,
+        proximaFechaStr,
+        proximaFechaDisponible: proximaFechaDisponible.toISOString(),
+        mensaje: `Por motivos de seguridad y resguardo de la identidad institucional de los colegiados, solo se permite realizar una actualización de datos cada 24 horas. Sus datos fueron actualizados recientemente y se encuentran protegidos. Podrá realizar una nueva actualización a partir del ${proximaFechaStr} (dentro de ${tiempoTexto}).`,
+      };
+    }
+
+    return null;
   }
 
   /**
@@ -204,6 +256,25 @@ export class ActualizacionDatosService {
       });
     } catch (err: any) {
       this.logger.warn(`No se pudo consultar historial en APP_DB: ${err.message}`);
+    }
+
+    // Regla de Seguridad Institucional: Período de bloqueo de 24 horas entre modificaciones
+    if (ultimaActualizacion) {
+      const cooldown = this.verificarCooldownActualizacion(ultimaActualizacion);
+      if (cooldown && cooldown.bloqueado) {
+        throw new ForbiddenException({
+          statusCode: 403,
+          bloqueado: true,
+          estadoColegiado: cooldown.tipo,
+          cooldown: true,
+          horasRestantes: cooldown.horasRestantes,
+          minutosRestantes: cooldown.minutosRestantes,
+          tiempoTexto: cooldown.tiempoTexto,
+          proximaFechaStr: cooldown.proximaFechaStr,
+          proximaActualizacionDisponible: cooldown.proximaFechaDisponible,
+          message: cooldown.mensaje,
+        });
+      }
     }
 
     const nombreCompleto = [
@@ -471,6 +542,24 @@ export class ActualizacionDatosService {
       orderBy: { createdAt: 'desc' },
     });
 
+    if (registroExistente) {
+      const cooldownExistente = this.verificarCooldownActualizacion(registroExistente);
+      if (cooldownExistente && cooldownExistente.bloqueado) {
+        throw new ForbiddenException({
+          statusCode: 403,
+          bloqueado: true,
+          estadoColegiado: cooldownExistente.tipo,
+          cooldown: true,
+          horasRestantes: cooldownExistente.horasRestantes,
+          minutosRestantes: cooldownExistente.minutosRestantes,
+          tiempoTexto: cooldownExistente.tiempoTexto,
+          proximaFechaStr: cooldownExistente.proximaFechaStr,
+          proximaActualizacionDisponible: cooldownExistente.proximaFechaDisponible,
+          message: cooldownExistente.mensaje,
+        });
+      }
+    }
+
     let registro;
     if (registroExistente) {
       registro = await this.prisma.colegiadoActualizacion.update({
@@ -603,12 +692,27 @@ export class ActualizacionDatosService {
       this.logger.warn(`No se pudo actualizar estado de correo en registro: ${statusErr.message}`);
     }
 
+    const proximaFechaDisponible = new Date(Date.now() + COOLDOWN_ACTUALIZACION_MS);
+    const proximaFechaStr = proximaFechaDisponible.toLocaleString('es-PE', {
+      timeZone: 'America/Lima',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    });
+
     return {
       success: true,
       message: emailEnviado
-        ? `Datos actualizados correctamente. Se ha enviado una constancia a su correo electrónico ${emailNuevo}.`
-        : 'Datos actualizados correctamente en el sistema.',
+        ? `Datos actualizados correctamente. Se ha enviado una constancia a su correo electrónico ${emailNuevo}. Por motivos de seguridad y resguardo de identidad institucional, no podrá volver a actualizar sus datos dentro de las próximas 24 horas.`
+        : 'Datos actualizados correctamente en el sistema. Por motivos de seguridad y resguardo de identidad institucional, no podrá volver a actualizar sus datos dentro de las próximas 24 horas.',
       emailEnviado,
+      cooldownHoras: COOLDOWN_ACTUALIZACION_HORAS,
+      proximaActualizacionDisponible: proximaFechaDisponible.toISOString(),
+      proximaFechaStr,
+      avisoSeguridad: `Por motivos de seguridad y resguardo de identidad institucional, no podrá volver a actualizar sus datos dentro de las próximas 24 horas (disponible nuevamente a partir de: ${proximaFechaStr}).`,
       data: {
         id: registro.id,
         cip: registro.cip,
@@ -625,6 +729,8 @@ export class ActualizacionDatosService {
         referencia: registro.referenciaNuevo,
         estadoCivil: registro.estadoCivilNuevo,
         fechaActualizacion: registro.updatedAt || registro.createdAt,
+        proximaActualizacionDisponible: proximaFechaDisponible.toISOString(),
+        proximaFechaStr,
       },
     };
   }

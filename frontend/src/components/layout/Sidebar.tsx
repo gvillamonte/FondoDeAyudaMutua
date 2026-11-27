@@ -243,10 +243,17 @@ export default function Sidebar({
       return menuItems;
     }
 
+    // Base de ítems: OPERADOR_FAM no ve el Dashboard principal
+    let baseItems = menuItems;
+    if (rol === 'OPERADOR_FAM') {
+      baseItems = baseItems.filter((item) => item.id !== 'dashboard');
+    }
+
     // Si tiene lista de módulos configurada para su rol
     if (Array.isArray(modulos)) {
-      return menuItems
+      return baseItems
         .filter((item) => {
+          if (rol === 'OPERADOR_FAM' && item.id === 'dashboard') return false;
           if (modulos.includes(item.id)) return true;
           if (
             item.children?.some((c) => {
@@ -273,7 +280,7 @@ export default function Sidebar({
     }
 
     // Fallback por defecto si no ha terminado de cargar permisos
-    return menuItems.filter((item) => !item.adminOnly);
+    return baseItems.filter((item) => !item.adminOnly);
   }, [rol, modulos]);
 
   const toggleGroup = (label: string) => {

@@ -56,6 +56,7 @@ export function hasModuleAccess(moduleKey: string): boolean {
   const user = getCurrentUser();
   if (!user) return false;
   if (user.rol === 'ADMINISTRADOR' || user.rol === 'SUPER_ADMINISTRADOR') return true;
+  if (user.rol === 'OPERADOR_FAM' && moduleKey === 'dashboard') return false;
   if (Array.isArray(user.modulos)) {
     return user.modulos.includes(moduleKey);
   }

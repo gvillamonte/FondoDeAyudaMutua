@@ -151,6 +151,242 @@ export class ActualizacionDatosService {
   }
 
   /**
+   * Verifica si el colegiado se encuentra bloqueado por 24 horas
+   * debido a superar las 2 oportunidades en preguntas secretas de identidad.
+   */
+  async verificarBloqueoSeguridad(cip: string): Promise<any | null> {
+    const cipNormalized = String(cip || '').trim();
+    if (!cipNormalized) return null;
+
+    try {
+      if (!this.prisma?.$queryRawUnsafe) return null;
+
+      const records: any[] = await this.prisma.$queryRawUnsafe(
+        `SELECT TOP 1 id, cip, intentos_fallidos, bloqueado_hasta
+         FROM colegiado_seguridad_bloqueos
+         WHERE cip = @P1
+         ORDER BY updated_at DESC`,
+        cipNormalized,
+      );
+
+      if (!records || records.length === 0) return null;
+      const rec = records[0];
+
+      if (!rec.bloqueado_hasta) return null;
+
+      const hastaDate = new Date(rec.bloqueado_hasta);
+      const ahora = Date.now();
+      const tiempoRestanteMs = hastaDate.getTime() - ahora;
+
+      if (tiempoRestanteMs > 0) {
+        const horasRestantes = Math.floor(tiempoRestanteMs / (1000 * 60 * 60));
+        const minutosRestantes = Math.ceil((tiempoRestanteMs % (1000 * 60 * 60)) / (1000 * 60));
+        const tiempoTexto =
+          horasRestantes > 0
+            ? `${horasRestantes} hora${horasRestantes > 1 ? 's' : ''} y ${minutosRestantes} minuto${minutosRestantes > 1 ? 's' : ''}`
+            : `${minutosRestantes} minuto${minutosRestantes > 1 ? 's' : ''}`;
+
+        const proximaFechaStr = hastaDate.toLocaleString('es-PE', {
+          timeZone: 'America/Lima',
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true,
+        });
+
+        return {
+          bloqueado: true,
+          tipo: 'BLOQUEO_INTENTOS_24H' as const,
+          horasRestantes,
+          minutosRestantes,
+          tiempoTexto,
+          proximaFechaStr,
+          proximaFechaDisponible: hastaDate.toISOString(),
+          mensaje: `Ha superado el número máximo de intentos permitidos (2 oportunidades) para validar sus preguntas de seguridad. Por motivos de resguardo institucional y protección de su expediente colegial, su acceso ha sido bloqueado temporalmente por 24 horas. Podrá intentar nuevamente a partir del ${proximaFechaStr} (dentro de ${tiempoTexto}).`,
+        };
+      } else {
+        // Expiró el período de 24 horas: desbloquear
+        if (this.prisma?.$executeRawUnsafe) {
+          await this.prisma.$executeRawUnsafe(
+            `DELETE FROM colegiado_seguridad_bloqueos WHERE cip = @P1`,
+            cipNormalized,
+          );
+        }
+        return null;
+      }
+    } catch (err: any) {
+      this.logger.warn(`Nota en verificación de bloqueo de seguridad para CIP ${cipNormalized}: ${err.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * Registra un intento fallido en las preguntas secretas.
+   * Si alcanza 2 intentos fallidos, se bloquea por 24 horas.
+   */
+  async registrarIntentoFallido(cip: string, dni?: string, ipAddress?: string): Promise<any> {
+    const cipNormalized = String(cip || '').trim();
+    const dniNormalized = dni ? String(dni).trim() : null;
+    const ip = ipAddress ? String(ipAddress).slice(0, 45) : 'unknown';
+
+    if (!cipNormalized) {
+      throw new BadRequestException('El número de CIP es obligatorio');
+    }
+
+    try {
+      if (!this.prisma?.$queryRawUnsafe || !this.prisma?.$executeRawUnsafe) {
+        return {
+          bloqueado: false,
+          intentosFallidos: 1,
+          intentosRestantes: 1,
+          mensaje: 'Respuesta incorrecta. Le queda 1 oportunidad antes de que su acceso sea bloqueado por 24 horas.',
+        };
+      }
+
+      const records: any[] = await this.prisma.$queryRawUnsafe(
+        `SELECT TOP 1 id, intentos_fallidos, bloqueado_hasta
+         FROM colegiado_seguridad_bloqueos
+         WHERE cip = @P1
+         ORDER BY updated_at DESC`,
+        cipNormalized,
+      );
+
+      const ahora = Date.now();
+      let intentosActuales = 0;
+      let recordId: string | null = null;
+
+      if (records && records.length > 0) {
+        const rec = records[0];
+        recordId = rec.id;
+        if (rec.bloqueado_hasta && new Date(rec.bloqueado_hasta).getTime() <= ahora) {
+          intentosActuales = 0;
+        } else {
+          intentosActuales = Number(rec.intentos_fallidos || 0);
+        }
+      }
+
+      const nuevosIntentos = intentosActuales + 1;
+
+      if (nuevosIntentos >= 2) {
+        // Bloqueo estricto por 24 horas
+        const fechaBloqueo = new Date(ahora + COOLDOWN_ACTUALIZACION_MS);
+        const fechaIso = fechaBloqueo.toISOString();
+
+        if (recordId) {
+          await this.prisma.$executeRawUnsafe(
+            `UPDATE colegiado_seguridad_bloqueos
+             SET intentos_fallidos = @P1,
+                 bloqueado_hasta = @P2,
+                 ip_address = @P3,
+                 updated_at = SYSDATETIME()
+             WHERE id = @P4`,
+            nuevosIntentos,
+            fechaIso,
+            ip,
+            recordId,
+          );
+        } else {
+          await this.prisma.$executeRawUnsafe(
+            `INSERT INTO colegiado_seguridad_bloqueos (id, cip, dni, intentos_fallidos, bloqueado_hasta, ip_address, created_at, updated_at)
+             VALUES (NEWID(), @P1, @P2, @P3, @P4, @P5, SYSDATETIME(), SYSDATETIME())`,
+            cipNormalized,
+            dniNormalized,
+            nuevosIntentos,
+            fechaIso,
+            ip,
+          );
+        }
+
+        const proximaFechaStr = fechaBloqueo.toLocaleString('es-PE', {
+          timeZone: 'America/Lima',
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true,
+        });
+
+        this.logger.warn(`[SEGURIDAD] CIP ${cipNormalized} bloqueado por 24 horas (2 intentos fallidos en preguntas).`);
+
+        return {
+          bloqueado: true,
+          tipo: 'BLOQUEO_INTENTOS_24H' as const,
+          intentosFallidos: nuevosIntentos,
+          intentosRestantes: 0,
+          horasRestantes: 24,
+          minutosRestantes: 0,
+          tiempoTexto: '24 horas',
+          proximaFechaStr,
+          proximaFechaDisponible: fechaIso,
+          mensaje: `Ha superado las 2 oportunidades permitidas para responder las preguntas secretas de identidad. Por motivos de resguardo y seguridad de su expediente colegial, su acceso ha sido bloqueado por 24 horas. Podrá intentar nuevamente el ${proximaFechaStr}.`,
+        };
+      } else {
+        // Primer fallo: le queda 1 oportunidad
+        if (recordId) {
+          await this.prisma.$executeRawUnsafe(
+            `UPDATE colegiado_seguridad_bloqueos
+             SET intentos_fallidos = @P1,
+                 ip_address = @P2,
+                 updated_at = SYSDATETIME()
+             WHERE id = @P3`,
+            nuevosIntentos,
+            ip,
+            recordId,
+          );
+        } else {
+          await this.prisma.$executeRawUnsafe(
+            `INSERT INTO colegiado_seguridad_bloqueos (id, cip, dni, intentos_fallidos, bloqueado_hasta, ip_address, created_at, updated_at)
+             VALUES (NEWID(), @P1, @P2, @P3, NULL, @P4, SYSDATETIME(), SYSDATETIME())`,
+            cipNormalized,
+            dniNormalized,
+            nuevosIntentos,
+            ip,
+          );
+        }
+
+        return {
+          bloqueado: false,
+          intentosFallidos: nuevosIntentos,
+          intentosRestantes: 1,
+          mensaje: 'Respuesta incorrecta (Intento 1 de 2 fallido). Le queda únicamente 1 oportunidad antes de que su acceso sea bloqueado por 24 horas. Por seguridad, se han cargado nuevas preguntas y opciones de respuesta.',
+        };
+      }
+    } catch (err: any) {
+      this.logger.error(`Error al registrar intento fallido para CIP ${cipNormalized}: ${err.message}`);
+      return {
+        bloqueado: false,
+        intentosFallidos: 1,
+        intentosRestantes: 1,
+        mensaje: 'Respuesta incorrecta. Le queda 1 oportunidad antes de que su acceso sea bloqueado por 24 horas.',
+      };
+    }
+  }
+
+  /**
+   * Limpia los intentos fallidos una vez que el colegiado responde con éxito.
+   */
+  async limpiarIntentosFallidos(cip: string): Promise<{ success: boolean }> {
+    const cipNormalized = String(cip || '').trim();
+    if (!cipNormalized) return { success: false };
+
+    try {
+      if (this.prisma?.$executeRawUnsafe) {
+        await this.prisma.$executeRawUnsafe(
+          `DELETE FROM colegiado_seguridad_bloqueos WHERE cip = @P1`,
+          cipNormalized,
+        );
+      }
+      return { success: true };
+    } catch (err: any) {
+      this.logger.warn(`Nota al limpiar intentos para CIP ${cipNormalized}: ${err.message}`);
+      return { success: false };
+    }
+  }
+
+  /**
    * Verifica si un N° CIP existe en el padrón del colegio.
    * Primer paso del flujo de actualización antes de solicitar el DNI.
    */
@@ -158,6 +394,23 @@ export class ActualizacionDatosService {
     const cipNormalized = String(cip).trim();
     if (!cipNormalized) {
       throw new BadRequestException('El número de CIP es obligatorio');
+    }
+
+    // Regla de Seguridad: Bloqueo de 24 horas si superó 2 intentos en preguntas secretas
+    const bloqueoSeguridad = await this.verificarBloqueoSeguridad(cipNormalized);
+    if (bloqueoSeguridad && bloqueoSeguridad.bloqueado) {
+      throw new ForbiddenException({
+        statusCode: 403,
+        bloqueado: true,
+        estadoColegiado: 'BLOQUEO_INTENTOS_24H',
+        cooldown: true,
+        horasRestantes: bloqueoSeguridad.horasRestantes,
+        minutosRestantes: bloqueoSeguridad.minutosRestantes,
+        tiempoTexto: bloqueoSeguridad.tiempoTexto,
+        proximaFechaStr: bloqueoSeguridad.proximaFechaStr,
+        proximaActualizacionDisponible: bloqueoSeguridad.proximaFechaDisponible,
+        message: bloqueoSeguridad.mensaje,
+      });
     }
 
     let colegiado: any = null;
@@ -223,6 +476,25 @@ export class ActualizacionDatosService {
    * para presentar siempre la versión más reciente.
    */
   async consultarPorCipYDni(dto: ConsultarColegiadoDto) {
+    const cipNormalized = String(dto.cip || '').trim();
+
+    // Regla de Seguridad: Bloqueo de 24 horas si superó 2 intentos en preguntas secretas
+    const bloqueoSeguridad = await this.verificarBloqueoSeguridad(cipNormalized);
+    if (bloqueoSeguridad && bloqueoSeguridad.bloqueado) {
+      throw new ForbiddenException({
+        statusCode: 403,
+        bloqueado: true,
+        estadoColegiado: 'BLOQUEO_INTENTOS_24H',
+        cooldown: true,
+        horasRestantes: bloqueoSeguridad.horasRestantes,
+        minutosRestantes: bloqueoSeguridad.minutosRestantes,
+        tiempoTexto: bloqueoSeguridad.tiempoTexto,
+        proximaFechaStr: bloqueoSeguridad.proximaFechaStr,
+        proximaActualizacionDisponible: bloqueoSeguridad.proximaFechaDisponible,
+        message: bloqueoSeguridad.mensaje,
+      });
+    }
+
     const colegiado = await this.legacyService.getColegiadoByCipAndDni(dto.cip, dto.dni);
     if (!colegiado) {
       throw new NotFoundException('No se encontró ningún colegiado con los datos ingresados');

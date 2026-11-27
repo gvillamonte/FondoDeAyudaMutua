@@ -21,12 +21,12 @@ ELSE
 -- 2. OPERADOR FAM (Área Fondo Asistencia Mutua)
 IF NOT EXISTS (SELECT 1 FROM roles WHERE id = 'OPERADOR_FAM')
     INSERT INTO roles (id, nombre, descripcion, modulos, activo)
-    VALUES ('OPERADOR_FAM', 'Operador FAM', 'Área FAM: Registro y seguimiento de beneficiarios, subsidios y expedientes', '["dashboard","colegiados","fam","beneficios","reportes"]', 1);
+    VALUES ('OPERADOR_FAM', 'Operador FAM', 'Área FAM: Registro y seguimiento de beneficiarios, subsidios y expedientes', '["fam","beneficios","colegiados","reportes"]', 1);
 ELSE
     UPDATE roles
     SET nombre = 'Operador FAM',
         descripcion = 'Área FAM: Registro y seguimiento de beneficiarios, subsidios y expedientes',
-        modulos = '["dashboard","colegiados","fam","beneficios","reportes"]',
+        modulos = '["fam","beneficios","colegiados","reportes"]',
         activo = 1
     WHERE id = 'OPERADOR_FAM';
 

@@ -87,7 +87,19 @@ export default function LoginPage() {
       localStorage.setItem('accessToken', data.accessToken);
       localStorage.setItem('refreshToken', data.refreshToken || '');
       localStorage.setItem('user', JSON.stringify(data.usuario));
-      router.push('/dashboard');
+
+      // Redirección inteligente según rol y permisos:
+      // Operador FAM no va al dashboard principal, ingresa directo a FAM
+      const userRol = data.usuario?.rol;
+      const userMods: string[] = Array.isArray(data.usuario?.modulos) ? data.usuario.modulos : [];
+
+      if (userRol === 'OPERADOR_FAM' || (!userMods.includes('dashboard') && userMods.includes('fam'))) {
+        router.push('/dashboard/fam');
+      } else if (userMods.length > 0 && !userMods.includes('dashboard')) {
+        router.push(`/dashboard/${userMods[0]}`);
+      } else {
+        router.push('/dashboard');
+      }
     } catch (err: any) {
       showConfirmMessage('error', 'Su contraseña ha sido incorrecta.');
     } finally {

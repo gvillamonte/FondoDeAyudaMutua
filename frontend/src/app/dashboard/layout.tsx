@@ -103,12 +103,23 @@ export default function DashboardLayout({
     if (!authorized) return false;
     if (!requiredModule) return true;
     if (userRol === 'ADMINISTRADOR' || userRol === 'SUPER_ADMINISTRADOR') return true;
+    if (userRol === 'OPERADOR_FAM' && requiredModule === 'dashboard') return false;
     if (Array.isArray(userModulos)) {
       return userModulos.includes(requiredModule);
     }
     // Si aún no están cargados los módulos, permitir visualización mientras se sincroniza
     return true;
   })();
+
+  // Redirección inmediata si un Operador FAM intenta entrar directamente a /dashboard
+  useEffect(() => {
+    if (!authorized) return;
+    if (pathname === '/dashboard') {
+      if (userRol === 'OPERADOR_FAM' || (Array.isArray(userModulos) && !userModulos.includes('dashboard') && userModulos.includes('fam'))) {
+        router.replace('/dashboard/fam');
+      }
+    }
+  }, [authorized, pathname, userRol, userModulos, router]);
 
   if (!authorized) {
     return (
@@ -167,6 +178,8 @@ export default function DashboardLayout({
           <Breadcrumbs />
           <div className="flex-1 lg:overflow-y-auto p-3 sm:p-4 lg:p-6">
             {!isModuleAllowed ? (
+              // Si es un Operador FAM en /dashboard o no tiene el módulo dashboard, no mostrar ningún mensaje de advertencia
+              (pathname === '/dashboard' && (userRol === 'OPERADOR_FAM' || !userModulos?.includes('dashboard'))) ? null : (
               <div className="max-w-xl mx-auto my-12 bg-white border border-[#E2E8F0] rounded-lg p-8 shadow-sm text-center">
                 <div className="w-16 h-16 mx-auto mb-4 bg-amber-50 border border-amber-200 rounded-full flex items-center justify-center text-amber-600">
                   <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -189,16 +202,17 @@ export default function DashboardLayout({
                   Si necesita acceder a esta funcionalidad, solicite al Administrador del Sistema la activación del módulo en el panel de Roles.
                 </p>
                 <button
-                  onClick={() => router.push('/dashboard')}
+                  onClick={() => router.push(userRol === 'OPERADOR_FAM' ? '/dashboard/fam' : '/dashboard')}
                   className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 rounded-md text-white text-sm font-medium transition-colors shadow-sm"
                   style={{ backgroundColor: '#8f0404' }}
                 >
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
                   </svg>
-                  Volver al Dashboard Principal
+                  Volver a {userRol === 'OPERADOR_FAM' ? 'Módulo FAM' : 'Dashboard Principal'}
                 </button>
               </div>
+              )
             ) : (
               children
             )}

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
 
 interface Estadisticas {
@@ -19,13 +20,35 @@ interface Estadisticas {
 }
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [stats, setStats] = useState<Estadisticas | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [isRedirecting, setIsRedirecting] = useState(false);
 
   useEffect(() => {
+    // Si el usuario es OPERADOR_FAM, no debe ver el dashboard general; redirigir de inmediato a FAM sin mostrar ningún mensaje
+    try {
+      const stored = localStorage.getItem('user');
+      if (stored) {
+        const u = JSON.parse(stored);
+        const userRol = u?.rol;
+        const userMods: string[] = Array.isArray(u?.modulos) ? u.modulos : [];
+        if (userRol === 'OPERADOR_FAM' || (!userMods.includes('dashboard') && userMods.includes('fam'))) {
+          setIsRedirecting(true);
+          router.replace('/dashboard/fam');
+          return;
+        }
+        if (userMods.length > 0 && !userMods.includes('dashboard')) {
+          setIsRedirecting(true);
+          router.replace(`/dashboard/${userMods[0]}`);
+          return;
+        }
+      }
+    } catch {}
+
     fetchStats();
-  }, []);
+  }, [router]);
 
   const fetchStats = async () => {
     try {
@@ -39,6 +62,11 @@ export default function DashboardPage() {
       setLoading(false);
     }
   };
+
+  // Si está redirigiendo a su módulo correspondiente, no renderizar absolutamente nada (sin mensajes de carga ni error)
+  if (isRedirecting) {
+    return null;
+  }
 
   if (loading) {
     return (

@@ -107,3 +107,22 @@ export class FiltroActualizacionesDto {
   @IsString()
   agrupado?: string;
 }
+
+export class RegistrarFalloPreguntasDto {
+  @IsString({ message: 'El CIP debe ser una cadena de texto' })
+  @IsNotEmpty({ message: 'El número de CIP es obligatorio' })
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  cip: string;
+
+  @IsOptional()
+  @IsString()
+  dni?: string;
+}
+
+export class LimpiarFallosPreguntasDto {
+  @IsString({ message: 'El CIP debe ser una cadena de texto' })
+  @IsNotEmpty({ message: 'El número de CIP es obligatorio' })
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  cip: string;
+}
+

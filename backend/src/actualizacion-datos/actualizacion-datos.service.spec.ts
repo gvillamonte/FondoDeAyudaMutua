@@ -409,4 +409,56 @@ describe('ActualizacionDatosService', () => {
       expect(res.fallidos).toBe(0);
     });
   });
+
+  describe('seguridadPreguntasIdentidad (Intentos y Bloqueo 24 Horas)', () => {
+    it('debe registrar el primer intento fallido permitiendo 1 oportunidad restante', async () => {
+      prismaMock.$queryRawUnsafe = jest.fn().mockResolvedValue([]);
+      prismaMock.$executeRawUnsafe = jest.fn().mockResolvedValue(1);
+
+      const res = await service.registrarIntentoFallido('123456', '45678912', '127.0.0.1');
+      expect(res.bloqueado).toBe(false);
+      expect(res.intentosFallidos).toBe(1);
+      expect(res.intentosRestantes).toBe(1);
+      expect(res.mensaje).toContain('1 oportunidad');
+    });
+
+    it('debe bloquear por 24 horas si falla en la segunda oportunidad', async () => {
+      prismaMock.$queryRawUnsafe = jest.fn().mockResolvedValue([
+        { id: 'sec-1', intentos_fallidos: 1, bloqueado_hasta: null },
+      ]);
+      prismaMock.$executeRawUnsafe = jest.fn().mockResolvedValue(1);
+
+      const res = await service.registrarIntentoFallido('123456', '45678912', '127.0.0.1');
+      expect(res.bloqueado).toBe(true);
+      expect(res.intentosFallidos).toBe(2);
+      expect(res.intentosRestantes).toBe(0);
+      expect(res.horasRestantes).toBe(24);
+      expect(res.proximaFechaDisponible).toBeDefined();
+      expect(res.mensaje).toContain('bloqueado por 24 horas');
+    });
+
+    it('debe limpiar los intentos fallidos al responder correctamente', async () => {
+      prismaMock.$executeRawUnsafe = jest.fn().mockResolvedValue(1);
+
+      const res = await service.limpiarIntentosFallidos('123456');
+      expect(res.success).toBe(true);
+      expect(prismaMock.$executeRawUnsafe).toHaveBeenCalledWith(
+        expect.stringContaining('DELETE FROM colegiado_seguridad_bloqueos'),
+        '123456',
+      );
+    });
+
+    it('verificarBloqueoSeguridad debe retornar bloqueado si tiene bloqueo activo', async () => {
+      const en23Horas = new Date(Date.now() + 23 * 60 * 60 * 1000);
+      prismaMock.$queryRawUnsafe = jest.fn().mockResolvedValue([
+        { id: 'sec-1', cip: '123456', intentos_fallidos: 2, bloqueado_hasta: en23Horas },
+      ]);
+
+      const res = await service.verificarBloqueoSeguridad('123456');
+      expect(res).not.toBeNull();
+      expect(res.bloqueado).toBe(true);
+      expect(res.tipo).toBe('BLOQUEO_INTENTOS_24H');
+      expect(res.horasRestantes).toBeGreaterThanOrEqual(22);
+    });
+  });
 });

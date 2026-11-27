@@ -16,6 +16,8 @@ import {
   ConsultarColegiadoDto,
   ActualizarDatosColegiadoDto,
   FiltroActualizacionesDto,
+  RegistrarFalloPreguntasDto,
+  LimpiarFallosPreguntasDto,
 } from './dto/actualizacion-datos.dto';
 import {
   ActualizarEmailConfigDto,
@@ -59,6 +61,19 @@ export class ActualizacionDatosController {
     const ip = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown';
     const userAgent = req.headers['user-agent'] || 'unknown';
     return this.service.actualizarDatos(dto, String(ip), String(userAgent));
+  }
+
+  @Post('registrar-fallo-preguntas')
+  @ApiOperation({ summary: 'Registrar intento fallido en preguntas secretas (bloqueo en 2da oportunidad)' })
+  async registrarFalloPreguntas(@Body() dto: RegistrarFalloPreguntasDto, @Req() req: any) {
+    const ip = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown';
+    return this.service.registrarIntentoFallido(dto.cip, dto.dni, String(ip));
+  }
+
+  @Post('limpiar-fallos-preguntas')
+  @ApiOperation({ summary: 'Limpiar intentos fallidos tras validación exitosa de identidad' })
+  async limpiarFallosPreguntas(@Body() dto: LimpiarFallosPreguntasDto) {
+    return this.service.limpiarIntentosFallidos(dto.cip);
   }
 
   // ==========================================

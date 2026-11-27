@@ -762,8 +762,9 @@ export default function ActualizarDatosPage() {
   const [infoSexo, setInfoSexo] = useState('');
   const centroErroresRef = useRef<HTMLDivElement>(null);
 
-  // Temporizador estricto de edición (120 segundos)
-  const [segundosRestantes, setSegundosRestantes] = useState(120);
+  // Temporizador estricto de edición (180 segundos / 3 minutos)
+  const TIEMPO_LIMITE_EDICION_SEGUNDOS = 180;
+  const [segundosRestantes, setSegundosRestantes] = useState(TIEMPO_LIMITE_EDICION_SEGUNDOS);
   const [widgetTiempoMinimizado, setWidgetTiempoMinimizado] = useState(false);
 
   // Control de concurrencia: Solo una pestaña activa a la vez
@@ -935,7 +936,7 @@ export default function ActualizarDatosPage() {
     setCaptcha(generarCaptchaData(5));
   }, []);
 
-  // Temporizador regresivo estricto para la edición de datos (120 segundos)
+  // Temporizador regresivo estricto para la edición de datos (180 segundos / 3 minutos)
   useEffect(() => {
     if (paso !== 'FORM' || showSuccessModal || bloqueadoPorMultiplesPestanas) return;
 
@@ -954,7 +955,7 @@ export default function ActualizarDatosPage() {
     return () => clearInterval(interval);
   }, [paso, showSuccessModal]);
 
-  // Reinicio total y regreso a la pantalla de inicio de Actualizar Datos cuando culminan los 120 segundos
+  // Reinicio total y regreso a la pantalla de inicio de Actualizar Datos cuando culminan los 180 segundos
   useEffect(() => {
     if (!showTimeoutModal) {
       setCuentaRegresivaRedireccion(3);
@@ -1244,7 +1245,7 @@ export default function ActualizarDatosPage() {
     }
 
     // Identidad validada con éxito: dar acceso a la ficha y formulario para modificar datos
-    setSegundosRestantes(120);
+    setSegundosRestantes(TIEMPO_LIMITE_EDICION_SEGUNDOS);
     setWidgetTiempoMinimizado(false);
     setShowTimeoutModal(false);
     setPaso('FORM');
@@ -1321,7 +1322,7 @@ export default function ActualizarDatosPage() {
     }
 
     if (segundosRestantes <= 0) {
-      setErrorGuardar('El tiempo límite de 120 segundos ha culminado. Por favor inicie nuevamente.');
+      setErrorGuardar(`El tiempo límite de ${TIEMPO_LIMITE_EDICION_SEGUNDOS} segundos (3 minutos) ha culminado. Por favor inicie nuevamente.`);
       return;
     }
 
@@ -1469,7 +1470,7 @@ export default function ActualizarDatosPage() {
     setShowSuccessModal(false);
     setShowTimeoutModal(false);
     setCapituloWhatsAppId('');
-    setSegundosRestantes(120);
+    setSegundosRestantes(TIEMPO_LIMITE_EDICION_SEGUNDOS);
     setWidgetTiempoMinimizado(false);
     refrescarCaptcha();
   };
@@ -1586,7 +1587,7 @@ export default function ActualizarDatosPage() {
                 <span className={`font-mono font-bold ${segundosRestantes <= 20 ? 'text-[#ac0505]' : 'text-slate-900'}`}>
                   {formatearTiempo(segundosRestantes)}
                 </span>
-                <span className="text-[10px] text-slate-400">/ 120s</span>
+                <span className="text-[10px] text-slate-400">/ {TIEMPO_LIMITE_EDICION_SEGUNDOS}s</span>
               </div>
             )}
 
@@ -1607,7 +1608,7 @@ export default function ActualizarDatosPage() {
         </header>
 
         {/* ============================================================== */}
-        {/* TEMPORIZADOR AL COSTADO DE LA PANTALLA (120 SEGUNDOS)          */}
+        {/* TEMPORIZADOR AL COSTADO DE LA PANTALLA (180 SEGUNDOS)          */}
         {/* ============================================================== */}
         {paso === 'FORM' && !showSuccessModal && (
           <aside
@@ -1621,7 +1622,7 @@ export default function ActualizarDatosPage() {
                 type="button"
                 onClick={() => setWidgetTiempoMinimizado(false)}
                 className="flex items-center gap-2 px-3 py-2 text-xs font-bold bg-[#ac0505] text-white hover:bg-[#8f0404] transition-colors shadow-md border border-black/20"
-                title="Mostrar temporizador de seguridad de 120s"
+                title={`Mostrar temporizador de seguridad de ${TIEMPO_LIMITE_EDICION_SEGUNDOS}s`}
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -1679,13 +1680,13 @@ export default function ActualizarDatosPage() {
                       className={`h-full transition-all duration-1000 ${
                         segundosRestantes <= 20 ? 'bg-red-600' : 'bg-[#ac0505]'
                       }`}
-                      style={{ width: `${(segundosRestantes / 120) * 100}%` }}
+                      style={{ width: `${(segundosRestantes / TIEMPO_LIMITE_EDICION_SEGUNDOS) * 100}%` }}
                     />
                   </div>
 
                   <p className="text-[10px] text-slate-500 leading-tight">
                     {segundosRestantes > 20
-                      ? 'Dispone de 120 segundos para completar y confirmar sus datos.'
+                      ? `Dispone de ${TIEMPO_LIMITE_EDICION_SEGUNDOS} segundos (3 minutos) para completar y confirmar sus datos.`
                       : segundosRestantes > 0
                         ? '¡Atención! Quedan pocos segundos antes del reinicio automático.'
                         : 'Tiempo culminado. Reiniciando sesión...'}
@@ -2906,7 +2907,7 @@ export default function ActualizarDatosPage() {
       )}
 
       {/* ============================================================== */}
-      {/* MODAL DE TIEMPO AGOTADO (120 SEGUNDOS)                         */}
+      {/* MODAL DE TIEMPO AGOTADO (180 SEGUNDOS)                         */}
       {/* ============================================================== */}
       {showTimeoutModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-in fade-in duration-200">
@@ -2923,7 +2924,7 @@ export default function ActualizarDatosPage() {
                   Tiempo de Edición Culminado
                 </h3>
                 <p className="text-xs text-red-100 font-medium">
-                  Límite de seguridad: 120 segundos
+                  Límite de seguridad: 180 segundos (3 minutos)
                 </p>
               </div>
             </div>
@@ -2939,7 +2940,7 @@ export default function ActualizarDatosPage() {
                     Sesión finalizada por tiempo límite
                   </span>
                   <p>
-                    Han transcurrido los <strong>120 segundos</strong> permitidos para realizar la actualización de sus datos. Por políticas de seguridad, confidencialidad y protección de la información gremial, el proceso se ha reiniciado por completo.
+                    Han transcurrido los <strong>180 segundos (3 minutos)</strong> permitidos para realizar la actualización de sus datos. Por políticas de seguridad, confidencialidad y protección de la información gremial, el proceso se ha reiniciado por completo.
                   </p>
                 </div>
               </div>
